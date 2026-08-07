@@ -6,10 +6,9 @@
 //! projects a live `WidgetNode` tree onto the [`FocusTree`] this module
 //! defines and drives it from `WindowState`'s keyboard and pointer arms
 //! (M4-Phase 2 T5) — that projection, not this module, is what a caller
-//! outside this file reaches for. `focus_spike` is a second, override-map
-//! projection kept only for `tests/focus_mechanism_fixture.rs` until
-//! M4-Phase 2 T7 retires it. Neither caller changes this module's logic:
-//! the core stays exactly what the Phase 2 ADR compared options against.
+//! outside this file reaches for. This module's own logic is unchanged by
+//! who calls it: it stays exactly what the Phase 2 ADR compared options
+//! against.
 //!
 //! # Why an annotated tree of its own rather than annotations on `WidgetNode`
 //!
@@ -30,12 +29,32 @@
 //! annotations, and the current focus state, what is the next focus
 //! target.
 
-// `Group`, `ActiveItemList` / `ActiveItem`, and `ModalScope` have no
-// production caller yet: `crate::focus`'s T5 projection derives only
-// `Stop` / `Container` from the widget kind (DD-M4-P2-003 F3), and the
-// authored annotations that would produce the other four roles arrive at
-// M4-Phase 2 T6, projected into production at T7. The allow stays until
-// T7 makes every variant reachable from production.
+// Measured at M4-Phase 2 T7's close gate by removing this attribute and
+// reading what a plain `cargo build -p wasamo-runtime` actually reports,
+// rather than by guessing: exactly seven methods across the two `impl`
+// blocks below have no production caller and would otherwise warn —
+// `FocusTree::is_empty` / `parent` / `focus_after_removing`, and
+// `FocusState::active_item_of` / `remembered_member_of` / `modal_depth` /
+// `exit_modal`. Every one of them is exercised only by this module's own
+// `#[cfg(test)]` unit tests, which a plain build does not compile, so a
+// build with no `#[cfg(test)]` reader still sees them as dead.
+//
+// `FocusRole::Group` and `FocusRole::ModalScope` are not on this list —
+// T6's authored `focus-group` / `modal-scope` annotations gave
+// `WidgetNode::focus_role` a production constructor for both, and T7's
+// `focus::sync_scopes_to_tree` / `arrow_on_key` / `dismiss_on_key` are
+// production consumers, so the enum variants and the tree/state methods
+// they drive (`tab`, `arrow`, `enter_modal`, `focus_landing`, …) are
+// reachable and warn-free without this attribute.
+// `FocusRole::ActiveItemList` / `ActiveItem` have no authored `.ui` source
+// in M4 at all (`plan.md` §T7 records the narrowed coverage as
+// deliberate), so `active_item_of` — the read half of the state they
+// drive — stays on this list alongside them; `remembered_member_of` and
+// `modal_depth` are read-only diagnostics over state a production caller
+// writes but never itself reads back; `exit_modal` is superseded in
+// production by `sync_scopes_to_tree`'s removal-driven exit
+// (`WindowFocus::rebase` plus the outermost-dropped-scope restoration in
+// `focus.rs`), which never calls it directly.
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;

@@ -38,9 +38,9 @@ pub(crate) struct FocusProjection {
     /// `paths[id]` is the path of child indices from the projection root
     /// to the widget that produced focus node `id`; `paths[0]` is empty
     /// (the root). Indexed by [`FocusId`], which is the pre-order index of
-    /// the walk in [`walk`] by construction — the same pairing
-    /// `focus_spike::Projection`'s `widgets` vec keeps for its override-map
-    /// projection.
+    /// the walk in [`walk`] by construction — the same indexing `anchors`
+    /// below keeps, written by the same walk at the same index (see that
+    /// field's own doc comment).
     paths: Vec<Vec<usize>>,
     /// `anchors[id]` is the node-address anchor (M4-Phase 2 T7) that
     /// produced focus node `id`: the same raw pointer
