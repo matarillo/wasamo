@@ -231,7 +231,19 @@ fn emit_host_binding(out: &mut String, binding: &IrBinding, indent: usize) {
 
 fn emit_handler(out: &mut String, handler: &IrHandler, indent: usize) {
     let i = ind(indent);
-    out.push_str(&format!("{}on {} {{\n", i, handler.signal));
+    match &handler.arg {
+        // Parenthesised argument form (DD-M4-P2-005), e.g.
+        // `on key-down("ArrowLeft") { ... }`.
+        Some(arg) => out.push_str(&format!(
+            "{}on {}(\"{}\") {{\n",
+            i,
+            handler.signal,
+            escape_string(arg)
+        )),
+        // No-argument case stays byte-identical to the pre-T8 form
+        // (`on clicked { ... }`) so no existing IR fixture changes.
+        None => out.push_str(&format!("{}on {} {{\n", i, handler.signal)),
+    }
     out.push_str(&format!("{}    {}\n", i, emit_expr(&handler.expr)));
     out.push_str(&format!("{}}}\n", i));
 }
@@ -409,6 +421,32 @@ mod tests {
         );
         assert!(out.contains("on clicked {"), "got: {}", out);
         assert!(out.contains("(compound-assign += count 1)"), "got: {}", out);
+    }
+
+    // --- M4-Phase 2 T8: `key-down("<key>")` argument IR text emit
+    // (DD-M4-P2-005) ------------------------------------------------
+
+    #[test]
+    fn key_down_handler_argument_emitted_in_parenthesised_form() {
+        let out = emit_src(
+            "component C inherits W { state selected_index: i32 = 0 Box { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(
+            out.contains(r#"on key-down("ArrowLeft") {"#),
+            "got: {}",
+            out
+        );
+    }
+
+    #[test]
+    fn no_argument_handler_still_emits_unchanged_form() {
+        // Byte-identical to the pre-T8 no-argument shape — no existing IR
+        // fixture changes.
+        let out = emit_src(
+            "component C inherits W { state count: i32 = 0 VStack { clicked => { root.count += 1; } } }",
+        );
+        assert!(out.contains("on clicked {"), "got: {}", out);
+        assert!(!out.contains("clicked(\""), "got: {}", out);
     }
 
     #[test]

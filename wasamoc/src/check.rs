@@ -979,6 +979,55 @@ fn check_box_child_count(
     }
 }
 
+/// Reject a layout-childless widget (`wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+/// — `Rectangle`, `Text`, `Button`, `ToggleButton`) carrying any
+/// child-materialising member (owner disposition CF-1, 2026-08-07; widened
+/// from Button/ToggleButton to all four kinds 2026-08-08). `build_layout_tree`
+/// (`wasamo-runtime/src/widget.rs`) maps every kind in that table to a
+/// childless `LayoutNode::rectangle`: an authored child is accepted here
+/// by the generic widget-decl walk, built by the IR loader, but unknown
+/// to layout — it renders nothing in release and aborts a debug build
+/// during `wasamo_load_ui` on the `sync_visuals` child-count assertion.
+///
+/// Mirrors `check_box_child_count`'s completeness: every member that can
+/// materialise a child counts (`WidgetDecl`, `Conditional`, `For`), not
+/// widget declarations only, so `Button { if c { Text {} } }` is caught
+/// even though it authors no bare widget child. Property binds, signal
+/// handlers, and `slot.*` placement binds are unaffected — those are not
+/// `Member::WidgetDecl` / `Conditional` / `For` variants.
+///
+/// Neither the invocation condition (below, in `check_members_inner`) nor
+/// this function names a widget kind: both read
+/// `crate::ir::layout_treats_as_childless` / the offending `widget_kind`
+/// string, so widening or narrowing the rule is a single edit to
+/// `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`.
+fn check_layout_childless_widget_children(
+    widget_kind: &str,
+    members: &[Member],
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let child_count = members
+        .iter()
+        .filter(|m| {
+            matches!(
+                m,
+                Member::WidgetDecl { .. } | Member::Conditional { .. } | Member::For { .. }
+            )
+        })
+        .count();
+    if child_count > 0 {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "`{widget_kind}` admits no widget children (found {child_count}); layout arranges `{widget_kind}` as a single rectangle, so a child would never be arranged, painted, or hit-tested — wrap it in a container widget instead (dsl_spec §4.4)"
+            ),
+        ));
+    }
+}
+
 fn check_zstack_unknown_attr(name: &str, span: &Span, filename: &str, diags: &mut Vec<Diagnostic>) {
     diags.push(error(
         filename,
@@ -1430,21 +1479,6 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                     ));
                 }
             }
-            Member::SignalHandler { signal, span, .. } => {
-                // The generic `check_members_inner` dispatch (run
-                // separately on Grid's own children) owns whether
-                // `dismiss` is admissible here — it requires a
-                // `modal-scope: true` sibling (dsl_spec §4.19). Every
-                // other signal name stays rejected; widening e.g.
-                // `clicked` on Grid is out of scope for this task (T8).
-                if signal != "dismiss" {
-                    diags.push(error(
-                        filename,
-                        span,
-                        "`Grid` takes no signal handlers other than `dismiss`",
-                    ));
-                }
-            }
             Member::Conditional { span, .. } => {
                 diags.push(error(filename, span, "`Grid` children must be wrapped in `Cell`; conditional members may appear inside a Cell content widget, not directly in Grid"));
             }
@@ -1455,7 +1489,14 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                     "`Grid` children must be wrapped in `Cell`; direct `for` members are not valid in Grid",
                 ));
             }
-            Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
+            // Handler admission on a `Grid` is the generic rule that
+            // `check_members_inner` applies to every widget kind
+            // (dsl_spec.md §4.19's admission table: `clicked` on any
+            // widget; `dismiss` only beside `modal-scope: true`). This
+            // `check_grid` pass holds no per-kind signal rule.
+            Member::SignalHandler { .. }
+            | Member::StateMember { .. }
+            | Member::PropertyDecl { .. } => {}
         }
     }
 
@@ -2411,6 +2452,11 @@ fn check_members_inner(
                     if type_name == "Grid" {
                         check_grid(children, span, filename, diags);
                     }
+                    if crate::ir::layout_treats_as_childless(type_name) {
+                        check_layout_childless_widget_children(
+                            type_name, children, span, filename, diags,
+                        );
+                    }
                     check_members_inner(
                         children,
                         Some(type_name),
@@ -2425,7 +2471,12 @@ fn check_members_inner(
                 }
             }
 
-            Member::SignalHandler { signal, body, span } => {
+            Member::SignalHandler {
+                signal,
+                arg,
+                body,
+                span,
+            } => {
                 if inside_for_template {
                     diags.push(error(
                         filename,
@@ -2444,6 +2495,44 @@ fn check_members_inner(
                         filename,
                         span,
                         "`dismiss` handler can never be raised: a dismissal request is addressed to a modal scope; write `modal-scope: true` on the same container or remove the handler (dsl_spec §4.19)",
+                    ));
+                }
+                // M4-Phase 2 T8: `key-down` argument rules (dsl_spec
+                // §4.19 "Keyboard input"). A `key-down` handler with no
+                // argument can never fire — the same "silently never
+                // fires" class the `dismiss` rule above guards against —
+                // and an argument naming an unrecognised key is rejected
+                // here rather than reaching the runtime unfireable.
+                // `key-down` is the only signal dsl_spec §4.19 defines
+                // with an argument, so any other signal carrying one is
+                // rejected too. Applies on every widget kind — there is
+                // no per-kind signal admission left to gate against
+                // (removed by the previous stage).
+                if signal == "key-down" {
+                    match arg {
+                        None => diags.push(error(
+                            filename,
+                            span,
+                            "`key-down` handler can never be raised: the key must be named in the declaration, e.g. `key-down(\"ArrowLeft\")` (dsl_spec §4.19)",
+                        )),
+                        Some(key) if !crate::ir::is_recognised_key_name(key) => {
+                            diags.push(error(
+                                filename,
+                                span,
+                                format!(
+                                    "`key-down(\"{key}\")` names an unrecognised key; recognised keys are the named non-character keys per dsl_spec §4.19 (`Escape`, the arrow / Home / End / Page keys, `Enter`, `F1`-`F12`)"
+                                ),
+                            ));
+                        }
+                        Some(_) => {}
+                    }
+                } else if arg.is_some() {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "`{signal}` does not take an argument; only `key-down` does (dsl_spec §4.19)"
+                        ),
                     ));
                 }
                 for stmt in &body.statements {
@@ -4164,6 +4253,137 @@ mod tests {
         let result = check_src(src);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
         assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    // --- M4-Phase 2 T8: layout-childless widget child rejection (CF-1,
+    // owner disposition 2026-08-07; widened from Button/ToggleButton to
+    // all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` 2026-08-08) ---
+
+    #[test]
+    fn button_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { Button { Text { text: "ok" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Button` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn togglebutton_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { ToggleButton { Text { text: "ok" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ToggleButton` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn text_with_widget_child_rejected() {
+        let errs =
+            errors(r#"component C inherits W { Text { text: "ok" Text { text: "nested" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Text` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn rectangle_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { Rectangle { Text { text: "nested" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Rectangle` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn vstack_with_widget_child_accepted() {
+        // Control: a container kind is untouched by the layout-childless
+        // rule — `VStack`'s `build_layout_tree` arm builds real layout
+        // children (`self.build_layout_child_slots()`), so this must
+        // remain accepted.
+        let result = check_src(r#"component C inherits W { VStack { Text { text: "ok" } } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn button_with_conditional_member_rejected() {
+        // Measured (T8 start gate): a `Conditional` member's own position
+        // inside a Button is not rejected by `check_if_body` (that pass
+        // only validates the `if`'s own body) nor by any Button-specific
+        // placement rule — before this rule, `Button { if c { Text {} } }`
+        // passed unrejected. Mirrors `check_box_child_count`'s completeness
+        // requirement: a conditional sibling must count toward the
+        // child-materialising total, not just bare `WidgetDecl` members.
+        let errs =
+            errors("component C inherits W { state c: bool = true Button { if c { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Button` admits no widget children")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn button_with_for_member_rejected() {
+        // Measured (T8 start gate): `check_for_member`'s enclosing-widget
+        // match special-cases `None` / `ScrollView` / `Box` / `Grid` /
+        // `Cell` only; `Some("Button")` falls through to its `_ => {}`
+        // arm, so a direct `for` inside a Button was not rejected before
+        // this rule.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] Button { for x in xs { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Button` admits no widget children")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn button_with_only_admitted_members_accepted() {
+        // The control that bounds the narrowing: `text:` / `enabled:` /
+        // a `clicked` handler / a `slot.*` bind are not child-materialising
+        // members, so a legitimate Button must not be rejected.
+        let src = r#"component C inherits W {
+            state on: bool = true
+            Grid {
+                columns: 1*
+                rows: 1*
+                Button {
+                    text: "Click"
+                    enabled: on
+                    slot.row: 0
+                    slot.column: 0
+                    clicked => { on = false; }
+                }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     // --- T3: Box accept shapes (dsl_spec §4.9) ---
@@ -6467,9 +6687,9 @@ mod tests {
 
     #[test]
     fn dismiss_handler_accepted_on_grid_carrying_modal_scope() {
-        // Grid relaxation: `Grid` takes no signal handlers other than
-        // `dismiss`, and `dismiss` itself is admissible here because the
-        // Grid carries `modal-scope: true`.
+        // `dismiss` is admitted here because the Grid carries
+        // `modal-scope: true` (the generic dsl_spec §4.19 rule; `Grid`
+        // holds no per-kind signal rule of its own).
         let result = check_src(
             "component C inherits W { state open: bool = true Grid { columns: 1* rows: 1* modal-scope: true dismiss => { open = false; } } }",
         );
@@ -6793,18 +7013,149 @@ mod tests {
     }
 
     #[test]
-    fn non_dismiss_handler_on_grid_still_rejected() {
-        // Proves the Grid signal-handler relaxation is narrow: only
-        // `dismiss` is let through, every other signal name stays
-        // rejected (widening e.g. `clicked` on Grid is T8's job).
-        let errs = errors(
+    fn clicked_handler_on_grid_accepted() {
+        // T8: `check_grid` no longer carries a per-kind signal rule, so
+        // `clicked` — admitted on any widget per dsl_spec §4.19 — is
+        // accepted on a Grid, same as on every other widget kind.
+        let result = check_src(
             "component C inherits W { state count: i32 = 0 Grid { columns: 1* rows: 1* clicked => { count += 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn clicked_handler_on_zstack_accepted() {
+        // Symmetric pin to the Grid case above: `wasamoc check` never had
+        // a per-kind signal rule for ZStack (only the runtime loader
+        // did), so this already passed; pinned explicitly so the
+        // Grid/ZStack admission pair is documented as symmetric.
+        let result = check_src(
+            "component C inherits W { state count: i32 = 0 ZStack { clicked => { count += 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_handler_on_grid_without_modal_scope_rejected_by_generic_rule() {
+        // Proves the generic dsl_spec §4.19 `dismiss` rule now solely
+        // owns Grid admission: the diagnostic is the generic "can never
+        // be raised" message, not the removed Grid-specific "takes no
+        // signal handlers other than `dismiss`" message — a Grid-specific
+        // rejection could not satisfy this assertion.
+        let errs = errors(
+            "component C inherits W { state open: bool = true Grid { columns: 1* rows: 1* dismiss => { open = false; } } }",
         );
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs[0].contains("`Grid` takes no signal handlers other than `dismiss`"),
+            errs[0].contains("`dismiss` handler can never be raised"),
             "{:?}",
             errs
         );
+        assert!(!errs[0].contains("takes no signal handlers"), "{:?}", errs);
+    }
+
+    // `dismiss` on a Grid carrying `modal-scope: true` is pinned above by
+    // `dismiss_handler_accepted_on_grid_carrying_modal_scope`, which
+    // doubles as this pair's accept-side case.
+
+    // ── M4-Phase 2 T8: `key-down("<key>")` argument rules (dsl_spec §4.19
+    // "Keyboard input", DD-M4-P2-005) ───────────────────────────────────
+
+    #[test]
+    fn key_down_without_argument_rejected() {
+        // A bare `key-down => { }` (no parenthesised key name) parses,
+        // but can never fire — the same "silently never fires" class the
+        // `dismiss` rule guards against.
+        let errs = errors("component C inherits W { Box { key-down => { } } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`key-down` handler can never be raised")
+                && errs[0].contains("must be named")
+                && errs[0].contains("key-down(\"ArrowLeft\")"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_unrecognised_key_name_rejected() {
+        let errs = errors(r#"component C inherits W { Box { key-down("Tab") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unrecognised key") && errs[0].contains("Tab"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_modifier_combo_rejected_as_unrecognised() {
+        // Modifier combinations (`Ctrl+S`) are not in this surface — they
+        // are simply an unrecognised name, no separate rule needed.
+        let errs = errors(r#"component C inherits W { Box { key-down("Ctrl+S") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("unrecognised key"), "{:?}", errs);
+    }
+
+    #[test]
+    fn argument_on_clicked_rejected() {
+        let errs = errors(r#"component C inherits W { Box { clicked("x") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`clicked` does not take an argument") && errs[0].contains("key-down"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn argument_on_dismiss_rejected() {
+        // `modal-scope: true` sibling present so only the argument rule
+        // fires, not the `dismiss`/`carries_modal_scope` admission rule.
+        let errs =
+            errors(r#"component C inherits W { Box { modal-scope: true dismiss("x") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` does not take an argument"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_accepted_on_box() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Box { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_accepted_on_button() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Button { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_accepted_on_grid() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Grid { columns: 1* rows: 1* key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_recognised_key_names_spot_check_accepted() {
+        // Representative sample across `RECOGNISED_KEY_NAMES`, not the
+        // full 22 (that exhaustive coverage lives on the
+        // `wasamo_ir::RECOGNISED_KEY_NAMES` table test).
+        for key in ["Escape", "Enter", "F12", "PageDown"] {
+            let src =
+                format!(r#"component C inherits W {{ Box {{ key-down("{key}") => {{ }} }} }}"#);
+            let result = check_src(&src);
+            assert!(!result.has_errors(), "key={key}: {:?}", result.diagnostics);
+        }
     }
 }

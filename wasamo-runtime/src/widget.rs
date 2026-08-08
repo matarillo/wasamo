@@ -975,6 +975,25 @@ impl WidgetNode {
         Self::button_family(compositor, renderer, label, style, true, false, false)
     }
 
+    /// Same as [`Self::button`], but with an explicit initial `enabled`
+    /// state (M4-Phase 2 T8, CF-2 disposition). `button` keeps its
+    /// hard-coded `enabled: true` so every other caller — the C ABI
+    /// `wasamo_button_create`, and the pre-existing `WidgetNode::button`
+    /// call sites in `tests/arranged_rect_integration.rs` and
+    /// `tests/button_enabled.rs` — stays source-compatible; only the IR
+    /// loader's `"Button"` materialisation arm needs a literal
+    /// `enabled: false` to reach construction, matching `toggle_button`'s
+    /// `enabled` parameter.
+    pub fn button_with_enabled(
+        compositor: &Compositor,
+        renderer: &TextRenderer,
+        label: &str,
+        style: ButtonStyle,
+        enabled: bool,
+    ) -> windows::core::Result<Box<Self>> {
+        Self::button_family(compositor, renderer, label, style, enabled, false, false)
+    }
+
     pub fn toggle_button(
         compositor: &Compositor,
         renderer: &TextRenderer,
@@ -1587,6 +1606,18 @@ impl WidgetNode {
 
     /// Attach a DSL inline handler for `signal_name` to this widget.
     /// Called by the IR loader (Phase 6) when building the widget tree.
+    ///
+    /// **`signal_name` is the canonical storage spelling, not the bare IR
+    /// signal name** (M4-Phase 2 T8): a signal carrying an argument is
+    /// stored under `wasamo_ir::signal_key`'s composed form —
+    /// `key-down("ArrowLeft")` rather than `key-down` — so that two
+    /// handlers for different keys on the same node are distinguishable by
+    /// name alone. `signal_key` returns the bare name unchanged when there
+    /// is no argument, so `clicked` and `dismiss` are stored exactly as
+    /// before. The loader is the only caller, and every lookup side
+    /// ([`signal_handlers_for`]'s callers) composes its key through the
+    /// same function — nothing else builds this string
+    /// (DD-M4-P2-005).
     pub fn set_inline_handler(&mut self, signal_name: impl Into<String>, expr: HandlerExpr) {
         self.inline_handlers.push((signal_name.into(), expr));
     }
@@ -1713,6 +1744,100 @@ impl WidgetNode {
         // live, and no handler has run yet in this delivery.
         let handlers = unsafe { signal_handlers_for(widget_ptr, "dismiss") };
         run_signal_handlers(widget_ptr, "dismiss", handlers);
+    }
+
+    /// Deliver an authored `key-down("<key>")` event, walking from
+    /// `start_path` through its ancestors until a handler runs (M4-Phase 2
+    /// T8; `docs/dsl_spec.md` §4.19 "Keyboard events start at the focused
+    /// widget... and walk the same way" as a pointer event; "the first
+    /// matching handler runs and consumes the key"). The caller
+    /// (`focus::key_down_on_key`) has already resolved `start_path` — the
+    /// focused widget, or the innermost modal focus scope when nothing is
+    /// focused — against the same live tree this call runs against, so no
+    /// staleness check is needed on `start_path` itself, the same
+    /// precondition [`Self::hit_test_click`] relies on for the path
+    /// `hit::resolve_topmost` just returned.
+    ///
+    /// Mirrors [`Self::hit_test_click`]'s two-pass shape: resolve every
+    /// node of the dispatch chain to a raw pointer up front, before any
+    /// handler runs (a handler's synchronous state write can rebuild or
+    /// remove subtrees — see `run_clicked_handlers`'s safety note, which
+    /// this inherits rather than restates), then walk front-to-back
+    /// looking up `wasamo_ir::signal_key("key-down", Some(key))` — the one
+    /// string the IR loader and this dispatcher both compose it from
+    /// (DD-M4-P2-005; "Nothing else may compose this string").
+    ///
+    /// Returns `true` as soon as some node in the chain actually runs a
+    /// handler; `false` if the walk reaches the root with nothing run —
+    /// the caller reads that as "not consumed" and lets the key continue
+    /// toward the host key slot and then `DefWindowProcW`
+    /// (`docs/architecture.md` §13.2).
+    ///
+    /// **A disabled Button-family node suppresses its own `key-down`
+    /// dispatch and does not consume**, the same disposition
+    /// [`ClickDisposition::Suppressed`] gives a click: the walk skips that
+    /// node's handlers and continues to its ancestors.
+    /// `docs/dsl_spec.md` §4.8's disabled contract is written over clicks,
+    /// but its focus clause is written over the keyboard — a disabled
+    /// Button "cannot be reached or activated from the keyboard" — and
+    /// §4.19 makes `clicked` and `key-down` two spellings of the same
+    /// authored surface, so delivering one while suppressing the other
+    /// would be an asymmetry an author could only discover by hitting it.
+    ///
+    /// **This arm is reachable, and the reachable shape is narrow**
+    /// (independent review of M4-Phase 2 T8, F1). A disabled Button is
+    /// excluded from Tab-stop enumeration and from click landing
+    /// (`focus_core::FocusTree::collect_stops` / `focus_landing`, both
+    /// gated on `node.enabled`), so it can never be the *focused* widget;
+    /// and after T8's Button-family child rejection a Button carries no
+    /// children, so it is never a non-start node on a chain. What remains
+    /// is [`crate::focus::key_down_on_key`]'s **other** start source: with
+    /// nothing focused the walk starts at `traversal_root`, which is the
+    /// tree root itself, and `collect_stops` never gates the root node
+    /// (it is visited with `is_root = true`, which skips the role and
+    /// enabled checks). A component whose root widget *is* a disabled
+    /// Button therefore reaches this arm — the shape
+    /// `a_disabled_root_button_suppresses_its_own_key_down_without_consuming`
+    /// builds.
+    pub(crate) fn deliver_key_down(&mut self, start_path: &[usize], key: &str) -> bool {
+        let signal = wasamo_ir::signal_key("key-down", Some(key));
+
+        // Same two-step split as `hit_test_click`: resolve every chain
+        // node to a raw pointer first, before any handler runs.
+        let mut chain: Vec<*mut WidgetNode> = Vec::new();
+        for node_path in hit::dispatch_chain(start_path) {
+            // Reborrow `self` fresh for each node_path instead of moving
+            // it, so the outer loop can walk down from the root again for
+            // the next ancestor — the same pattern `hit_test_click` uses.
+            let mut node: &mut WidgetNode = &mut *self;
+            for index in node_path {
+                node = node.children[index].as_mut();
+            }
+            chain.push(node as *mut WidgetNode);
+        }
+
+        for widget_ptr in chain {
+            // Safety: every pointer in `chain` was resolved above, before
+            // any handler in this dispatch ran, so it is still live the
+            // first time the walk reaches it — the same argument
+            // `hit_test_click` makes for its own chain.
+            let node = unsafe { &*widget_ptr };
+            // Checked ahead of the handler lookup, exactly as
+            // `click_disposition_for` checks it ahead of its producer scan:
+            // a disabled Button-family node dispatches nothing even when it
+            // carries a handler, and — having run nothing — does not end
+            // the walk either.
+            if let Some(false) = node.button_data().map(|btn| btn.enabled) {
+                continue;
+            }
+            let handlers = unsafe { signal_handlers_for(widget_ptr, &signal) };
+            if handlers.inline.is_empty() && !handlers.has_host_listener {
+                continue;
+            }
+            run_signal_handlers(widget_ptr, &signal, handlers);
+            return true;
+        }
+        false
     }
 
     /// Update hover/press state as an enter/leave transition against the
@@ -2466,6 +2591,15 @@ impl WidgetNode {
 
     fn build_layout_tree(&self) -> LayoutNode {
         match &self.data {
+            // This arm *is* what `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+            // describes: it maps `Rectangle` / `Text` / `Button` /
+            // `ToggleButton` to a childless `LayoutNode::rectangle`, so a
+            // widget child under any of them is never arranged. Giving any
+            // of these kinds real layout children (the way the `VStack` /
+            // `Box` / … arms below build `self.build_layout_child_slots()`)
+            // means removing its entry from that table in the same change
+            // — otherwise `wasamoc check` and the runtime IR loader keep
+            // rejecting a shape layout now supports.
             WidgetData::Rectangle
             | WidgetData::Text { .. }
             | WidgetData::Button(_)
@@ -2821,20 +2955,21 @@ unsafe fn click_disposition_for(widget_ptr: *mut WidgetNode) -> ClickDisposition
 
 /// The handlers found for one named signal at one node, snapshotted before
 /// any of them runs (M4-Phase 2 T7) — the inline-plus-host half of what
-/// [`ClickedHandlers`] carries for `clicked`, generalised so `dismiss`
-/// (`docs/dsl_spec.md` §4.19) can share it rather than growing a second,
-/// parallel handler dispatcher (implementation-gates trap #3: two
-/// handler-running code paths could drift on ordering, or on the
-/// synchronous-rebuild hazard [`run_signal_handlers`]'s doc comment
+/// [`ClickedHandlers`] carries for `clicked`, generalised so `dismiss` and
+/// `key-down("<key>")` (`docs/dsl_spec.md` §4.19) can share it rather than
+/// each growing a parallel handler dispatcher (implementation-gates trap
+/// #3: several handler-running code paths could drift on ordering, or on
+/// the synchronous-rebuild hazard [`run_signal_handlers`]'s doc comment
 /// records).
 ///
 /// **No native-closure flag here**, unlike `ClickedHandlers`: `clicked` is
 /// the only signal with a Rust-native producer (`ButtonData::clicked_fn`),
 /// so `run_clicked_handlers` keeps that step in its own body and hands
-/// only this inline-plus-host half to [`run_signal_handlers`]. `dismiss`
-/// has no native producer at all — every recipient of this type either
-/// has no native step ([`WidgetNode::deliver_dismiss_at`]) or runs it
-/// separately (`run_clicked_handlers`).
+/// only this inline-plus-host half to [`run_signal_handlers`]. Neither
+/// `dismiss` nor `key-down` has a native producer at all — every recipient
+/// of this type either has no native step
+/// ([`WidgetNode::deliver_dismiss_at`], [`WidgetNode::deliver_key_down`])
+/// or runs it separately (`run_clicked_handlers`).
 struct SignalHandlers {
     /// DSL inline handler bodies for this signal name, already cloned out
     /// of `WidgetNode::inline_handlers` — any widget kind can carry these.
@@ -2853,9 +2988,11 @@ struct SignalHandlers {
 /// `widget_ptr` must point to a still-live `WidgetNode`, and this must be
 /// called before any handler has run in this delivery — the same
 /// dispatch-order invariant `click_disposition_for`'s callers already
-/// guarantee (`hit_test_click`'s pre-captured chain) and
-/// [`WidgetNode::deliver_dismiss_at`] guarantees by construction (it
-/// resolves `widget_ptr` itself, immediately before calling this).
+/// guarantee (`hit_test_click`'s pre-captured chain, and
+/// [`WidgetNode::deliver_key_down`]'s, which is that chain's shape applied
+/// to a key) and [`WidgetNode::deliver_dismiss_at`] guarantees by
+/// construction (it resolves `widget_ptr` itself, immediately before
+/// calling this).
 unsafe fn signal_handlers_for(widget_ptr: *mut WidgetNode, signal: &str) -> SignalHandlers {
     // Safety: see the function doc comment.
     let node = unsafe { &*widget_ptr };

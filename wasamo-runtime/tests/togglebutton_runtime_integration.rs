@@ -274,6 +274,67 @@ fn disabled_checked_togglebutton_shows_disabled_not_checked_color() {
     );
 }
 
+// ── M4-Phase 2 T8: literal `enabled: false` on a plain `Button` (CF-2,
+// owner disposition 2026-08-07) ─────────────────────────────────────────
+//
+// Before this fix, the "Button" IR-loader materialisation arm read only
+// `text` / `style`, and `WidgetNode::button` hard-coded `enabled: true` —
+// so only a *state-bound* `enabled` could disable a plain Button; a
+// literal `enabled: false` was accepted by `wasamoc check` and then
+// silently dropped. These two tests drive the production compiler ->
+// textual IR -> runtime loader -> live `WidgetNode` path the same way
+// the ToggleButton tests above do, reusing `__button_enabled_for_test`
+// (already shared across `WidgetData::Button` / `WidgetData::ToggleButton`).
+
+#[test]
+fn literal_enabled_false_on_plain_button_is_respected() {
+    run_on_owning_runtime_thread_or_skip(
+        "Button literal enabled:false integration test (CF-2)",
+        move || {
+            let built = build_ui(
+                r#"component DisabledButton inherits Window {
+    Button {
+        text: "Disabled"
+        enabled: false
+    }
+}"#,
+            );
+
+            assert_eq!(
+                built.root.__button_enabled_for_test(),
+                Some(false),
+                "a literal `enabled: false` on a plain Button must disable it"
+            );
+        },
+    );
+}
+
+#[test]
+fn button_with_no_enabled_prop_constructs_enabled() {
+    run_on_owning_runtime_thread_or_skip(
+        "Button absent enabled defaults-true integration test (CF-2 positive control)",
+        move || {
+            let built = build_ui(
+                r#"component DefaultButton inherits Window {
+    Button {
+        text: "Click"
+    }
+}"#,
+            );
+
+            // Positive control: the loader must not simply always disable a
+            // Button — absent `enabled` still constructs enabled (`true`),
+            // the same runtime default as `ToggleButton.enabled` (dsl_spec
+            // §4.8), so the fix above cannot pass by always disabling.
+            assert_eq!(
+                built.root.__button_enabled_for_test(),
+                Some(true),
+                "a Button with no `enabled` prop must construct enabled"
+            );
+        },
+    );
+}
+
 fn checked_children(root: &WidgetNode) -> Vec<bool> {
     root.children
         .iter()

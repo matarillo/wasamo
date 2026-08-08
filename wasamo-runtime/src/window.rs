@@ -975,6 +975,26 @@ unsafe extern "system" fn wnd_proc(
                     // dismissal request.
                     return LRESULT(0);
                 }
+                // The three arms above are the runtime-kept behaviours
+                // `docs/dsl_spec.md` §4.19's key table lists ahead of any
+                // authored handler (Tab/Shift+Tab always, arrows inside a
+                // focus-group, Escape while a modal scope is present).
+                // `key_down_on_key` is the authored `key-down("<key>")`
+                // propagation walk (M4-Phase 2 T8): it runs after all
+                // three and before the host key slot below, because a
+                // handler that ran has already consumed the key (§4.19
+                // "the first matching handler runs and consumes the key")
+                // and nothing downstream should also see it. CF-T5-5's
+                // tripwire (`modal_scope_integration.rs`'s
+                // `escapes_two_legs` / `arrow_keys_two_legs`) asserts the
+                // host-key-slot fallthrough leg, so this arm must stay
+                // between `dismiss_on_key` and the host key slot, not
+                // ahead of the other three or behind the slot.
+                if focus::key_down_on_key(root, &mut state.focus, vk) {
+                    // An authored `key-down("<key>")` handler consumed the
+                    // key.
+                    return LRESULT(0);
+                }
             }
             // Routing consumes ahead of the host key slot without
             // installing it: the first installer would fix the callback

@@ -18,7 +18,8 @@ use crate::focus_core::{self, Arrow, ArrowOutcome, FocusId, FocusRole, FocusTree
 use crate::hit::{self, DipPoint};
 use crate::widget::WidgetNode;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    VK_DOWN, VK_ESCAPE, VK_LEFT, VK_RIGHT, VK_TAB, VK_UP,
+    VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_F10, VK_F11, VK_F12, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6,
+    VK_F7, VK_F8, VK_F9, VK_HOME, VK_LEFT, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_TAB, VK_UP,
 };
 use windows::UI::Composition::Compositor;
 
@@ -755,6 +756,142 @@ pub(crate) fn dismiss_on_key(root: &mut WidgetNode, focus: &mut WindowFocus, vk:
     true
 }
 
+/// Map a Win32 virtual-key code to the `dsl_spec.md` §4.19 key name a
+/// `key-down("<key>")` handler is declared with, or `None` when `vk` is
+/// not one of the 22 recognised names.
+///
+/// **The 22 arms below are `wasamo_ir::RECOGNISED_KEY_NAMES`'s own
+/// order**, one `if` per table entry — not a formula (e.g. `VK_F1.0 +
+/// n`), because the return type is `&'static str` and every recognised
+/// name already exists as a string literal; a formula would need to
+/// build one instead. This function's own unit test
+/// (`key_name_for_vk_produces_every_recognised_key_name`) is the
+/// anti-drift check that a name added to the shared table with no
+/// matching arm here does not silently compile — a handler the checker
+/// accepts but this map can never produce would be a `key-down` that can
+/// never fire.
+///
+/// `Tab` is deliberately unmapped: `VK_TAB` is claimed by
+/// [`traverse_on_key`] ahead of [`key_down_on_key`] in `window.rs`'s
+/// `WM_KEYDOWN` arm and can never reach here, and `Tab` is not itself in
+/// `RECOGNISED_KEY_NAMES` (that table's own doc comment) — so `VK_TAB`
+/// falls to the final `else` and returns `None`, pinned directly by this
+/// function's own `vk_tab_is_not_authorable_as_a_key_down_name` test
+/// rather than left to fall out of the two facts above by inference.
+pub(crate) fn key_name_for_vk(vk: u16) -> Option<&'static str> {
+    if vk == VK_ESCAPE.0 {
+        Some("Escape")
+    } else if vk == VK_LEFT.0 {
+        Some("ArrowLeft")
+    } else if vk == VK_RIGHT.0 {
+        Some("ArrowRight")
+    } else if vk == VK_UP.0 {
+        Some("ArrowUp")
+    } else if vk == VK_DOWN.0 {
+        Some("ArrowDown")
+    } else if vk == VK_HOME.0 {
+        Some("Home")
+    } else if vk == VK_END.0 {
+        Some("End")
+    } else if vk == VK_PRIOR.0 {
+        Some("PageUp")
+    } else if vk == VK_NEXT.0 {
+        Some("PageDown")
+    } else if vk == VK_RETURN.0 {
+        Some("Enter")
+    } else if vk == VK_F1.0 {
+        Some("F1")
+    } else if vk == VK_F2.0 {
+        Some("F2")
+    } else if vk == VK_F3.0 {
+        Some("F3")
+    } else if vk == VK_F4.0 {
+        Some("F4")
+    } else if vk == VK_F5.0 {
+        Some("F5")
+    } else if vk == VK_F6.0 {
+        Some("F6")
+    } else if vk == VK_F7.0 {
+        Some("F7")
+    } else if vk == VK_F8.0 {
+        Some("F8")
+    } else if vk == VK_F9.0 {
+        Some("F9")
+    } else if vk == VK_F10.0 {
+        Some("F10")
+    } else if vk == VK_F11.0 {
+        Some("F11")
+    } else if vk == VK_F12.0 {
+        Some("F12")
+    } else {
+        None
+    }
+}
+
+/// Deliver an authored `key-down("<key>")` event: map `vk` to its
+/// `dsl_spec.md` §4.19 name and walk the propagation chain starting at
+/// the focused widget — or, when nothing is focused, at the innermost
+/// modal focus scope — until a handler runs. Every other case (`vk` is
+/// not a recognised key name, or the walk finds nothing to run) is left
+/// untouched so the caller can fall the key through
+/// (`docs/architecture.md` §13.2).
+///
+/// Shaped exactly like [`dismiss_on_key`]: map or decline, project,
+/// rebase, resolve a path, deliver.
+///
+/// **Why the fallback start is `traversal_root` and not "no dispatch".**
+/// `docs/dsl_spec.md` §4.19: "Keyboard events start at the focused
+/// widget — or, when nothing is focused, at the innermost modal focus
+/// scope — and walk the same way" as a pointer event.
+/// `focus_core::FocusTree::traversal_root`'s own doc comment is exactly
+/// that clause: "The subtree traversal is confined to: the innermost
+/// entered modal scope, or the tree root" — it returns the entered
+/// scope's id, or the tree root (id `0`) when none is entered. Reading
+/// that value as the walk's start, rather than declining to dispatch at
+/// all when nothing is focused, is therefore a direct reading of the
+/// spec's "or... at the innermost modal focus scope" clause, not an
+/// invention made here.
+///
+/// **No focus write here**, the same as [`dismiss_on_key`]: delivering
+/// the key can run a handler whose state write rebuilds or removes
+/// subtrees synchronously, but reconciling focus against that is
+/// `sync_scopes_to_tree`'s job at the next structural-mutation seam, not
+/// this function's.
+pub(crate) fn key_down_on_key(root: &mut WidgetNode, focus: &mut WindowFocus, vk: u16) -> bool {
+    let Some(name) = key_name_for_vk(vk) else {
+        return false;
+    };
+    let projection = FocusProjection::project(root);
+    // Must run before anything below reads `focus.core`, for the same
+    // reason `traverse_on_key` / `arrow_on_key` / `dismiss_on_key` run it
+    // first: the ids read next must already be expressed in this fresh
+    // projection's coordinate system.
+    focus.rebase(&projection);
+    let start = focus
+        .focused()
+        .unwrap_or_else(|| projection.tree().traversal_root(&focus.core));
+    // `rebase` just ran, so `start` is already expressed in this fresh
+    // projection's coordinate system; `path` failing to resolve it would
+    // mean the projection disagrees with the tree it was itself built
+    // from, which does not happen — but delivery is still gated on it
+    // resolving, rather than assumed (the same discipline
+    // `dismiss_on_key` uses for `scope`).
+    //
+    // **This arm returns `false` where `dismiss_on_key`'s returns `true`,
+    // and the asymmetry is the two signals' consumption rules rather than
+    // an oversight** (noted at the independent review, F3). Escape is
+    // consumed by the *existence* of an entered scope — writing no
+    // `dismiss` handler is how a scope declines to close (dsl_spec §4.19)
+    // — so `dismiss_on_key` has already decided consumption before it
+    // resolves a path. A `key-down` is consumed only by a handler that
+    // *runs*, so a walk that cannot start has consumed nothing and the key
+    // must fall through.
+    let Some(path) = projection.path(start) else {
+        return false;
+    };
+    root.deliver_key_down(path, name)
+}
+
 /// The focused widget's path, or `None` when nothing is focused, or when
 /// the retained id names a node this freshly built projection cannot
 /// explain.
@@ -887,5 +1024,60 @@ mod tests {
             None,
             "nothing dropped must read back as nothing to restore"
         );
+    }
+
+    // ── `key_name_for_vk` (M4-Phase 2 T8) ───────────────────────────────────
+
+    #[test]
+    fn key_name_for_vk_produces_every_recognised_key_name() {
+        // The anti-drift check this stage's brief requires. Rather than a
+        // second (name -> vk) table here — which would just be a
+        // differently-shaped copy of `key_name_for_vk`'s own mapping, and
+        // could drift from it exactly the way this test exists to catch
+        // — the full Win32 virtual-key byte range (0..=255; every VK_*
+        // constant this crate uses fits in a `u8`) is swept through the
+        // function itself and the produced names are collected. The only
+        // way a `wasamo_ir::RECOGNISED_KEY_NAMES` entry can fail the
+        // assertion below is if `key_name_for_vk` truly has no `vk` that
+        // maps to it: a name added to the shared table with no matching
+        // arm added here — the "silently never fires" failure class this
+        // test exists to close.
+        let produced: std::collections::HashSet<&'static str> =
+            (0u16..=255).filter_map(key_name_for_vk).collect();
+        for name in wasamo_ir::RECOGNISED_KEY_NAMES {
+            assert!(
+                produced.contains(name),
+                "`{name}` is in wasamo_ir::RECOGNISED_KEY_NAMES but no vk in 0..=255 maps to \
+                 it via key_name_for_vk — a name added to the shared table with no vk mapping \
+                 is a handler that would silently never fire"
+            );
+        }
+    }
+
+    #[test]
+    fn every_name_key_name_for_vk_can_produce_is_recognised() {
+        // The reverse agreement leg: nothing this function can produce is
+        // itself unrecognised by the checker's own gate — the two facts
+        // together are what make `key_name_for_vk`'s range exactly
+        // `RECOGNISED_KEY_NAMES`, not a superset or a disjoint set that
+        // happens to pass the forward sweep above.
+        for vk in 0u16..=255 {
+            if let Some(name) = key_name_for_vk(vk) {
+                assert!(
+                    wasamo_ir::is_recognised_key_name(name),
+                    "key_name_for_vk({vk}) produced `{name}`, which \
+                     wasamo_ir::is_recognised_key_name does not recognise"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn vk_tab_is_not_authorable_as_a_key_down_name() {
+        // Tab always belongs to focus traversal (`traverse_on_key` claims
+        // it ahead of `key_down_on_key` in `window.rs`'s `WM_KEYDOWN`
+        // arm) and is never in `RECOGNISED_KEY_NAMES`, so it must never
+        // be authorable as a `key-down` name either.
+        assert_eq!(key_name_for_vk(VK_TAB.0), None);
     }
 }

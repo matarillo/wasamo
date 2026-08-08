@@ -249,6 +249,14 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // rather than being swallowed by a per-kind "unknown attribute"
     // catch-all.
     validate_focus_annotation_invariants(&comp.root)?;
+    // M4-Phase 2 T8 defense-in-depth gate (dsl_spec §4.19, DD-M4-P2-005).
+    // `wasamoc check` (T8) rejects the same `key-down` argument shapes
+    // at compile time; this is the runtime half for memory IR that
+    // reaches the loader via `wasamo_load_ui` without traversing
+    // `wasamoc`. See `validate_key_down_invariants`'s doc comment for
+    // why this is a sibling pass rather than folded into
+    // `validate_focus_annotation_invariants` above.
+    validate_key_down_invariants(&comp.root)?;
     // M3-Phase 3 T6 defense-in-depth gate (DD-M3-P3-006 runtime half).
     // `wasamoc check` (T1) rejects negative literals on WrapPanel's three
     // attribute names at compile time; this is the last-line-of-defence
@@ -924,6 +932,27 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             child_member_count
         )));
     }
+    // M4-Phase 2 T8 (CF-1, owner disposition 2026-08-07; widened from
+    // Button/ToggleButton to all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+    // 2026-08-08): a layout-childless node (`Rectangle` / `Text` /
+    // `Button` / `ToggleButton`) carrying any child member is rejected
+    // here too. `wasamoc check`'s `check_layout_childless_widget_children`
+    // rejects the same shape at compile time (defense in depth); this is
+    // the runtime gate for memory IR that reaches `wasamo_load_ui` without
+    // traversing `wasamoc`. Unlike Box's "at most one", every child member
+    // (widget, conditional, or `for`) is unknown to `build_layout_tree`
+    // (widget.rs), which maps every kind in the table to a childless
+    // `LayoutNode::rectangle` — so the admitted count here is zero, not
+    // one. Neither this condition nor the message below names a widget
+    // kind: both read `wasamo_ir::layout_treats_as_childless` / the
+    // offending `node.widget_type`, so widening or narrowing the rule is a
+    // single edit to `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`.
+    if wasamo_ir::layout_treats_as_childless(&node.widget_type) && child_member_count > 0 {
+        return Err(IrLoadError::Validate(format!(
+            "`{}` node accepts no children, got {} (layout arranges it as a single rectangle, so a child would never be arranged, painted, or hit-tested — wrap it in a container widget instead; dsl_spec §4.4)",
+            node.widget_type, child_member_count
+        )));
+    }
     // Ratio / Color literal placement (DD-M3-P2-002 / DD-M3-P2-003,
     // variant strategy Option A). These literals materialise directly
     // into Box-internal `Ratio` / `Color` at `build_node` and never
@@ -1174,11 +1203,17 @@ fn validate_phase6_zstack_node_invariants(
         // has already run (see `validate`'s ordering) and rejected a
         // malformed shape of either attribute or of `dismiss`, so by the
         // time this gate sees them they are known-good. Every other
-        // Phase-6 attribute and every other signal name — `clicked`
-        // included; widening `clicked` on a `ZStack` is T8's job, not
-        // this one's — stays rejected. The bindings rule is untouched:
-        // both focus annotations are constant-only and never travel the
-        // binding path.
+        // Phase-6 attribute stays rejected. The bindings rule is
+        // untouched: both focus annotations are constant-only and never
+        // travel the binding path.
+        //
+        // M4-Phase 2 T8: signal-handler admission on a ZStack is not
+        // gated here at all — it is the generic name-keyed rule in
+        // `validate_focus_annotation_invariants` (`dismiss` needs a
+        // `modal-scope: true` sibling on the same node; every other
+        // signal name, e.g. `clicked`, is admitted unconditionally), the
+        // same rule every other widget kind is subject to. This gate has
+        // no per-kind handler rule of its own.
         let zstack_widget_prop = node.props.iter().find(|prop| {
             !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name))
                 && !matches!(prop.name.as_str(), "focus-group" | "modal-scope")
@@ -1192,11 +1227,6 @@ fn validate_phase6_zstack_node_invariants(
         if !node.bindings.is_empty() {
             return Err(IrLoadError::Validate(
                 "`ZStack` accepts no Phase-6 bindings".into(),
-            ));
-        }
-        if node.handlers.iter().any(|h| h.signal != "dismiss") {
-            return Err(IrLoadError::Validate(
-                "`ZStack` accepts no Phase-6 handlers".into(),
             ));
         }
     }
@@ -1369,6 +1399,79 @@ fn validate_focus_annotation_member_invariants(member: &IrMember) -> Result<(), 
         IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
             for body_member in body {
                 validate_focus_annotation_member_invariants(body_member)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+// ── M4-Phase 2 T8: `key-down("<key>")` handler argument ────────────────
+
+/// M4-Phase 2 T8 defense-in-depth gate (dsl_spec §4.19 "Keyboard input",
+/// DD-M4-P2-005) — the runtime half of the `wasamoc check` gate for
+/// `key-down`'s parenthesised argument. `wasamoc check` rejects the same
+/// three shapes at compile time (in the `Member::SignalHandler` arm of
+/// `check_members_inner`); this gate exists for memory IR that reaches
+/// the runtime loader through `wasamo_load_ui` without traversing
+/// `wasamoc`, the same reason every earlier `validate_phaseN_*` gate in
+/// this file exists.
+///
+/// Kept as its own pass rather than folded into
+/// `validate_focus_annotation_invariants`: the two features are
+/// unrelated beyond sharing dsl_spec §4.19. `key-down` is admitted on
+/// **every** widget kind (no container gate, unlike `focus-group` /
+/// `modal-scope`), so this pass needs neither `FOCUS_ANNOTATION_CONTAINERS`
+/// nor an `enclosing_widget`-shaped parameter — folding it in would have
+/// made that function's own doc comment ("the gate for focus-group /
+/// modal-scope / dismiss") inaccurate for no shared logic.
+fn validate_key_down_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    for handler in &node.handlers {
+        if handler.signal == "key-down" {
+            match &handler.arg {
+                // A bare `key-down` (no argument) can never fire — the
+                // same "silently never fires" class `dismiss` guards
+                // against above.
+                None => {
+                    return Err(IrLoadError::Validate(
+                        "`key-down` handler can never be raised: the key must be named in the declaration, e.g. `key-down(\"ArrowLeft\")` (dsl_spec §4.19)".into(),
+                    ));
+                }
+                Some(key) if !wasamo_ir::is_recognised_key_name(key) => {
+                    return Err(IrLoadError::Validate(format!(
+                        "`key-down(\"{key}\")` names an unrecognised key; recognised keys are the named non-character keys per dsl_spec §4.19 (`Escape`, the arrow / Home / End / Page keys, `Enter`, `F1`-`F12`)"
+                    )));
+                }
+                Some(_) => {}
+            }
+        } else if handler.arg.is_some() {
+            // `key-down` is the only signal dsl_spec §4.19 defines with
+            // an argument.
+            return Err(IrLoadError::Validate(format!(
+                "`{}` does not take an argument; only `key-down` does (dsl_spec §4.19)",
+                handler.signal
+            )));
+        }
+    }
+    for member in &node.children {
+        validate_key_down_member_invariants(member)?;
+    }
+    Ok(())
+}
+
+fn validate_key_down_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(slot) => validate_key_down_invariants(&slot.node),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_key_down_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_key_down_member_invariants(body_member)?;
             }
             Ok(())
         }
@@ -2841,10 +2944,29 @@ impl<'a> Parser<'a> {
     fn parse_handler(&mut self) -> Result<IrHandler, IrLoadError> {
         self.expect_keyword("on")?;
         let signal = self.expect_ident()?;
+        // Optional parenthesised string argument (DD-M4-P2-005), e.g.
+        // `on key-down("ArrowLeft") { ... }`. The IR text grammar's
+        // canonical machine format always writes a plain string literal
+        // here — no interpolation, mirroring `wasamoc`'s parser.
+        let arg = if matches!(self.peek(), Some(Token::LParen)) {
+            self.advance();
+            let value = match self.advance() {
+                Some(Token::Str(s)) => s.clone(),
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "expected string literal in handler argument, got {other:?}"
+                    )));
+                }
+            };
+            self.expect(&Token::RParen)?;
+            Some(value)
+        } else {
+            None
+        };
         self.expect(&Token::LBrace)?;
         let expr = self.parse_expr()?;
         self.expect(&Token::RBrace)?;
-        Ok(IrHandler { signal, expr })
+        Ok(IrHandler { signal, arg, expr })
     }
 
     fn parse_literal(&mut self) -> Result<IrLiteral, IrLoadError> {
@@ -3240,9 +3362,17 @@ fn build_node_with_loop_context(
         widget.bindings.push(handle);
     }
 
-    // Handlers: attach each `on` body via Phase 3's set_inline_handler path.
+    // Handlers: attach each `on` body via Phase 3's set_inline_handler
+    // path. The storage key is the DD-M4-P2-005 canonical spelling
+    // (`wasamo_ir::signal_key`) — `clicked` for a no-argument handler,
+    // `key-down("ArrowLeft")` for an argument-carrying one — so a later
+    // stage's dispatcher can look handlers up by the same composed key.
+    // Nothing else may compose this string.
     for handler in &node.handlers {
-        widget.set_inline_handler(handler.signal.clone(), handler.expr.clone());
+        widget.set_inline_handler(
+            wasamo_ir::signal_key(&handler.signal, handler.arg.as_deref()),
+            handler.expr.clone(),
+        );
     }
 
     // Children: recurse and attach via the Phase 4 internal mutation API.
@@ -3838,12 +3968,25 @@ fn construct_widget(
         "Button" => {
             let label = extract_str_prop(&node.props, "text").unwrap_or_default();
             let style = extract_button_style(&node.props, "style");
+            // CF-2 disposition (2026-08-07): read `enabled` exactly the way
+            // the `ToggleButton` arm below does. A literal `enabled: false`
+            // was previously silently dropped here — this arm read only
+            // `text` / `style`, and `WidgetNode::button` hard-coded
+            // `enabled: true` — so only a *state-bound* `enabled` could
+            // disable a plain Button. `has_binding` still defers to the
+            // binding's initial run, same as ToggleButton.
+            let enabled = extract_bool_prop(&node.props, "enabled").unwrap_or(true);
             let initial = if has_binding(&node.bindings, "text") {
                 String::new()
             } else {
                 label
             };
-            WidgetNode::button(compositor, renderer, &initial, style)
+            let initial_enabled = if has_binding(&node.bindings, "enabled") {
+                true
+            } else {
+                enabled
+            };
+            WidgetNode::button_with_enabled(compositor, renderer, &initial, style, initial_enabled)
                 .map_err(|e| IrLoadError::Build(format!("button: {e}")))
         }
         "ToggleButton" => {
@@ -5746,6 +5889,7 @@ mod tests {
                         bindings: vec![],
                         handlers: vec![IrHandler {
                             signal: "clicked".into(),
+                            arg: None,
                             expr: HandlerExpr::CompoundAssign {
                                 op: CompoundOp::Add,
                                 lhs: "count".into(),
@@ -5894,7 +6038,10 @@ mod tests {
             ));
         }
         for h in &n.handlers {
-            out.push_str(&format!("{i}    on {} {{\n", h.signal));
+            match &h.arg {
+                Some(arg) => out.push_str(&format!("{i}    on {}(\"{}\") {{\n", h.signal, arg)),
+                None => out.push_str(&format!("{i}    on {} {{\n", h.signal)),
+            }
             out.push_str(&format!("{i}        {}\n", render_expr(&h.expr)));
             out.push_str(&format!("{i}    }}\n"));
         }
@@ -6435,6 +6582,72 @@ mod tests {
         );
         assert_eq!(c.root.children.len(), 1);
         assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
+    }
+
+    // ── M4-Phase 2 T8: layout-childless widget child rejection (CF-1,
+    // owner disposition 2026-08-07; widened from Button/ToggleButton to
+    // all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` 2026-08-08)
+    // ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn validate_rejects_button_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { node Text {} }\n\
+             }",
+            "`Button` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { node Text {} }\n\
+             }",
+            "`ToggleButton` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_text_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Text { node Text {} }\n\
+             }",
+            "`Text` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_rectangle_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Rectangle { node Text {} }\n\
+             }",
+            "`Rectangle` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn childless_button_is_valid() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { prop text = \"hi\" }\n}",
+        );
+        assert!(c.root.children.is_empty());
+    }
+
+    #[test]
+    fn vstack_with_widget_child_is_valid() {
+        // Control: a container kind is untouched by the layout-childless
+        // rule — `VStack` is not in `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`,
+        // so a widget child must still parse and validate.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { node Text {} }\n}",
+        );
+        assert_eq!(c.root.children.len(), 1);
     }
 
     // ── M3-Phase 3 T6: WrapPanel validate() defense-in-depth ─────────────
@@ -7869,16 +8082,21 @@ mod tests {
     }
 
     #[test]
-    fn zstack_handler_rejected_at_validate() {
-        // The handler-rejection arm of the Phase-6 ZStack gate is distinct
-        // from the binding arm above; pin it so a ZStack carrying an inline
-        // `on` handler surfaces the dedicated diagnostic.
-        assert_validate_err(
+    fn zstack_clicked_handler_validates() {
+        // T8: the Phase-6 ZStack gate no longer carries a per-kind
+        // handler rejection arm (it used to reject every signal name but
+        // `dismiss`, asymmetrically with the checker side, which never
+        // gated ZStack handlers). `clicked` is admitted on any widget
+        // per dsl_spec §4.19, so a ZStack carrying an inline `on clicked`
+        // handler now loads successfully.
+        let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state ready: bool = true\n\
              node ZStack { on clicked { (assign ready false) } node Text {} }\n}",
-            "`ZStack` accepts no Phase-6 handlers",
         );
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert_eq!(c.root.handlers.len(), 1);
+        assert_eq!(c.root.handlers[0].signal, "clicked");
     }
 
     #[test]
@@ -8008,9 +8226,10 @@ mod tests {
 
     #[test]
     fn dismiss_handler_accepted_on_zstack_carrying_modal_scope() {
-        // Exercises the ZStack relaxation: `dismiss` is let through
-        // alongside `modal-scope: true`, even though ZStack's own
-        // Phase-6 gate rejects every other handler name.
+        // T6 regression pin, unaffected by T8's removal of the
+        // ZStack-specific handler gate: `dismiss` is admitted here via
+        // the generic dsl_spec §4.19 rule because the ZStack carries
+        // `modal-scope: true`.
         let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state open: bool = true\n\
@@ -8279,15 +8498,106 @@ mod tests {
     }
 
     #[test]
-    fn zstack_clicked_handler_still_rejected_after_relaxation() {
-        // Control proving the ZStack relaxation stayed narrow: every
-        // signal name other than `dismiss` is still rejected. Widening
-        // `clicked` on a `ZStack` is a later task's job, not this one's.
+    fn grid_clicked_handler_validates() {
+        // T8: `Grid` never had a per-kind handler gate in the loader
+        // (only `wasamoc check` did, asymmetrically with ZStack); pin
+        // the accept case explicitly, symmetric with
+        // `zstack_clicked_handler_validates` above.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               on clicked { (assign count 1) }\n\
+             }\n}",
+        );
+        assert_eq!(c.root.widget_type, "Grid");
+        assert_eq!(c.root.handlers.len(), 1);
+        assert_eq!(c.root.handlers[0].signal, "clicked");
+    }
+
+    #[test]
+    fn dismiss_handler_on_zstack_without_modal_scope_prop_rejected() {
+        // T8: proves the generic dsl_spec §4.19 `dismiss` rule
+        // (`validate_focus_annotation_invariants`) still owns ZStack
+        // admission now that the ZStack-specific handler gate is gone —
+        // the diagnostic is the generic "can never be raised" message,
+        // the same one every other widget kind produces (see
+        // `dismiss_handler_without_modal_scope_prop_rejected` above for
+        // the Box case), not a ZStack-specific rejection.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node ZStack { on dismiss { (assign open false) } node Text {} }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    // ── M4-Phase 2 T8: `key-down("<key>")` argument (dsl_spec §4.19
+    // "Keyboard input", DD-M4-P2-005) ───────────────────────────────────
+    //
+    // Parse half: the optional `( STRING )` after the signal name
+    // (`parse_handler`). Second-gate half: `validate_key_down_invariants`
+    // re-checks the same three shapes `wasamoc check` rejects at compile
+    // time, for memory IR that reaches the loader without traversing
+    // `wasamoc`.
+
+    #[test]
+    fn key_down_handler_parses_with_string_argument() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected_index: i32 = 0\n\
+             node Box { on key-down(\"ArrowLeft\") { (compound-assign -= selected_index 1) } }\n}",
+        );
+        assert_eq!(c.root.handlers.len(), 1);
+        let h = &c.root.handlers[0];
+        assert_eq!(h.signal, "key-down");
+        assert_eq!(h.arg.as_deref(), Some("ArrowLeft"));
+    }
+
+    #[test]
+    fn clicked_handler_still_parses_with_arg_none() {
+        // Regression guard: a plain `on clicked { ... }` (no parenthesised
+        // argument) keeps parsing with `arg == None` after the optional
+        // `( STRING )` production is added.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Button { on clicked { (compound-assign += count 1) } }\n}",
+        );
+        let h = &c.root.handlers[0];
+        assert_eq!(h.signal, "clicked");
+        assert_eq!(h.arg, None);
+    }
+
+    #[test]
+    fn key_down_without_argument_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected_index: i32 = 0\n\
+             node Box { on key-down { (compound-assign -= selected_index 1) } }\n}",
+            "`key-down` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn key_down_unrecognised_key_name_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected_index: i32 = 0\n\
+             node Box { on key-down(\"Tab\") { (compound-assign -= selected_index 1) } }\n}",
+            "unrecognised key",
+        );
+    }
+
+    #[test]
+    fn argument_on_clicked_rejected_at_validate() {
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state count: i32 = 0\n\
-             node ZStack { on clicked { (assign count 1) } node Text {} }\n}",
-            "`ZStack` accepts no Phase-6 handlers",
+             node Button { on clicked(\"x\") { (compound-assign += count 1) } }\n}",
+            "`clicked` does not take an argument",
         );
     }
 }
