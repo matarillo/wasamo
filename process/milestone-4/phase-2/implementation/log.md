@@ -6338,6 +6338,7 @@ the catalog item its selection missed.
 | **CF-T11-2 — pointer capture, drag and gesture are not built.** `WM_POINTERCAPTURECHANGED` is reachable (the system can take a gesture over mid-contact) and is deliberately unclaimed | The claimed-set unit test's must-not-claim list | `carry-forward` | **M4-Phase 4**, whose scrollbar is DD-M4-P2-001's named trigger for pointer capture. It is also the first task that would need the moving-contact path to do anything |
 | **CF-T11-3 — multi-contact behaviour is one decision, not a mechanism.** Only the primary contact activates; a second simultaneous contact is claimed and does nothing | `a_non_primary_contact_is_claimed_but_dispatches_nothing`, and the M4 mutation | `carry-forward` | The first surface that wants two contacts to mean something — pinch, two-finger scroll — which is at the earliest M4-Phase 4 |
 | **CF-T11-4 — `pointer_physical` has two callers in two coordinate spaces, with nothing in the type system separating them.** This is the near-miss form of the phantom-typed length newtype (`Dip<T>` / `Px<T>`) the M4-Phase 1 handoff reserved "only if a unit-confusion defect actually recurs" | The #1 audit table's Input-space column | `carry-forward` | A third caller, or the first actual unit-confusion defect. The reserve condition has **not** fired: no defect occurred, and the classification is currently carried by a doc comment and a table rather than by the compiler |
+| **CF-T11-6 — the injection half is deliberately outside the CI gate, and the reservation is open.** Owner-settled 2026-08-09: not needed for now, revisited when it is. The two tiers that exist close AC1's touch half; a CI-gated injection test would be additive | The disposition below, and fact 11 (the message-level tier cannot make the suppression claim) | `carry-forward` | A touch surface whose regression would go unnoticed between desktop captures — the first is M4-Phase 4's drag, which needs a *moving* contact — or a CI runner known to support injection. Adding it needs a GitHub Actions capability probe, which needs a push |
 | **CF-T11-5 — an evidence script's fixed wait encodes the machine's load at the moment it was written.** `capture-t11-touch-counter.ps1` slept 3 s and looked for the host's window once; on a loaded machine the titled window appears between 3 s and 5 s, and the run failed with "no visible Counter HWND" while the host was alive and healthy. Replaced by a poll to a deadline, with a failure message that lists the windows the process actually owns | The measured appearance times (none at 1 s / 2 s, untitled-only at 3 s, titled at 5 s) | `carry-forward` | Any later capture or smoke script that waits for a host to be ready. [verification-environments.md](../../../../docs/notes/verification-environments.md) Observation 4 already states this for foreground activation — "a single refusal is not an environment verdict" — and the step before it had been left on a fixed sleep |
 
 #### #6 — deterministic failures, root-caused rather than re-rolled
@@ -6476,15 +6477,21 @@ of the class that makes an evidence script lie rather than fail:
   which, and the measured noise floor is `max_channel` 1 over 4,638 px in
   the mouse set and 0 in the touch set.
 
-#### Owner question — should the injection half also be gated on CI?
+#### Owner disposition — the injection half stays out of the CI gate (2026-08-09)
 
 The plan predicted one artifact, a cargo test gated on CI. Fact 5 (start
-gate) and fact 11 split it into two tiers instead, and the CI-gated tier
-is landed and green. What is **not** decided is whether the injection half
-should *additionally* be a cargo test that fails rather than skips on
-GitHub Actions ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)). It
-cannot be decided from here: a GitHub Actions runner may or may not have
-the capability, probing it needs a push, and push is its own gate. The
-recommendation is to leave injection in the desktop tier — its
-precondition (a visible, foreground, unobstructed window) is one a test
-binary cannot own — and to keep the message-level fixture as the CI gate.
+gate) and fact 11 split it into two tiers instead: the message-level
+fixture is CI-gated and green, and the injection half is desktop-tier.
+Whether the injection half should *additionally* be a cargo test that
+fails rather than skips on GitHub Actions
+([CLAUDE.md §Testing rules](../../../../CLAUDE.md)) could not be settled
+from here — a runner may or may not have the capability, probing it needs
+a push, and push is its own gate.
+
+**Owner-settled 2026-08-09: not needed for now, revisited when it is.**
+This is a reservation rather than a closed question — the owner kept the
+possibility of change open — so it is recorded with its re-trigger rather
+than as a decision the phase is done with (CF-T11-6). Nothing in the
+phase is blocked by it: AC1's touch half is closed by the two tiers that
+exist, and adding the CI-gated variant later is additive, needing a
+GitHub Actions capability probe and nothing else.

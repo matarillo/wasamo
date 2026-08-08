@@ -397,6 +397,12 @@ bare `ERROR_INVALID_PARAMETER`:
 that a physical digitizer produces the same messages. Nothing here should
 be read as evidence about real touch hardware.
 
+Whether an injecting test should *additionally* be gated on CI was
+settled by the project owner on 2026-08-09 as **not needed for now,
+revisited when it is** — a reservation rather than a closed question. A
+later phase that wants it needs a GitHub Actions capability probe first;
+until one is run, "a CI runner can inject" is unmeasured either way.
+
 ### Implication for future ADRs
 
 When a future ADR (M2-Phase 4/5/6 or later) prescribes a verification

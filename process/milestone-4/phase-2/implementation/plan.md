@@ -893,9 +893,10 @@ agreement ⑥).
   - a **desktop-tier injection artifact** for the OS-level claim, which
     the CI-gated tier provably cannot make: mutation witness W2 removed
     the suppression and left the whole suite green.
-  - Whether the injection half should **additionally** be gated on CI is
-    left to the owner: deciding it needs a GitHub Actions probe, and that
-    needs a push, which is its own gate.
+  - The injection half is **deliberately outside the CI gate**
+    (owner-settled 2026-08-09: not needed for now, revisited when it is —
+    a reservation, not a closed question). Adding it later is additive and
+    needs a GitHub Actions capability probe, which needs a push.
 - **The single-delivery rule is measured, and it is per contact rather
   than per message.** Claiming `WM_POINTERDOWN` **or** `WM_POINTERUP`
   suppresses the whole contact's promotion, including the `WM_MOUSEMOVE`
