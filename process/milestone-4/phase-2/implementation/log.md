@@ -4398,3 +4398,92 @@ touches three files and changes no build input the rebuild was measuring.
 
 **External-agent (codex) review is not performed**, per the owner's
 standing disposition for this phase (T1–T7).
+
+#### Owner disposition of CF-T8-1 and CF-T8-2 (2026-08-08)
+
+The two findings the T8 retrospective's item 4 routed to the owner are
+dispositioned. Neither changes what T8's own commits landed; one changes
+what the branch carries.
+
+**CF-T8-1 — Button keyboard activation.** Not built, and **not assigned
+to a milestone**. It goes to the
+[candidate pool](../../../candidate-pool.md) with the owner's direction:
+**decide it alongside the other keyboard-operable controls** a widget set
+brings — a DropDown, CheckBox or Radio each activate from the keyboard
+too, and one activation contract for the family beats retrofitting
+Button's. The reason it is not a free addition is unchanged from the
+finding: it puts `Space` and `Enter` into
+[dsl_spec §4.19](../../../../docs/dsl_spec.md)'s keys-the-runtime-keeps
+table, which lists neither, so an authored `key-down("Enter")` would stop
+firing while a Button is focused. T13 re-verifies §4.19's and §4.8's
+keyboard-activation sentences against a runtime that still does not have
+it.
+
+**CF-T8-2 — `Text` and `Rectangle` children: reject them too, and do not
+obstruct a future re-opening.** The finding stands as measured — the
+defect spans four kinds, not two — and the owner settled both halves of
+it at once.
+
+The first half is the rule. `Text` and `Rectangle` join `Button` and
+`ToggleButton`: a widget child on any of them is a diagnostic at both
+gates. Re-measured before implementing, so the release-profile half is
+not inherited from the Button case:
+`Text { text: "label"  Button { text: "inner" } }` is accepted by
+`wasamoc check`, accepted by the loader, and aborts a debug build on
+`sync_visuals`'s child-count `debug_assert_eq!` — the same panic message
+T3 measured for the Button shape.
+
+**The second half is a constraint on the design, and it is what shapes
+the code.** "Do not obstruct a later spec change that lets one of these
+kinds hold children" means, concretely, that re-opening a kind must be a
+single obvious edit rather than a hunt through two crates — the drift
+shape CF-T6-3 recorded for signal admission, arriving in a second place.
+So:
+
+- The four kinds are named in **one** place,
+  `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`, in the crate `wasamoc` and
+  `wasamo-runtime` already share. Both gates call
+  `layout_treats_as_childless`; neither names a kind.
+- The table is named after the **reason** (layout arranges it as a single
+  childless rectangle), not after the symptom set. A name tied to Button
+  would have been wrong the moment `Text` joined it.
+- The const's doc comment carries the **re-opening recipe** as steps:
+  give the kind's `build_layout_tree` arm real children, remove its
+  entry, and both gates stop rejecting in the same edit.
+- `build_layout_tree`'s childless arm carries a **pointer back** to the
+  table, because that arm is where a re-opening actually starts.
+- The diagnostic is now kind-agnostic. It named Button's `text:` label,
+  which is false prose on a `Rectangle`; it now names the offending kind
+  and the reason. Its citation moves from §4.8 (the property catalog,
+  which says nothing about children) to **§4.4**, the widget registry,
+  where the container / leaf distinction is visible.
+
+**The table's membership is deliberately not pinned by a `wasamo-ir`
+test.** This is the one place the design differs from
+`RECOGNISED_KEY_NAMES`, and the difference is the point:
+§4.19 fixes that table's 22 entries normatively, so pinning them is
+pinning the spec. This table is a *fact about layout* that a later phase
+is expected to change, and an exact-contents assertion beside it would
+make re-opening a two-file edit for no gain — the per-kind reject tests
+at both gates already pin membership at the level that matters, and those
+are the tests a re-opening *should* have to update, because they are what
+changes. What stays pinned is the invariant that holds for any
+membership: no duplicates.
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W17** | `LAYOUT_CHILDLESS_WIDGET_KINDS` narrowed back to `["Button", "ToggleButton"]` | exactly four tests — `text_with_widget_child_rejected` / `rectangle_with_widget_child_rejected` in `check.rs` and `validate_rejects_text_with_widget_child` / `validate_rejects_rectangle_with_widget_child` in `ir_loader.rs` — and **nothing else**, `wasamo-ir`'s own tests included | The two gates genuinely key off the one table, so "re-opening a kind is one edit" is measured rather than asserted. Run twice: the first run also reddened `wasamo-ir`'s exact-contents assertion, which is what identified that assertion as an obstruction and got it removed |
+
+**A normative gap this opens, recorded for T13.** No spec section says
+which widget kinds admit children. §4.9 fixes Box's count and §4.11
+ScrollView's; "these four admit none" is now enforced at both gates and
+stated nowhere. §4.4's registry is where the distinction is visible and
+is what the diagnostic cites. Added to T13's re-verification list.
+
+**Re-verification after both dispositions** (superseding the counts
+above): `cargo fmt --all -- --check` zero exit, `cargo build --workspace`
+successful, `cargo test --workspace --no-fail-fast` **48
+binaries/sections, 1,212 passed, 0 failed, 0 ignored** — the nine added
+tests are three in `wasamo-ir`, three in `check.rs` and three in
+`ir_loader.rs`. `cargo build -p counter-rust -p gallery-rust -p
+bool-demo-rust` succeeds, so no shipped `.ui` trips the widened reject.

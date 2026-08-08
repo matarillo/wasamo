@@ -550,13 +550,19 @@ handler table — not how an event travels.
     deliberately**, and the capability it withholds is recorded as its
     own row in the [candidate pool](../../../candidate-pool.md) so
     re-opening it is a milestone decision rather than a rediscovery.
-    **The defect spans four widget kinds, and only two are rejected**
-    (start gate fact 4): `build_layout_tree` maps `Rectangle`, `Text`,
-    `Button` and `ToggleButton` alike to a childless
-    `LayoutNode::rectangle`, and `check` accepted a widget child on all
-    four. The owner disposition and the pool row both name the Button
-    family, so `Text` / `Rectangle` are recorded as CF-T8-2 rather than
-    folded in — rejecting them would narrow a surface no decision covers.
+    **The defect spans four widget kinds, and all four are rejected**
+    (start gate fact 4; owner disposition 2026-08-08):
+    `build_layout_tree` maps `Rectangle`, `Text`, `Button` and
+    `ToggleButton` alike to a childless `LayoutNode::rectangle`, and
+    `check` accepted a widget child on all four — `Text { Button {} }`
+    was measured aborting a debug build on the same assertion the Button
+    shape does. **The rule is built so a later phase can re-open any of
+    these kinds in one edit**: the four are named only in
+    `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`, both gates read
+    `layout_treats_as_childless`, the const's doc carries the re-opening
+    recipe, and `build_layout_tree`'s childless arm points back at it.
+    Measured rather than claimed — removing two entries reddens exactly
+    the four per-kind reject tests across both gates and nothing else.
 - `key-down` needs the phase's **one new grammar production** — a signal
   handler whose name carries an argument. The key name is validated at
   `check` against the recognised non-character table, and an
@@ -897,6 +903,13 @@ The four controls from the [framing](../requirements/framing.md)
     (T8 close gate CF-T8-4). Today `Box { totally_unknown => … }` is
     accepted on every kind and silently never fires; T8 removed the one
     kind-specific exception rather than adding a rule;
+  - **no section says which widget kinds admit children** (T8's owner
+    follow-up, 2026-08-08). §4.9 fixes Box's count and §4.11
+    ScrollView's, but "`Rectangle` / `Text` / `Button` / `ToggleButton`
+    admit none" — now a diagnostic at both gates — is stated nowhere.
+    §4.4's registry is where the container / leaf distinction is visible
+    and is what the diagnostic cites, so either it gains the sentence or
+    the rule is recorded as unspecified;
   - **§4.16's placement example is corrected by T8**, not here, so this
     is a confirmation rather than a repair;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
