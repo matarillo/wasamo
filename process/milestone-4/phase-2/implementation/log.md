@@ -6338,7 +6338,7 @@ the catalog item its selection missed.
 | **CF-T11-2 — pointer capture, drag and gesture are not built.** `WM_POINTERCAPTURECHANGED` is reachable (the system can take a gesture over mid-contact) and is deliberately unclaimed | The claimed-set unit test's must-not-claim list | `carry-forward` | **M4-Phase 4**, whose scrollbar is DD-M4-P2-001's named trigger for pointer capture. It is also the first task that would need the moving-contact path to do anything |
 | **CF-T11-3 — multi-contact behaviour is one decision, not a mechanism.** Only the primary contact activates; a second simultaneous contact is claimed and does nothing | `a_non_primary_contact_is_claimed_but_dispatches_nothing`, and the M4 mutation | `carry-forward` | The first surface that wants two contacts to mean something — pinch, two-finger scroll — which is at the earliest M4-Phase 4 |
 | **CF-T11-4 — `pointer_physical` has two callers in two coordinate spaces, with nothing in the type system separating them.** This is the near-miss form of the phantom-typed length newtype (`Dip<T>` / `Px<T>`) the M4-Phase 1 handoff reserved "only if a unit-confusion defect actually recurs" | The #1 audit table's Input-space column | `carry-forward` | A third caller, or the first actual unit-confusion defect. The reserve condition has **not** fired: no defect occurred, and the classification is currently carried by a doc comment and a table rather than by the compiler |
-| **CF-T11-5 — the injection frame set is not yet taken against the corrected runtime** | This close gate | `finding`, owner-owned | Below |
+| **CF-T11-5 — an evidence script's fixed wait encodes the machine's load at the moment it was written.** `capture-t11-touch-counter.ps1` slept 3 s and looked for the host's window once; on a loaded machine the titled window appears between 3 s and 5 s, and the run failed with "no visible Counter HWND" while the host was alive and healthy. Replaced by a poll to a deadline, with a failure message that lists the windows the process actually owns | The measured appearance times (none at 1 s / 2 s, untitled-only at 3 s, titled at 5 s) | `carry-forward` | Any later capture or smoke script that waits for a host to be ready. [verification-environments.md](../../../../docs/notes/verification-environments.md) Observation 4 already states this for foreground activation — "a single refusal is not an environment verdict" — and the step before it had been left on a fixed sleep |
 
 #### #6 — deterministic failures, root-caused rather than re-rolled
 
@@ -6439,23 +6439,42 @@ Read T12 and T13 again at close, not only T11's own item.
 - **Cross-task obligations** — "no new ABI function" holds: the arms call
   private runtime functions and install no callback slot.
 
-#### Open item — the frame set awaits an unlocked desktop
+#### The desktop-tier evidence, taken against the landed runtime
 
-The counter-app injection frames in
-[evidence/t11-frames/](./evidence/t11-frames/) were captured at
-`e36e04d`, **before** the independent review added the primary-contact
-gate. Since that gate changes dispatch, the frames predate the runtime
-they are evidence for, and re-taking them needs an unlocked interactive
-desktop — the environment class Observation 6 records. The session was
-locked (`LogonUI` resident) at task close, so the re-capture is **not
-done**, and the frames are deliberately **not committed**: an artifact
-that predates its own subject is worse than a missing one. Fact 10 predicts
-the re-take will be identical, and a prediction is exactly what this phase
-does not accept in place of a measurement.
+[evidence/t11-frames/](./evidence/t11-frames/) holds two full capture
+runs of the shipped `counter-rust.exe` at `e0cb862` — the commit that
+carries the primary-contact gate — one driven by real OS touch injection
+and one by mouse, differing in nothing else. Three touch contacts render
+`Count: 3`, agreeing with three mouse clicks at every step within the
+F-33 tolerance (`max_channel` 0 or 1, no pixel over the visible-change
+threshold), while step 0 versus step 1 differs by 6,628 px in both
+families. A contact delivered twice — the state the suppression exists to
+prevent — would have rendered `Count: 2` against the mouse run's
+`Count: 1`, so the agreement leg fails on a whole digit rather than on a
+rounding difference. Read directly: step 1 also shows the Button in its
+focus indicator, which is the "a touch contact moves focus" decision
+rendered rather than only read back as state.
 
-Everything else in the task is complete and green. The two evidence
-scripts are committed, so the re-capture is one command per input family
-once the desktop is available.
+**Two defects in the artifact itself were found while taking it**, both
+of the class that makes an evidence script lie rather than fail:
+
+- The script slept a fixed 3 s and looked for the host's window **once**.
+  On a loaded machine the titled window appears between 3 s and 5 s, so
+  the run aborted with "no visible Counter HWND" while the host was alive
+  and healthy. Measured (nothing at 1 s / 2 s, an untitled visible window
+  at 3 s, the titled one at 5 s) rather than guessed at, then replaced by
+  a poll to a deadline whose failure message lists the windows the
+  process actually owns. Recorded as CF-T11-5.
+- The comparison reported `differing_px=0` and a within-set jitter of
+  `0 px` for frames that differ by 1 per channel over 4,638 pixels. The
+  verdicts were sound — they check `max_channel` against the tolerance —
+  but the *counter* being reported was "pixels over a 60-per-channel-sum
+  visible-change threshold" under a label that reads as "pixels that
+  differ". F-33's whole point is that the noise floor is a measured
+  quantity, and the artifact was reporting a threshold artifact as that
+  quantity. Now reports all three numbers under names that say which is
+  which, and the measured noise floor is `max_channel` 1 over 4,638 px in
+  the mouse set and 0 in the touch set.
 
 #### Owner question — should the injection half also be gated on CI?
 
