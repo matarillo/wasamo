@@ -2591,6 +2591,15 @@ impl WidgetNode {
 
     fn build_layout_tree(&self) -> LayoutNode {
         match &self.data {
+            // This arm *is* what `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+            // describes: it maps `Rectangle` / `Text` / `Button` /
+            // `ToggleButton` to a childless `LayoutNode::rectangle`, so a
+            // widget child under any of them is never arranged. Giving any
+            // of these kinds real layout children (the way the `VStack` /
+            // `Box` / … arms below build `self.build_layout_child_slots()`)
+            // means removing its entry from that table in the same change
+            // — otherwise `wasamoc check` and the runtime IR loader keep
+            // rejecting a shape layout now supports.
             WidgetData::Rectangle
             | WidgetData::Text { .. }
             | WidgetData::Button(_)

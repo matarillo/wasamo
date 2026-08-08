@@ -932,23 +932,24 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
             child_member_count
         )));
     }
-    // M4-Phase 2 T8 (CF-1, owner disposition 2026-08-07): a Button-family
-    // node (`Button` / `ToggleButton`) carrying any child member is
-    // rejected here too. `wasamoc check`'s `check_button_family_children`
+    // M4-Phase 2 T8 (CF-1, owner disposition 2026-08-07; widened from
+    // Button/ToggleButton to all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+    // 2026-08-08): a layout-childless node (`Rectangle` / `Text` /
+    // `Button` / `ToggleButton`) carrying any child member is rejected
+    // here too. `wasamoc check`'s `check_layout_childless_widget_children`
     // rejects the same shape at compile time (defense in depth); this is
     // the runtime gate for memory IR that reaches `wasamo_load_ui` without
     // traversing `wasamoc`. Unlike Box's "at most one", every child member
     // (widget, conditional, or `for`) is unknown to `build_layout_tree`
-    // (widget.rs), which maps both kinds to a childless
+    // (widget.rs), which maps every kind in the table to a childless
     // `LayoutNode::rectangle` — so the admitted count here is zero, not
-    // one. `Text` / `Rectangle` share the identical layout gap but are
-    // deliberately out of scope for this rule (tracked as a separate
-    // finding).
-    if (node.widget_type == "Button" || node.widget_type == "ToggleButton")
-        && child_member_count > 0
-    {
+    // one. Neither this condition nor the message below names a widget
+    // kind: both read `wasamo_ir::layout_treats_as_childless` / the
+    // offending `node.widget_type`, so widening or narrowing the rule is a
+    // single edit to `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`.
+    if wasamo_ir::layout_treats_as_childless(&node.widget_type) && child_member_count > 0 {
         return Err(IrLoadError::Validate(format!(
-            "`{}` node accepts no children, got {} (Button-family widgets take a `text:` label rather than authored content; dsl_spec §4.8)",
+            "`{}` node accepts no children, got {} (layout arranges it as a single rectangle, so a child would never be arranged, painted, or hit-tested — wrap it in a container widget instead; dsl_spec §4.4)",
             node.widget_type, child_member_count
         )));
     }
@@ -6583,8 +6584,10 @@ mod tests {
         assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
     }
 
-    // ── M4-Phase 2 T8: Button-family child rejection (CF-1, owner
-    // disposition 2026-08-07) ──────────────────────────────────────────
+    // ── M4-Phase 2 T8: layout-childless widget child rejection (CF-1,
+    // owner disposition 2026-08-07; widened from Button/ToggleButton to
+    // all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` 2026-08-08)
+    // ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn validate_rejects_button_with_widget_child() {
@@ -6592,7 +6595,7 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node Button { node Text {} }\n\
              }",
-            "`Button` node accepts no children",
+            "`Button` node accepts no children, got 1 (layout arranges it as a single rectangle",
         );
     }
 
@@ -6602,7 +6605,27 @@ mod tests {
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              node ToggleButton { node Text {} }\n\
              }",
-            "`ToggleButton` node accepts no children",
+            "`ToggleButton` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_text_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Text { node Text {} }\n\
+             }",
+            "`Text` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_rectangle_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Rectangle { node Text {} }\n\
+             }",
+            "`Rectangle` node accepts no children, got 1 (layout arranges it as a single rectangle",
         );
     }
 
@@ -6613,6 +6636,18 @@ mod tests {
              node Button { prop text = \"hi\" }\n}",
         );
         assert!(c.root.children.is_empty());
+    }
+
+    #[test]
+    fn vstack_with_widget_child_is_valid() {
+        // Control: a container kind is untouched by the layout-childless
+        // rule — `VStack` is not in `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`,
+        // so a widget child must still parse and validate.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { node Text {} }\n}",
+        );
+        assert_eq!(c.root.children.len(), 1);
     }
 
     // ── M3-Phase 3 T6: WrapPanel validate() defense-in-depth ─────────────

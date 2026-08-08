@@ -979,14 +979,15 @@ fn check_box_child_count(
     }
 }
 
-/// Reject a Button-family widget (`Button` / `ToggleButton`) carrying any
-/// child-materialising member (owner disposition CF-1, 2026-08-07).
-/// `build_layout_tree` (`wasamo-runtime/src/widget.rs`) maps both widget
-/// kinds to a childless `LayoutNode::rectangle`: an authored child is
-/// accepted here by the generic widget-decl walk, built by the IR loader,
-/// but unknown to layout — it renders nothing in release and aborts a
-/// debug build during `wasamo_load_ui` on the `sync_visuals` child-count
-/// assertion.
+/// Reject a layout-childless widget (`wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+/// — `Rectangle`, `Text`, `Button`, `ToggleButton`) carrying any
+/// child-materialising member (owner disposition CF-1, 2026-08-07; widened
+/// from Button/ToggleButton to all four kinds 2026-08-08). `build_layout_tree`
+/// (`wasamo-runtime/src/widget.rs`) maps every kind in that table to a
+/// childless `LayoutNode::rectangle`: an authored child is accepted here
+/// by the generic widget-decl walk, built by the IR loader, but unknown
+/// to layout — it renders nothing in release and aborts a debug build
+/// during `wasamo_load_ui` on the `sync_visuals` child-count assertion.
 ///
 /// Mirrors `check_box_child_count`'s completeness: every member that can
 /// materialise a child counts (`WidgetDecl`, `Conditional`, `For`), not
@@ -995,10 +996,12 @@ fn check_box_child_count(
 /// handlers, and `slot.*` placement binds are unaffected — those are not
 /// `Member::WidgetDecl` / `Conditional` / `For` variants.
 ///
-/// `Text` and `Rectangle` share the identical layout gap but are
-/// deliberately out of scope for this rule; they are tracked as a
-/// separate finding.
-fn check_button_family_children(
+/// Neither the invocation condition (below, in `check_members_inner`) nor
+/// this function names a widget kind: both read
+/// `crate::ir::layout_treats_as_childless` / the offending `widget_kind`
+/// string, so widening or narrowing the rule is a single edit to
+/// `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`.
+fn check_layout_childless_widget_children(
     widget_kind: &str,
     members: &[Member],
     span: &Span,
@@ -1019,8 +1022,7 @@ fn check_button_family_children(
             filename,
             span,
             format!(
-                "`{}` admits no widget children (found {}); Button-family widgets take a `text:` label rather than authored content (dsl_spec §4.8)",
-                widget_kind, child_count
+                "`{widget_kind}` admits no widget children (found {child_count}); layout arranges `{widget_kind}` as a single rectangle, so a child would never be arranged, painted, or hit-tested — wrap it in a container widget instead (dsl_spec §4.4)"
             ),
         ));
     }
@@ -2450,8 +2452,10 @@ fn check_members_inner(
                     if type_name == "Grid" {
                         check_grid(children, span, filename, diags);
                     }
-                    if type_name == "Button" || type_name == "ToggleButton" {
-                        check_button_family_children(type_name, children, span, filename, diags);
+                    if crate::ir::layout_treats_as_childless(type_name) {
+                        check_layout_childless_widget_children(
+                            type_name, children, span, filename, diags,
+                        );
                     }
                     check_members_inner(
                         children,
@@ -4251,8 +4255,9 @@ mod tests {
         assert!(warnings(src).is_empty(), "{:?}", warnings(src));
     }
 
-    // --- M4-Phase 2 T8: Button-family child rejection (CF-1, owner
-    // disposition 2026-08-07) ---
+    // --- M4-Phase 2 T8: layout-childless widget child rejection (CF-1,
+    // owner disposition 2026-08-07; widened from Button/ToggleButton to
+    // all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` 2026-08-08) ---
 
     #[test]
     fn button_with_widget_child_rejected() {
@@ -4260,8 +4265,9 @@ mod tests {
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`Button` admits no widget children")
-                && errs[0].contains("text:")
-                && errs[0].contains("dsl_spec §4.8"),
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
             "{:?}",
             errs
         );
@@ -4273,10 +4279,51 @@ mod tests {
         assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
             errs[0].contains("`ToggleButton` admits no widget children")
-                && errs[0].contains("dsl_spec §4.8"),
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
             "{:?}",
             errs
         );
+    }
+
+    #[test]
+    fn text_with_widget_child_rejected() {
+        let errs =
+            errors(r#"component C inherits W { Text { text: "ok" Text { text: "nested" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Text` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn rectangle_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { Rectangle { Text { text: "nested" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Rectangle` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn vstack_with_widget_child_accepted() {
+        // Control: a container kind is untouched by the layout-childless
+        // rule — `VStack`'s `build_layout_tree` arm builds real layout
+        // children (`self.build_layout_child_slots()`), so this must
+        // remain accepted.
+        let result = check_src(r#"component C inherits W { VStack { Text { text: "ok" } } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     #[test]

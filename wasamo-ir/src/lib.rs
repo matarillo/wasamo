@@ -262,6 +262,38 @@ pub fn signal_key(signal: &str, arg: Option<&str>) -> String {
     }
 }
 
+/// `WidgetNode::build_layout_tree` (`wasamo-runtime/src/widget.rs`) maps
+/// these four widget kinds to a childless `LayoutNode::rectangle`: a
+/// widget child authored under any of them is accepted by the generic
+/// widget-decl walk and built by the IR loader, but it is never handed to
+/// layout as a child.
+///
+/// Two failure modes follow if such a child is admitted: it is invisible
+/// in a release build (never arranged, painted, or hit-tested), and it
+/// aborts a debug build during `wasamo_load_ui` on `sync_visuals`'s
+/// child-count `debug_assert_eq!` (`widget.rs`).
+///
+/// To re-open one of these kinds to hold children later:
+/// 1. give the kind's `build_layout_tree` match arm real children (the
+///    way the `VStack` / `Box` / `Grid` / … arms already do, via
+///    `self.build_layout_child_slots()`);
+/// 2. remove its entry from this table.
+///
+/// Both `wasamoc check` and the runtime IR loader stop rejecting a widget
+/// child under that kind in the same edit, because neither carries its
+/// own copy of this list — this table is the *only* place the four kinds
+/// are named for this rule, which is what makes re-opening one of them a
+/// single, obvious edit.
+pub const LAYOUT_CHILDLESS_WIDGET_KINDS: &[&str] = &["Rectangle", "Text", "Button", "ToggleButton"];
+
+/// Whether `widget_kind` is one of [`LAYOUT_CHILDLESS_WIDGET_KINDS`] —
+/// i.e. whether layout arranges it as a single childless rectangle.
+/// `wasamoc check` and the runtime IR loader's defense-in-depth gate both
+/// call this rather than naming the four kinds themselves.
+pub fn layout_treats_as_childless(widget_kind: &str) -> bool {
+    LAYOUT_CHILDLESS_WIDGET_KINDS.contains(&widget_kind)
+}
+
 /// A member in a widget node body.
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrMember {
@@ -796,5 +828,54 @@ mod tests {
             signal_key("key-down", Some("ArrowLeft")),
             "key-down(\"ArrowLeft\")"
         );
+    }
+
+    // --- M4-Phase 2 T8 follow-up: layout-childless widget kinds (owner
+    // disposition 2026-08-08, widens T8's Button/ToggleButton-only rule
+    // to all four kinds `build_layout_tree` maps to a childless
+    // rectangle) ---
+
+    #[test]
+    fn layout_childless_widget_kinds_are_unique() {
+        // **The table's membership is deliberately not pinned here** —
+        // unlike `RECOGNISED_KEY_NAMES`, whose 22 entries are a normative
+        // list `dsl_spec.md` §4.19 fixes. This table is a *fact about
+        // layout* that a later phase is expected to change when it gives
+        // one of these kinds real children, and this table entry is meant
+        // to be the single edit that does it (see the const's own doc
+        // comment). Asserting the exact contents here would make that a
+        // two-file edit for no gain: the per-kind reject tests in
+        // `wasamoc::check` and the runtime IR loader already pin the
+        // membership at the level that matters — behaviour — and those are
+        // the tests a re-opening *should* have to update, because they are
+        // what changes.
+        //
+        // What stays pinned is the invariant that holds for any
+        // membership: no duplicates.
+        let mut seen = std::collections::HashSet::new();
+        for name in LAYOUT_CHILDLESS_WIDGET_KINDS {
+            assert!(seen.insert(*name), "duplicate widget kind: `{name}`");
+        }
+        assert!(!LAYOUT_CHILDLESS_WIDGET_KINDS.is_empty());
+    }
+
+    #[test]
+    fn layout_treats_as_childless_accepts_every_table_entry() {
+        for kind in LAYOUT_CHILDLESS_WIDGET_KINDS {
+            assert!(
+                layout_treats_as_childless(kind),
+                "`{kind}` should be layout-childless"
+            );
+        }
+    }
+
+    #[test]
+    fn layout_treats_as_childless_rejects_container_kinds() {
+        for kind in ["Box", "VStack", "Grid", "ZStack"] {
+            assert!(
+                !layout_treats_as_childless(kind),
+                "`{kind}` should not be layout-childless"
+            );
+        }
     }
 }
