@@ -92,6 +92,17 @@
 //!   and a `send_click` there is asserted to leave every tab button's
 //!   `checked` state unchanged — the silently-never-fires shape this
 //!   phase exists to catch.
+//! - [`g8_the_lightbox_prev_next_buttons_step_the_same_bound_value`] (G8)
+//!   — the lightbox's `<` / `>` Buttons carry `clicked` handlers that no
+//!   other fixture fires (a trap-#4 miss found at the close gate): an
+//!   authored handler accepted by both gates with nothing showing it
+//!   runs. Needs its own wider client ([`G8_CLIENT_W`] x
+//!   [`G8_CLIENT_H`]) because at [`CLIENT_W`] x [`CLIENT_H`] the
+//!   lightbox `Grid`'s column 3 — where `>` lives — is entirely off the
+//!   client, measured by the same accessor G1 / G5 / G7 use. Clicking `>`
+//!   then `<` twice is asserted to reach the **same** state
+//!   `ArrowRight` / `ArrowLeft` x2 reaches from the same start (G4) —
+//!   one bound value, two authored routes.
 //!
 //! # Standing conventions
 //!
@@ -102,15 +113,23 @@
 //! - Every fixture establishes its own before-state — nothing focused,
 //!   the lightbox branch absent — and reads it back
 //!   ([`assert_gallery_before_state`]) before injecting any input.
-//! - **No fixture derives a coordinate inside the lightbox.** T10's start
-//!   gate fact 8: the lightbox `Grid`'s fixed tracks (columns
-//!   `56+400+56=512`, rows `44+300+64=408`) exceed the 360x240 client, so
-//!   its layout is degenerate there. Everything this file asserts about
-//!   the scope's *interior* goes through focus-path read-back
-//!   (`ffi::__focus_path_for_test` + [`label_of`]), `WM_KEYDOWN`, and the
-//!   caption `Text`'s rendered content
-//!   (`WidgetNode::__text_content_for_test`) — never a click point
-//!   derived from a lightbox-interior `__arranged_rect_for_test()`.
+//! - **A coordinate inside the lightbox is used only where the resolver
+//!   has been measured to return the intended node — never assumed.**
+//!   T10's start gate fact 8: the lightbox `Grid`'s fixed tracks (columns
+//!   `56+400+56=512`, rows `44+300+64=408`) exceed [`CLIENT_W`] x
+//!   [`CLIENT_H`] (360x240), so at that client its layout is degenerate:
+//!   column 3 (`>` and `x`) lands entirely past the right edge and
+//!   `__resolve_topmost_for_test` at either one's centre measures `None`
+//!   — nothing to click. G1 through G7 hold to fact 8's original
+//!   precaution and never derive a coordinate inside the lightbox at all,
+//!   going through focus-path read-back (`ffi::__focus_path_for_test` +
+//!   [`label_of`]), `WM_KEYDOWN`, and the caption `Text`'s rendered
+//!   content (`WidgetNode::__text_content_for_test`) instead. **G8 is the
+//!   one exception**, and it does not relax the rule — it takes its own
+//!   wider client ([`G8_CLIENT_W`] x [`G8_CLIENT_H`]) specifically
+//!   because column 3 needs to fit before any point inside it can be
+//!   derived, and even there each point's resolution is measured and
+//!   asserted, not assumed.
 //! - **Every click coordinate is derived from `__arranged_rect_for_test()`**
 //!   (never hand-worked-out), and the geometric relationship a fixture
 //!   depends on (non-degenerate, disjoint, contained, overlapping) is
@@ -202,19 +221,25 @@
 //! are DIP, the same space `__arranged_rect_for_test()`'s rectangle is in,
 //! never physical pixels. G1 and G5(fact 6) use it to turn what would
 //! otherwise be a geometric deduction into a direct measurement; G7 uses
-//! it to turn the toolbar-overlap finding into its own measured artifact
-//! — see each fixture's own doc comment for what it measured.
+//! it to turn the toolbar-overlap finding into its own measured artifact;
+//! G8 uses it to establish, before deriving any point inside the
+//! lightbox, that `<` and `>` are actually reachable at G8's own client
+//! size — see each fixture's own doc comment for what it measured.
 //!
 //! # The client stays small (M4-Phase 1 T8 finding)
 //!
-//! Every fixture normalises to 96 DPI at an explicitly chosen 360x240
-//! physical client — the same ceiling every other integration test file
-//! in this crate records (a hosted CI desktop failed a larger request
-//! twice). The shipped gallery's own toolbar row (`rows: 56 1* 28`)
-//! fits this client with an 88 DIP `item-cross-size` thumbnail grid
-//! wrapping into it (T10 start-gate fact 7), which is what makes driving
-//! the fixtures against the shipped `.ui` itself possible without a
-//! gallery-shaped miniature.
+//! Every fixture except G8 normalises to 96 DPI at an explicitly chosen
+//! 360x240 physical client — the same ceiling every other integration
+//! test file in this crate records (a hosted CI desktop failed a larger
+//! request twice). The shipped gallery's own toolbar row
+//! (`rows: 56 1* 28`) fits this client with an 88 DIP `item-cross-size`
+//! thumbnail grid wrapping into it (T10 start-gate fact 7), which is what
+//! makes driving the fixtures against the shipped `.ui` itself possible
+//! without a gallery-shaped miniature. **G8 is the one exception**,
+//! documented at [`G8_CLIENT_W`] / [`G8_CLIENT_H`]'s own doc comment: its
+//! 560x320 stays under the 720x480 `dpi_scale_matrix_integration.rs`
+//! already requests, so it does not raise this file's own ceiling, only
+//! use more of the headroom already shown to be honoured.
 
 #![cfg(windows)]
 
@@ -250,6 +275,31 @@ const REFERENCE_DPI: u32 = 96;
 /// small".
 const CLIENT_W: i32 = 360;
 const CLIENT_H: i32 = 240;
+
+/// G8's own, wider client — a property of the **app under test**, not a
+/// fixture convenience: the shipped lightbox `Grid`'s fixed columns
+/// (`columns: 1* 56 400 56 1*`) total `56 + 400 + 56 = 512` DIP, so at
+/// [`CLIENT_W`] (360) column 3 lands entirely past the client's right edge
+/// and both `>` and `x` are unreachable by any click — measured directly
+/// (G7's sibling probe): `__resolve_topmost_for_test` at each of their
+/// centres returns `None`. 560 is the smallest round width that brings
+/// column 3 fully inside: the two flex (`1*`) columns split the remaining
+/// `560 - 512 = 48` DIP evenly, `24` each, so column 3 lands at
+/// `x≈480..536`, comfortably inside a 560-wide client. 320 is chosen for
+/// the vertical axis for the matching reason: the `<` / `>` row (`rows: 1*
+/// 44 300 64 1*`, `<` / `>` centred across the `300`+`64` span) measures at
+/// `y≈208.7..243.3` — it overhangs a 240-high client's bottom edge by
+/// `~3.3` DIP, so 320 clears it with margin.
+///
+/// **This stays under what CI has already been shown to honour.**
+/// `dpi_scale_matrix_integration.rs` requests physical clients up to
+/// 720x480 (its own recorded failure was a 1440x960 request); G8's
+/// 560x320 is smaller than that on both axes. `hit_resolution_integration.rs`'s
+/// "480x320 ceiling" is that file's own stated bound, not a measured CI
+/// limit — cited here as a second, smaller precedent, not as evidence the
+/// ceiling itself was raised.
+const G8_CLIENT_W: i32 = 560;
+const G8_CLIENT_H: i32 = 320;
 
 // ── Copied verbatim from `modal_scope_integration.rs` ───────────────────────
 
@@ -1928,6 +1978,242 @@ fn g7_the_overflowing_toolbar_swallows_clicks_aimed_at_the_tab_buttons() {
 
                 ffi::wasamo_window_destroy(window);
             }
+        },
+    );
+}
+
+// ── G8 — the lightbox's Prev/Next Buttons step the same bound value ────────
+
+/// Needs a wider client than every other fixture in this file, because the
+/// shipped app does — not as a fixture convenience. See [`G8_CLIENT_W`] /
+/// [`G8_CLIENT_H`]'s own doc comment for the measured reason (the
+/// lightbox `Grid`'s fixed tracks do not fit [`CLIENT_W`] x [`CLIENT_H`],
+/// so `>` and `x` resolve to nothing there at all).
+///
+/// What this fixture measures and asserts:
+///
+/// 1. Opens the lightbox on thumbnail 2 (line 1 fits five thumbnails at
+///    [`G8_CLIENT_W`], so thumbnail 2 is on it) and reads the caption
+///    back as `Photo #2`.
+/// 2. Finds `<` and `>` by label, reads their rectangles, and — **on the
+///    centre point, not the whole rectangle** — asserts each centre lies
+///    inside the client and that `__resolve_topmost_for_test` at that
+///    centre returns the Button's own path. **Whole-rectangle containment
+///    is deliberately not the assertion**: `<`'s own rectangle measures
+///    `y≈208.7..243.3`, close enough to a client edge that a
+///    whole-rectangle check is fragile even at G8's own generous height —
+///    the centre is the only point a click actually lands on, and that is
+///    what is asserted. A future edit that "tightens" this back to
+///    whole-rectangle containment would be reintroducing a check this
+///    fixture deliberately does not make; don't.
+/// 3. Clicks `>` (`click_and_drain`, since the caption's own re-render is
+///    a state write) and reads `Photo #3`; clicks `<` twice and reads
+///    `Photo #1`.
+/// 4. **The cross-path leg**, in a second window at the plain [`CLIENT_W`]
+///    x [`CLIENT_H`] (key presses need no coordinates, so the second
+///    window does not need G8's wider client): the identical
+///    `ArrowRight` / `ArrowLeft` x2 sequence
+///    [`g4_arrow_keys_reach_the_scope_key_down_handlers_only_while_present`]
+///    exercises, from the identical start (thumbnail 2, `Photo #2`), is
+///    asserted to land on the **same** `Photo #1` — not merely a
+///    coincidentally-equal literal, but the same state reached by two
+///    different authored routes to one bound value
+///    (`root.selected_index`), which is the reason the `<` / `>` Buttons
+///    were given `clicked` handlers in the first place rather than being
+///    left inert next to the key-down handlers alone.
+#[test]
+fn g8_the_lightbox_prev_next_buttons_step_the_same_bound_value() {
+    run_on_owning_runtime_thread_or_skip(
+        "G8: the lightbox's Prev/Next Buttons step the same bound value",
+        move || {
+            let ir = lower_ui_to_ir(GALLERY_UI);
+            let g8_client_rect = DipRect {
+                x: 0.0,
+                y: 0.0,
+                width: G8_CLIENT_W as f32,
+                height: G8_CLIENT_H as f32,
+            };
+
+            // Window A: the click path, at G8's own wider client.
+            let caption_via_click;
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(
+                    window,
+                    G8_CLIENT_W,
+                    G8_CLIENT_H,
+                    "G8 window A baseline",
+                );
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+                assert_gallery_before_state(window, "G8 window A before-state");
+
+                let box2_rect = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let text2_path =
+                        find_text_path(root, "IMG 003 #2").expect("thumbnail 2's Text must exist");
+                    let mut box2_path = text2_path;
+                    box2_path.pop();
+                    node_at_path(root, &box2_path).__arranged_rect_for_test()
+                }
+                .expect("thumbnail 2's Box must be laid out");
+                let (cx, cy) = rect_center_physical(box2_rect, factor);
+                click_and_drain(hwnd, cx, cy);
+
+                let read_caption = |window: *mut ffi::WasamoWindow, what: &str| -> String {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let p = find_path(root, &|n| {
+                        n.__text_content_for_test()
+                            .is_some_and(|c| c.starts_with("Photo #"))
+                    })
+                    .unwrap_or_else(|| panic!("{what}: the caption Text must exist"));
+                    read_text(node_at_path(root, &p), what)
+                };
+                assert_eq!(
+                    read_caption(window, "caption after opening thumbnail 2"),
+                    "Photo #2",
+                    "fixture stopped discriminating: opening thumbnail 2 must show Photo #2"
+                );
+
+                // Find `<` / `>`, measure, and assert the premises — on
+                // the centre point, not the whole rectangle (this
+                // fixture's own doc comment states why). Every line
+                // prints whatever the outcome.
+                let mut button_rects: Vec<(&str, Vec<usize>, DipRect)> = Vec::new();
+                {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    for label in ["<", ">"] {
+                        let path = find_button_path(root, label)
+                            .unwrap_or_else(|| panic!("the {label} Button must exist"));
+                        let rect = node_at_path(root, &path)
+                            .__arranged_rect_for_test()
+                            .unwrap_or_else(|| panic!("{label} must be laid out"));
+                        let (cx_dip, cy_dip) =
+                            (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+                        let resolved_path = root.__resolve_topmost_for_test(cx_dip, cy_dip);
+                        let resolved_kind = resolved_path
+                            .as_ref()
+                            .map(|rp| node_at_path(root, rp).__kind_name_for_test());
+                        eprintln!(
+                            "G8 measurement: {label:?} path={path:?} rect={rect:?} \
+                             centre=({cx_dip}, {cy_dip}) resolved_path={resolved_path:?} \
+                             resolved_kind={resolved_kind:?}"
+                        );
+                        assert!(
+                            dip_rect_contains_point(g8_client_rect, cx_dip, cy_dip),
+                            "G8: {label}'s centre ({cx_dip}, {cy_dip}) must lie inside the G8 \
+                             client rectangle {g8_client_rect:?}"
+                        );
+                        assert_eq!(
+                            resolved_path,
+                            Some(path.clone()),
+                            "G8: a click at {label}'s own centre must resolve to {label}'s own \
+                             path {path:?} — measured resolved_path={resolved_path:?} \
+                             (kind={resolved_kind:?}) instead"
+                        );
+                        button_rects.push((label, path, rect));
+                    }
+                }
+                let prev_rect = button_rects
+                    .iter()
+                    .find(|(label, _, _)| *label == "<")
+                    .map(|(_, _, rect)| *rect)
+                    .expect("< must have been measured above");
+                let next_rect = button_rects
+                    .iter()
+                    .find(|(label, _, _)| *label == ">")
+                    .map(|(_, _, rect)| *rect)
+                    .expect("> must have been measured above");
+
+                let (nx, ny) = rect_center_physical(next_rect, factor);
+                click_and_drain(hwnd, nx, ny);
+                assert_eq!(
+                    read_caption(window, "caption after clicking >"),
+                    "Photo #3",
+                    "clicking > must step selected_index forward by one"
+                );
+
+                let (px, py) = rect_center_physical(prev_rect, factor);
+                click_and_drain(hwnd, px, py);
+                assert_eq!(read_caption(window, "caption after one <"), "Photo #2");
+                click_and_drain(hwnd, px, py);
+                caption_via_click = read_caption(window, "caption after two <");
+                assert_eq!(
+                    caption_via_click, "Photo #1",
+                    "clicking < twice from Photo #3 must land on Photo #1"
+                );
+
+                ffi::wasamo_window_destroy(window);
+            }
+
+            // Window B: the cross-path leg — the identical sequence via
+            // the key-down handlers G4 exercises, at the plain client
+            // (key presses need no coordinates, so no wide client here).
+            let caption_via_key;
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "G8 window B baseline");
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+                assert_gallery_before_state(window, "G8 window B before-state");
+
+                let box2_rect = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let text2_path =
+                        find_text_path(root, "IMG 003 #2").expect("thumbnail 2's Text must exist");
+                    let mut box2_path = text2_path;
+                    box2_path.pop();
+                    node_at_path(root, &box2_path).__arranged_rect_for_test()
+                }
+                .expect("thumbnail 2's Box must be laid out");
+                let (cx, cy) = rect_center_physical(box2_rect, factor);
+                click_and_drain(hwnd, cx, cy);
+
+                let read_caption = |window: *mut ffi::WasamoWindow, what: &str| -> String {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let p = find_path(root, &|n| {
+                        n.__text_content_for_test()
+                            .is_some_and(|c| c.starts_with("Photo #"))
+                    })
+                    .unwrap_or_else(|| panic!("{what}: the caption Text must exist"));
+                    read_text(node_at_path(root, &p), what)
+                };
+                assert_eq!(
+                    read_caption(window, "window B caption after opening thumbnail 2"),
+                    "Photo #2",
+                    "fixture stopped discriminating: opening thumbnail 2 must show Photo #2"
+                );
+
+                send_key(hwnd, VK_RIGHT.0);
+                assert_eq!(
+                    read_caption(window, "window B caption after ArrowRight"),
+                    "Photo #3"
+                );
+                send_key(hwnd, VK_LEFT.0);
+                assert_eq!(
+                    read_caption(window, "window B caption after one ArrowLeft"),
+                    "Photo #2"
+                );
+                send_key(hwnd, VK_LEFT.0);
+                caption_via_key = read_caption(window, "window B caption after two ArrowLeft");
+                assert_eq!(
+                    caption_via_key, "Photo #1",
+                    "two ArrowLeft presses from Photo #3 must land on Photo #1"
+                );
+
+                ffi::wasamo_window_destroy(window);
+            }
+
+            // The cross-path leg itself: the click route and the key
+            // route reach the identical state from the identical start —
+            // one bound value, two authored routes.
+            assert_eq!(
+                caption_via_click, caption_via_key,
+                "G8: the < / > Buttons (click path) and the key-down(\"ArrowLeft\") / \
+                 key-down(\"ArrowRight\") handlers (key path, G4) must reach the same \
+                 selected_index from the same start — {caption_via_click:?} via click vs \
+                 {caption_via_key:?} via key"
+            );
         },
     );
 }
