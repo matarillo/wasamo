@@ -1091,4 +1091,67 @@ mod tests {
         assert!(out.contains("(list-append labels \"b\")"), "got: {out}");
         assert!(out.contains("(list-drop-last labels)"), "got: {out}");
     }
+
+    // M4-Phase 2 T9: a handler inside a `for` body template is admitted
+    // (dsl_spec §4.19 "Per-item handlers"). Fact 2 (T9 start gate) already
+    // established that `lower_node_with_loop`'s `Member::SignalHandler`
+    // arm threads `loop_ctx` into `lower_block` unconditionally, so this
+    // test measures — it does not newly build — that a binder read inside
+    // `on clicked { ... }` lowers to `ItemRead` / `IndexRead` the same way
+    // a binding does, and round-trips through `emit` as `(item-read x)` /
+    // `(index-read i)`.
+    #[test]
+    fn for_body_handler_lowers_and_emits_item_and_index_reads() {
+        let tokens = tokenize(
+            r#"component C inherits W {
+                state xs: i32[] = [1, 2]
+                state sel: i32 = 0
+                state pos: i32 = 0
+                WrapPanel { for x, i in xs { Box { clicked => { root.sel = x; root.pos = i; } } } }
+            }"#,
+            "<test>",
+        )
+        .unwrap();
+        let ast = parse(&tokens, "<test>").unwrap();
+        let result = check(&ast, "<test>");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let comp = lower(&ast, &result.namespace);
+
+        let IrMember::ControlFlow(ControlFlowNode::For { body, .. }) = &comp.root.children[0]
+        else {
+            panic!("expected For control-flow, got {:?}", comp.root.children[0]);
+        };
+        let IrMember::Widget(box_node) = &body[0] else {
+            panic!("expected Box body");
+        };
+        let HandlerExpr::Block(exprs) = &box_node.node.handlers[0].expr else {
+            panic!(
+                "expected block handler body, got {:?}",
+                box_node.node.handlers[0].expr
+            );
+        };
+        assert!(
+            matches!(
+                &exprs[0],
+                HandlerExpr::Assign { lhs, rhs }
+                    if lhs == "sel" && matches!(rhs.as_ref(), HandlerExpr::ItemRead { binder } if binder == "x")
+            ),
+            "got: {:?}",
+            exprs[0]
+        );
+        assert!(
+            matches!(
+                &exprs[1],
+                HandlerExpr::Assign { lhs, rhs }
+                    if lhs == "pos" && matches!(rhs.as_ref(), HandlerExpr::IndexRead { binder } if binder == "i")
+            ),
+            "got: {:?}",
+            exprs[1]
+        );
+
+        let out = emit(&comp);
+        assert!(out.contains("on clicked {"), "got: {out}");
+        assert!(out.contains("(item-read x)"), "got: {out}");
+        assert!(out.contains("(index-read i)"), "got: {out}");
+    }
 }
