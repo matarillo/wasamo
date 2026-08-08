@@ -270,6 +270,49 @@ function Find-CounterWindow($ProcessId) {
   return $script:found
 }
 
+# Every top-level window the process owns, for a failure message that says
+# what was actually there. A bare "not found" cannot distinguish "the host
+# died", "the host is alive but has not shown its window yet" and "the
+# title is not what this script looks for".
+function Describe-ProcessWindows($ProcessId) {
+  $script:rows = New-Object System.Collections.ArrayList
+  [WinT11Cap]::EnumWindows({
+    param($h, $l)
+    $owner = 0
+    [WinT11Cap]::GetWindowThreadProcessId($h, [ref]$owner) | Out-Null
+    if ($owner -ne $ProcessId) { return $true }
+    $sb = [Text.StringBuilder]::new(256)
+    [WinT11Cap]::GetWindowTextW($h, $sb, 256) | Out-Null
+    $null = $script:rows.Add("hwnd=$h visible=$([WinT11Cap]::IsWindowVisible($h)) title='$($sb.ToString())'")
+    return $true
+  }, [IntPtr]::Zero) | Out-Null
+  if ($script:rows.Count -eq 0) { return "(no top-level windows)" }
+  return ($script:rows -join "; ")
+}
+
+# Poll for the host's window rather than sleeping a fixed interval and
+# looking once.
+#
+# **Measured, not defensive.** A single look after 3 s failed on this
+# machine under load: the process was alive, an untitled visible window
+# already existed at 3 s, and the titled "Counter" window only appeared
+# between 3 s and 5 s. The same script had succeeded on the same machine
+# earlier the same day, so a fixed wait encodes the machine's mood at the
+# moment it was written. This is the discipline
+# docs/notes/verification-environments.md Observation 4 already states for
+# foreground activation -- "a single refusal is not an environment
+# verdict ... retry before concluding anything" -- applied to the step
+# before it, which had been left on a fixed sleep.
+function Wait-ForCounterWindow($ProcessId, $TimeoutSeconds = 30) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $h = Find-CounterWindow $ProcessId
+    if ($h -ne [IntPtr]::Zero) { return $h }
+    Start-Sleep -Milliseconds 250
+  }
+  return [IntPtr]::Zero
+}
+
 # The client rectangle in screen coordinates: both corners mapped with
 # ClientToScreen, never derived from GetWindowRect minus a guessed frame
 # (Observation 4).
@@ -397,6 +440,30 @@ function Diff-Count($a, $b) {
   return $n
 }
 
+# Pixels that differ AT ALL, at any magnitude. Reported beside
+# `Diff-Count` because the two answer different questions and only this
+# one is the noise floor F-33 is about: `Diff-Count`'s 60-per-channel-sum
+# threshold exists to count *visible* change (a digit appearing), and
+# reporting its zero as "differing px" reads as "the frames are
+# identical" when they can differ by 1 on thousands of pixels. Measured
+# on this artifact's own frames: a mouse set's two back-to-back captures
+# of the same state differ by max 1 per channel over 4,638 px, which
+# `Diff-Count` reports as 0.
+function Diff-CountAny($a, $b) {
+  if ($a.W -ne $b.W -or $a.H -ne $b.H) { throw "frame size mismatch: $($a.W)x$($a.H) vs $($b.W)x$($b.H)" }
+  $n = 0
+  for ($y = 0; $y -lt $a.H; $y++) {
+    $row = $y * $a.Stride
+    for ($x = 0; $x -lt $a.W; $x++) {
+      $i = $row + $x * 4
+      if ($a.Bytes[$i] -ne $b.Bytes[$i] -or
+          $a.Bytes[$i+1] -ne $b.Bytes[$i+1] -or
+          $a.Bytes[$i+2] -ne $b.Bytes[$i+2]) { $n++ }
+    }
+  }
+  return $n
+}
+
 # The measured MAXIMUM per-channel delta across the whole frame -- the
 # number the agreement leg's tolerance (F-33's "up to 13 per channel") is
 # checked against. Never a bit-identity check.
@@ -457,9 +524,11 @@ function Do-Capture([string]$InputFamily) {
 
   $p = Start-Process -FilePath $exe -PassThru
   try {
-    Start-Sleep -Seconds 3
-    $h = Find-CounterWindow $p.Id
-    if ($h -eq [IntPtr]::Zero) { throw "no visible Counter HWND (alive=$(-not $p.HasExited))" }
+    $h = Wait-ForCounterWindow $p.Id 30
+    if ($h -eq [IntPtr]::Zero) {
+      throw ("no visible Counter HWND after 30s (alive=$(-not $p.HasExited)); " +
+             "windows owned by pid $($p.Id): $(Describe-ProcessWindows $p.Id)")
+    }
 
     [WinT11Cap]::ShowWindow($h, 9) | Out-Null   # SW_RESTORE
     # HWND_TOPMOST = -1: raised foreground + topmost (Observation 4).
@@ -619,16 +688,22 @@ function Do-Compare() {
   # captures per side before comparing across the change; T10 precedent).
   # Each set's two frames are the SAME rendered state, captured back to
   # back, so any difference here is pure capture noise, not signal.
-  Write-Host "within-set jitter (same set, two frames -- the noise floor):"
+  Write-Host "within-set jitter (same set, two frames of the same rendered state -- the noise floor):"
   $noise = 0
+  $noiseAny = 0
+  $noiseMax = 0
   foreach ($fam in @("mouse", "touch")) {
     for ($step = 0; $step -le 3; $step++) {
       $n = Diff-Count $data["$fam$step"] $dataFrame1["$fam$step"]
+      $any = Diff-CountAny $data["$fam$step"] $dataFrame1["$fam$step"]
+      $mx = Max-ChannelDiff $data["$fam$step"] $dataFrame1["$fam$step"]
       if ($n -gt $noise) { $noise = $n }
-      Write-Host ("  {0,-5} step {1}: {2} differing px" -f $fam, $step, $n)
+      if ($any -gt $noiseAny) { $noiseAny = $any }
+      if ($mx -gt $noiseMax) { $noiseMax = $mx }
+      Write-Host ("  {0,-5} step {1}: max_channel={2,3}, {3,7} px differ at all, {4,7} px over the 60/channel-sum visible-change threshold" -f $fam, $step, $mx, $any, $n)
     }
   }
-  Write-Host "  noise floor (max within-set jitter): $noise px"
+  Write-Host "  noise floor: max_channel=$noiseMax, $noiseAny px differ at all, $noise px over the visible-change threshold"
   Write-Host ""
   $metaLines.Add("commit=$($mouseMeta.commit)")
   $metaLines.Add("dpi=$($mouseMeta.dpi)")
@@ -640,7 +715,9 @@ function Do-Compare() {
   $metaLines.Add("input_path_mouse=SetCursorPos + mouse_event (LEFTDOWN/LEFTUP)")
   $metaLines.Add("input_path_touch=InitializeTouchInjection + InjectTouchInput (DOWN then UP flags)")
   $metaLines.Add("tolerance_per_channel=$F33_TOLERANCE (Phase 1 F-33 measured maximum; never bit-identity)")
-  $metaLines.Add("noise_floor_within_set_jitter_max=$noise px")
+  $metaLines.Add("noise_floor_within_set_max_channel=$noiseMax")
+  $metaLines.Add("noise_floor_within_set_px_differing_at_all=$noiseAny")
+  $metaLines.Add("noise_floor_within_set_px_over_visible_change_threshold=$noise")
   $metaLines.Add("")
   $metaLines.Add("--- difference leg (step 0 vs step 1, same input family; the count changed at all) ---")
 
@@ -659,10 +736,11 @@ function Do-Compare() {
   for ($step = 0; $step -le 3; $step++) {
     $maxDiff = Max-ChannelDiff $data["mouse$step"] $data["touch$step"]
     $diffCount = Diff-Count $data["mouse$step"] $data["touch$step"]
+    $diffAny = Diff-CountAny $data["mouse$step"] $data["touch$step"]
     $verdict = if ($maxDiff -le $F33_TOLERANCE) { "PASS" } else { "FAIL" }
     if ($verdict -eq "FAIL") { $ok = $false }
-    Write-Host ("AGREEMENT  step {0}: max_channel_diff={1,3} (tolerance {2}), {3,7} differing px (>60/channel-sum threshold) -> {4}" -f $step, $maxDiff, $F33_TOLERANCE, $diffCount, $verdict)
-    $metaLines.Add("agreement_step${step}_max_channel_diff=$maxDiff, differing_px=$diffCount, verdict=$verdict")
+    Write-Host ("AGREEMENT  step {0}: max_channel_diff={1,3} (tolerance {2}), {3,7} px differ at all, {4,7} px over the visible-change threshold -> {5}" -f $step, $maxDiff, $F33_TOLERANCE, $diffAny, $diffCount, $verdict)
+    $metaLines.Add("agreement_step${step}_max_channel_diff=$maxDiff, px_differing_at_all=$diffAny, px_over_visible_change_threshold=$diffCount, verdict=$verdict")
   }
 
   Write-Host ""
