@@ -1138,6 +1138,31 @@ The four controls from the [framing](../requirements/framing.md)
     only whether §4.19 gains the sentence;
   - **§4.16's placement example is corrected by T8**, not here, so this
     is a confirmation rather than a repair;
+  - **§13.2's touch paragraph is satisfied, and the runtime is now
+    measured more precisely than the sentence** (T11 close gate fact 9).
+    "Handling the pointer message is what suppresses that promotion — one
+    delivery per contact" is true; what was measured per member is that
+    the suppression is keyed on `WM_POINTERDOWN` / `WM_POINTERUP` alone,
+    with `ENTER` / `UPDATE` / `LEAVE` claimed for a different reason. T13
+    decides whether the sentence gains that precision;
+  - **§13.2 says nothing about whether a touch contact moves focus or
+    paints hover** (T11). Both are decided — it moves focus exactly as a
+    click does, and it writes no hover or pressed state, with the limit
+    that a touch user gets no press feedback in M4 — and neither is
+    normative anywhere. T13 decides whether §13.2 gains the two
+    sentences, and the same pass covers **only the primary contact
+    activates a widget**, which is decided and unstated for the same
+    reason;
+  - **§12.3's four-kind conversion enumeration does not mention that the
+    pointer family arrives in screen space** (T11). Row 2 says pointer
+    coordinates are divided at the window procedure and is silent on the
+    `ScreenToClient` translation ahead of that division, which is now a
+    real site in the class §12.3 exists to keep enumerable;
+  - **§12.3 row 2's second sentence is false, and was in no task's
+    re-verification list until now** (found at T11's start gate). "Where
+    hit-testing reads a widget's rectangle back off its Visual (§7.5),
+    that readback is converted alongside them" was falsified by T2's
+    migration;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
     framing R2).
 - Phase-end retrospective, verification closure mapping, and
