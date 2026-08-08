@@ -1,0 +1,47 @@
+commit=e0cb862d15aae7e1720fbc3e49414996c479913c
+dpi=120
+scale=1.25
+client_rect=159,188,682,453
+button_centre_dip=272.4,90.4
+button_centre_derivation=one frame scanned for the Fluent accent-blue fill (R<100, 80<G<190, B>150); pixel bbox x[282..399] y[92..134] physical at 682x453 client, 120 DPI (scale 1.25); centroid (340.5,113.0) physical / (272.4,90.4) DIP
+cursor_park_screen=5,5 (fixed, off-window, both input families, before every capture)
+input_path_mouse=SetCursorPos + mouse_event (LEFTDOWN/LEFTUP)
+input_path_touch=InitializeTouchInjection + InjectTouchInput (DOWN then UP flags)
+tolerance_per_channel=13 (Phase 1 F-33 measured maximum; never bit-identity)
+noise_floor_within_set_max_channel=1
+noise_floor_within_set_px_differing_at_all=4638
+noise_floor_within_set_px_over_visible_change_threshold=0
+
+--- difference leg (step 0 vs step 1, same input family; the count changed at all) ---
+difference_mouse_step0_vs_step1=6628 px, verdict=PASS
+difference_touch_step0_vs_step1=6628 px, verdict=PASS
+
+--- agreement leg (touch step N vs mouse step N) ---
+agreement_step0_max_channel_diff=0, px_differing_at_all=0, px_over_visible_change_threshold=0, verdict=PASS
+agreement_step1_max_channel_diff=1, px_differing_at_all=4638, px_over_visible_change_threshold=0, verdict=PASS
+agreement_step2_max_channel_diff=1, px_differing_at_all=4638, px_over_visible_change_threshold=0, verdict=PASS
+agreement_step3_max_channel_diff=0, px_differing_at_all=0, px_over_visible_change_threshold=0, verdict=PASS
+
+overall=PASS
+
+--- provenance (two independent runs; every retained file's SHA-256 and capture timestamp) ---
+run_start_mouse=2026-08-09T06:13:31.9950770+09:00
+run_start_touch=2026-08-09T06:15:03.6349533+09:00
+file=t11-touch-counter-mouse-step0-0.png sha256=6409CBC6F9D73CE6169B1FEDC00B6500132E50666ED95E445515190FA45573E8 captured_utc=2026-08-08T21:13:48.6685377Z
+file=t11-touch-counter-mouse-step0-1.png sha256=6409CBC6F9D73CE6169B1FEDC00B6500132E50666ED95E445515190FA45573E8 captured_utc=2026-08-08T21:13:49.7065558Z
+file=t11-touch-counter-mouse-step1-0.png sha256=24933EF245038182A1AFFB4B07FC977019FDB44ED179E54E59D2F5E64BED98EE captured_utc=2026-08-08T21:13:52.7700467Z
+file=t11-touch-counter-mouse-step1-1.png sha256=FC363F1304E6A9778F36B1571B00B94B7C22993DDE80CD32EB2ADCC4F8A5C87A captured_utc=2026-08-08T21:13:53.7064838Z
+file=t11-touch-counter-mouse-step2-0.png sha256=2AEE2BDA9C28FF05823EC470DD934A5E976E2BAEEE0933EBD3E99E90962DCA98 captured_utc=2026-08-08T21:14:00.1468078Z
+file=t11-touch-counter-mouse-step2-1.png sha256=E650105376CA427D387D3C4AB067FF22ACD804DF73D97DAE3BC88551F7137B6D captured_utc=2026-08-08T21:14:01.1447356Z
+file=t11-touch-counter-mouse-step3-0.png sha256=02614798185F73350C30189219FACC7A1ED735B9C0E8D1DF834D6AAA5162DBEE captured_utc=2026-08-08T21:14:06.5199565Z
+file=t11-touch-counter-mouse-step3-1.png sha256=02614798185F73350C30189219FACC7A1ED735B9C0E8D1DF834D6AAA5162DBEE captured_utc=2026-08-08T21:14:07.1465890Z
+file=t11-touch-counter-mouse-run-meta.txt sha256=13F43E06D1BB7EF2A183907395BC9962A3A3EB9F9C402DFCF9F1C430ADD60D4F captured_utc=2026-08-08T21:14:10.7484844Z
+file=t11-touch-counter-touch-step0-0.png sha256=6409CBC6F9D73CE6169B1FEDC00B6500132E50666ED95E445515190FA45573E8 captured_utc=2026-08-08T21:15:14.6382252Z
+file=t11-touch-counter-touch-step0-1.png sha256=6409CBC6F9D73CE6169B1FEDC00B6500132E50666ED95E445515190FA45573E8 captured_utc=2026-08-08T21:15:15.2677144Z
+file=t11-touch-counter-touch-step1-0.png sha256=FC363F1304E6A9778F36B1571B00B94B7C22993DDE80CD32EB2ADCC4F8A5C87A captured_utc=2026-08-08T21:15:17.2683758Z
+file=t11-touch-counter-touch-step1-1.png sha256=FC363F1304E6A9778F36B1571B00B94B7C22993DDE80CD32EB2ADCC4F8A5C87A captured_utc=2026-08-08T21:15:17.8613409Z
+file=t11-touch-counter-touch-step2-0.png sha256=E650105376CA427D387D3C4AB067FF22ACD804DF73D97DAE3BC88551F7137B6D captured_utc=2026-08-08T21:15:22.8305769Z
+file=t11-touch-counter-touch-step2-1.png sha256=E650105376CA427D387D3C4AB067FF22ACD804DF73D97DAE3BC88551F7137B6D captured_utc=2026-08-08T21:15:23.4267248Z
+file=t11-touch-counter-touch-step3-0.png sha256=02614798185F73350C30189219FACC7A1ED735B9C0E8D1DF834D6AAA5162DBEE captured_utc=2026-08-08T21:15:28.2369430Z
+file=t11-touch-counter-touch-step3-1.png sha256=02614798185F73350C30189219FACC7A1ED735B9C0E8D1DF834D6AAA5162DBEE captured_utc=2026-08-08T21:15:28.8300322Z
+file=t11-touch-counter-touch-run-meta.txt sha256=F673AFC45CC57244D56057BBD0CE0DB4B520D9ACA0883C1369DDA9039A531A3D captured_utc=2026-08-08T21:15:32.1177000Z

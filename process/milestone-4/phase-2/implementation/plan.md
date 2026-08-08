@@ -864,27 +864,69 @@ agreement ⑥).
 - `EnableMouseInPointer` is **not** called (DD-001: a library does not
   change its host process's input mode); the mouse stays on the mouse
   messages, and the shared seam is the DIP conversion.
-- **Where it runs is probed, not assumed.** Pointer injection needs
-  capabilities a CI runner may lack, so a feasibility probe on the dev
-  box and on CI comes before the assertions are written. On CI the test
-  follows the standing rule: it **fails rather than silently skips**
-  when the capability is missing, and the skip guard is verified on an
-  environment that actually lacks it
-  ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)). If the probe
-  finds injection infeasible everywhere, the fallback — posting
-  `WM_POINTER*` frames directly, which does not exercise the OS pointer
-  machinery — is a **weaker claim**, and swapping to it is an
-  owner-visible plan change (framing agreement ⑥ named the evidence
-  form), not a silent substitution.
+  - **"The shared seam is the DIP conversion" was true of the division
+    and false of the space** (start gate fact 3). The `WM_POINTER*`
+    family carries **screen** coordinates where the mouse family carries
+    client coordinates, so the arm adds a `ScreenToClient` translation
+    ahead of the shared division — a new conversion site in the class
+    [architecture.md §12](../../../../docs/architecture.md) keeps
+    enumerable. It is invisible at a window position of `(0,0)`, so the
+    fixture parks its window off the desktop origin and asserts the move.
+    The **review lane is correspondingly corrected** from the
+    branch/test-focused review [preamble.md](./preamble.md) predicted to
+    a full independent review.
+- **Where it runs was probed, and the probe reshaped the task.** Both
+  injection APIs work on the development desktop, so the plan's
+  "infeasible everywhere" fallback does not fire. What the probe found
+  instead is that injection is **desktop-scoped**: the contact goes to
+  whatever window is at the screen point, so an injection-driven cargo
+  test would depend on its own window being visible, foreground and
+  unobstructed — the *GUI / interactive* environment class, not the
+  *headless runtime with live Compositor* class the integration suite
+  runs in. The two halves of the claim therefore land in the two tiers
+  that can carry them, which is **not** the plan's fallback swap
+  (injection is used, not replaced):
+  - a **CI-gated message-level fixture** (`touch_pointer_integration.rs`)
+    for conversion, resolution, dispatch, focus and hover — labelled in
+    its own header as the weaker claim, because a `SendMessageW`-borne
+    pointer message carries no real pointer id;
+  - a **desktop-tier injection artifact** for the OS-level claim, which
+    the CI-gated tier provably cannot make: mutation witness W2 removed
+    the suppression and left the whole suite green.
+  - The injection half is **deliberately outside the CI gate**
+    (owner-settled 2026-08-09: not needed for now, revisited when it is —
+    a reservation, not a closed question). Adding it later is additive and
+    needs a GitHub Actions capability probe, which needs a push.
+- **The single-delivery rule is measured, and it is per contact rather
+  than per message.** Claiming `WM_POINTERDOWN` **or** `WM_POINTERUP`
+  suppresses the whole contact's promotion, including the `WM_MOUSEMOVE`
+  an unclaimed `WM_POINTERUPDATE` would otherwise produce on a moving
+  contact; claiming only `WM_POINTERENTER` or only `WM_POINTERLEAVE`
+  suppresses nothing. All five are claimed anyway, so no member of a
+  contact the runtime has taken responsibility for reaches
+  `DefWindowProc`.
+- **Two behaviours no normative text fixes are decided here**, rather
+  than inherited by omission (CF-T4-4 and the T5 / T7 / T10 focus line):
+  a touch contact **moves focus exactly as a click does**, and it
+  **writes no hover or pressed state** — with the limit stated, that a
+  touch user gets no press feedback in M4.
+- **Only the primary contact activates a widget** (found at the
+  independent review). The arm read no `wParam`, so two fingers landing
+  on one Button produced two dispatches for one perceived tap. A
+  non-primary contact is still *claimed* — claiming must not become
+  contact-dependent or promotion returns — and simply dispatches nothing.
+  Multi-contact gestures stay outside M4-Phase 2.
 - **The limit is stated, not implied**: this does not establish that a
   physical touch digitizer produces the same messages. Recorded in the
   same shape as Phase 1's synthesized-`WM_DPICHANGED` limit.
-- Confirm whether
-  [verification-environments.md](../../../../docs/notes/verification-environments.md)
-  needs a taxonomy entry for synthesized touch, per the framing's
-  verification section.
+- The taxonomy entry
+  ([verification-environments.md](../../../../docs/notes/verification-environments.md))
+  **was needed**, and the answer is a measurement rather than a
+  judgement: synthesized touch injection gets its own row and an
+  observation recording the desktop-scoped requirement, the two-tier
+  split, and the mechanics that fail silently.
 
-- [ ] T11
+- [x] T11
 
 ## T12 — GUI evidence with positive controls
 
@@ -1097,6 +1139,31 @@ The four controls from the [framing](../requirements/framing.md)
     only whether §4.19 gains the sentence;
   - **§4.16's placement example is corrected by T8**, not here, so this
     is a confirmation rather than a repair;
+  - **§13.2's touch paragraph is satisfied, and the runtime is now
+    measured more precisely than the sentence** (T11 close gate fact 9).
+    "Handling the pointer message is what suppresses that promotion — one
+    delivery per contact" is true; what was measured per member is that
+    the suppression is keyed on `WM_POINTERDOWN` / `WM_POINTERUP` alone,
+    with `ENTER` / `UPDATE` / `LEAVE` claimed for a different reason. T13
+    decides whether the sentence gains that precision;
+  - **§13.2 says nothing about whether a touch contact moves focus or
+    paints hover** (T11). Both are decided — it moves focus exactly as a
+    click does, and it writes no hover or pressed state, with the limit
+    that a touch user gets no press feedback in M4 — and neither is
+    normative anywhere. T13 decides whether §13.2 gains the two
+    sentences, and the same pass covers **only the primary contact
+    activates a widget**, which is decided and unstated for the same
+    reason;
+  - **§12.3's four-kind conversion enumeration does not mention that the
+    pointer family arrives in screen space** (T11). Row 2 says pointer
+    coordinates are divided at the window procedure and is silent on the
+    `ScreenToClient` translation ahead of that division, which is now a
+    real site in the class §12.3 exists to keep enumerable;
+  - **§12.3 row 2's second sentence is false, and was in no task's
+    re-verification list until now** (found at T11's start gate). "Where
+    hit-testing reads a widget's rectangle back off its Visual (§7.5),
+    that readback is converted alongside them" was falsified by T2's
+    migration;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
     framing R2).
 - Phase-end retrospective, verification closure mapping, and

@@ -5885,3 +5885,613 @@ known then.
 CF-T10-1 therefore stays a `finding` with M4-Phase 4 as its owner, now
 with a home in that phase's own scope rather than only in this phase's
 ledger. G7 remains the tripwire either way.
+
+---
+
+## T11 — Touch
+
+### Start gate (recorded 2026-08-08, before any source edit)
+
+Read first: [AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[plan.md](./plan.md) §T11 and §Cross-task obligations,
+[preamble.md](./preamble.md),
+[framing.md](../requirements/framing.md) §オーナー合意の記録 (agreement ⑥)
+and §検証方針 §タッチ,
+[constraints.md](../requirements/constraints.md) §7 / §8 / §10,
+[DD-M4-P2-001](../decisions/dd-m4-p2-001-event-routing-model.md) §Touch,
+[architecture.md §12.3 / §13.2](../../../../docs/architecture.md),
+[dsl_spec.md §4.19](../../../../docs/dsl_spec.md),
+[verification-environments.md](../../../../docs/notes/verification-environments.md)
+§Verification kinds / Observation 3 / Observation 4, the T2–T10 close
+gates above, and the T10 retrospective.
+
+**The whole plan, log, decision set and retrospective set were grepped
+for `T11`.** Nine senders, plus one homonym that has to be separated
+before the list is usable:
+
+- **The homonym.** [constraints.md §6](../requirements/constraints.md)
+  and [framing.md](../requirements/framing.md) agreement ④ both say
+  "T11" and mean **M4-Phase 1's T11** (the owner's toolbar-overlap
+  observation), not this task. Nothing in either row is addressed here.
+- **T2** — two rows. `hit_test_click` is already message-family-agnostic,
+  so the walk needs no change; and the carry-forward *"a test that drives
+  a click must lay its tree out"* names this task explicitly, so the
+  fixture goes through `wasamo_load_ui` and a real client-extent message
+  rather than hand-pinning geometry.
+- **T4 / CF-T4-4** — hover is wired to the three mouse messages only. A
+  pointer arm inherits nothing, and **whether a touch contact should
+  paint hover at all is this task's explicit decision** rather than
+  something to inherit by omission.
+- **T5, restated by T7 and T10** — the same shape for focus: a
+  `WM_POINTER*` arm would have to call `focus_on_click` itself. **This
+  task's explicit decision.** T10 adds the consequence: the shipped
+  gallery now has a modal scope, so a touch contact that *did* move focus
+  would have a scope to move it inside.
+- **T10** — the shipped gallery is now driven by fixtures that click
+  through `hit_test_click`, so a touch arm reaching the same seam has a
+  ready comparison target: the same point through two message families
+  must reach the same handler.
+- **T6 / T8 / T9** — recorded as unaffected, and re-checked: correct.
+  Nothing in the authored surface distinguishes input family.
+- **T12** — its four controls are mouse- and keyboard-driven; no control
+  is a touch control. This task therefore owes T12 nothing and takes
+  nothing from it.
+
+The accumulated per-task start-gate lines, answered in order:
+
+- **T1 — new store / unit / coordinate system?** **Yes, and it is the
+  finding that reshapes this task.** The `WM_POINTER*` family carries
+  **screen** coordinates where the mouse family carries client
+  coordinates (fact 3). The pointer arm therefore needs a screen-to-client
+  translation ahead of the division `pointer_physical` +
+  `DipScale::pair_to_dip` already perform. No new *retained* store.
+- **T2 — which test pins the property this task deletes?** This task
+  deletes no property; it adds arms. The property it must not break is
+  T2's audit conclusion (zero `visual_rect` readers on the input path) —
+  the new arms read no Visual.
+- **T3 — was the evidence a later task needs built once here?** No later
+  task needs touch evidence: T12's controls are mouse / keyboard and T13
+  is documentation. What this task owes forward is the **stated limit**
+  and a taxonomy row, not a fixture.
+- **T4 — was the negative prediction this task rests on measured once?**
+  The prediction is DD-M4-P2-001's *"handling the pointer message
+  suppresses the mouse messages the system would otherwise synthesize"*.
+  Measured before writing any runtime code, in both legs (fact 4).
+- **T5 — identifiers held across messages: what is their lifetime?**
+  None. The arms hold nothing between messages; the OS pointer id is read
+  from nothing and stored nowhere.
+- **T6 — how many gates does the rule have?** Zero. This task adds no
+  authored surface, so neither `wasamoc check` nor the loader changes.
+- **T7 — which closing carry-forward is `doc-folded`, and where?**
+  CF-T4-4 and the T5 / T7 / T10 focus line are closed here, and the
+  closure is folded into the new arms' doc comments so the next reader of
+  `wnd_proc` sees the decision beside the code rather than in a ledger.
+- **T8 — what has another task sent here?** Answered above.
+- **T9 — how many paths does this surface split into, counted by type /
+  element type / message rather than by call site?** Counted:
+  **five `WM_POINTER*` members a stationary or moving contact produces**
+  (`ENTER`, `DOWN`, `UPDATE`, `UP`, `LEAVE`), **two coordinate spaces**
+  (screen on the pointer family, client on the mouse family), and **two
+  delivery outcomes per contact** (claimed, so no promotion; unclaimed,
+  so promotion), which is what the single-delivery assertion is about.
+
+#### Eight measured facts (probes run before any source edit)
+
+The probe is a standalone C#-in-PowerShell window with an instrumented
+`WndProc`, run in two modes that differ **only** in whether the pointer
+messages are returned without calling the default window procedure. It
+touches no wasamo code, so every fact below is a property of Windows on
+this machine rather than of this runtime.
+
+1. **Touch injection is available on this dev box, by both APIs.**
+   `InitializeTouchInjection(1, TOUCH_FEEDBACK_NONE)` + `InjectTouchInput`
+   and `CreateSyntheticPointerDevice(PT_TOUCH, 1, …)` +
+   `InjectSyntheticPointerInput` both succeeded and both delivered
+   messages. The plan's *"if the probe finds injection infeasible
+   everywhere"* branch therefore does **not** fire, and no swap to the
+   weaker posted-frame-only claim is proposed.
+2. **A stationary tap delivers `WM_POINTERENTER`, `WM_POINTERDOWN`,
+   `WM_POINTERUP`, `WM_POINTERLEAVE`** — in that order, with one pointer
+   id — and **no `WM_POINTERUPDATE`**.
+3. **`WM_POINTER*` `lParam` carries SCREEN coordinates; the promoted
+   mouse messages carry CLIENT coordinates.** Measured on the same
+   contact: client centre `(241,176)`, pointer `lParam` `(450,414)`,
+   promoted `WM_LBUTTONDOWN` `lParam` `(241,176)`, window at `(200,200)`.
+   **This is the fact the plan item does not have.** Its
+   *"the shared seam is the DIP conversion"* is true and incomplete: the
+   pointer family needs a translation the mouse family does not, and a
+   fixture whose window sits at the desktop origin cannot fail on its
+   absence.
+4. **Claiming the pointer messages suppresses promotion entirely.**
+   Handled leg: `ENTER / DOWN / UP / LEAVE` and nothing else. Unclaimed
+   leg (same script, same window, only the early `return` removed):
+   the same four, then `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, `WM_LBUTTONUP`,
+   `WM_MOUSEMOVE`. DD-M4-P2-001's single-delivery property is therefore
+   measured rather than assumed, and the "two deliveries" state it
+   excludes is shown to be reachable.
+5. **Injection is desktop-scoped, not window-scoped.** The contact goes
+   to whatever window is at the screen point — the probe asserts
+   `WindowFromPoint(p)` is its own `hwnd` before injecting. An
+   injection-driven **cargo test** would therefore depend on its window
+   being visible, foreground and unobstructed, which is
+   [verification-environments.md](../../../../docs/notes/verification-environments.md)'s
+   **GUI / interactive** environment class, not the *headless runtime
+   with live Compositor* class the existing integration suite runs in.
+   This is the fact that decides where the injection evidence lives
+   (below).
+6. **Two injection-side traps, recorded because both fail with a bare
+   `ERROR_INVALID_PARAMETER` and no diagnostic.** `pressure` is a touch
+   range (0 to 1024); the pen-ish `32000` is rejected. And PowerShell
+   assignment to a **nested** value-type field mutates a copy, so a
+   `POINTER_TOUCH_INFO` built field-by-field from PowerShell is sent to
+   the OS still zeroed — the struct has to be built in the C# layer.
+7. **No normative text says whether a touch contact moves focus or
+   paints hover.** [architecture.md §13.2](../../../../docs/architecture.md)
+   fixes the message family, the promotion suppression and the shared DIP
+   boundary; §13.3 / §13.4 describe focus without reference to input
+   family; [dsl_spec.md §4.19](../../../../docs/dsl_spec.md) never
+   mentions touch. Both are this task's decisions, and both are recorded
+   for T13 rather than silently taken.
+8. **[architecture.md §12.3](../../../../docs/architecture.md) row 2 is
+   stale, and no task's re-verification list names it.** *"Where
+   hit-testing reads a widget's rectangle back off its Visual (§7.5),
+   that readback is converted alongside them"* was falsified by T2's
+   migration. A grep of this log for `12.3` returns nothing and T13's
+   check list names §4.x and §13.x only. Carried to T13 as a finding,
+   together with the question §12.3 newly acquires here — whether its
+   four-kind enumeration should mention that the pointer family arrives
+   in screen space.
+
+#### Normative statements that already answer this task (DD-V-031)
+
+| Document / section | What it fixes | Consequence here |
+|---|---|---|
+| [architecture.md §13.2](../../../../docs/architecture.md) "Pointer, mouse and touch" | Touch is consumed as `WM_POINTER*`, not through mouse promotion; **handling the pointer message is what suppresses that promotion — one delivery per contact**; `EnableMouseInPointer` is deliberately not called; both families cross the same DIP boundary | The message family, the suppression mechanism and the refusal are **answers, not questions**. The task builds them; it does not re-decide them |
+| [architecture.md §13.2](../../../../docs/architecture.md) target selection | One target, topmost, bounded by ancestor clips; ancestors until a handler runs | The touch arm reuses `hit::` through `hit_test_click`; it adds no resolution rule |
+| [architecture.md §12.3](../../../../docs/architecture.md) row 2 | Pointer message coordinates are divided by the scale at the window procedure | Confirms the division belongs in `wnd_proc`. Silent on screen-versus-client space (fact 3) — recorded as a §12.3 question for T13, not resolved here |
+| [dsl_spec.md §4.19](../../../../docs/dsl_spec.md) | "A pointer event resolves to exactly one target…"; `clicked` on any widget | A touch tap is a pointer event, so the authored surface is already specified and unchanged |
+| [DD-M4-P2-001 §Risks](../decisions/dd-m4-p2-001-event-routing-model.md) | "only the subset the fixture and the two apps exercise is handled, and unhandled members fall through to `DefWindowProc`" | Fixes the shape of the handled set: claim the members a contact produces, let the rest fall through |
+| [CLAUDE.md §Testing rules](../../../../CLAUDE.md) | A CI-gated mock-free test fails rather than skips on GitHub Actions; the skip guard is verified where the capability is absent | Applies to whatever is landed as a cargo test — which is why the split below matters |
+
+No divergence between the decision set and the specification was found.
+The one gap is fact 7 (touch and focus, touch and hover), which is an
+**absence** rather than a disagreement.
+
+#### What T11's responsibility actually is (critical re-reading of the item)
+
+The plan item is right about the path and understates two things.
+
+- **Right:** the path under test is touch to DIP to hit resolution to
+  handler; `EnableMouseInPointer` is refused; the limit must be stated;
+  the taxonomy question must be answered.
+- **Understated 1 — the conversion.** "Touch rides the same seam" is
+  true of the *division* and false of the *space*: fact 3 makes
+  screen-to-client a new step on the input path, in the class
+  [architecture.md §12](../../../../docs/architecture.md) treats as
+  enumerable and audited. It is invisible at a window position of
+  `(0,0)` and invisible at scale 1 in the other direction, so the
+  fixture has to be positioned **and** scaled off the identity.
+- **Understated 2 — where the evidence can run.** The item predicts one
+  artifact, a cargo test, and asks whether it can run on CI. Fact 5 says
+  the two halves of the claim have **different environment
+  requirements**:
+  - the claim *"the runtime converts, resolves and dispatches a pointer
+    message correctly"* is a property of `wnd_proc` and needs only the
+    environment the existing integration suite already has;
+  - the claim *"a real OS touch contact reaches the shipped app, exactly
+    once, because the promotion was suppressed"* needs the interactive
+    desktop of fact 5.
+
+  So T11 lands **both**, each in the tier that can run it: a CI-gated
+  message-level integration fixture, and a desktop-tier injection
+  evidence script whose result is recorded here. This is **not** the
+  plan's fallback swap — the fallback was *"if injection is infeasible
+  everywhere, post frames instead"*, and injection is feasible (fact 1).
+  The posted-frame fixture is added **beside** injection rather than
+  instead of it, and the weaker claim is labelled as such.
+
+  **The open question this leaves for the owner is narrow**: whether the
+  injection half should *additionally* be a cargo test gated on CI, which
+  cannot be decided without probing GitHub Actions, and probing GitHub
+  Actions needs a push — a separate owner gate. Raised at the close gate
+  with a recommendation rather than blocking delivery, because the split
+  above is complete evidence on its own.
+
+#### Decisions this task makes explicitly (fact 7's two halves)
+
+- **A touch contact moves focus, exactly as a click does.** The
+  `WM_POINTERUP` arm calls `focus_on_click` before dispatching, in the
+  same order and for the same reason `WM_LBUTTONUP` does (a handler's
+  synchronous rebuild can invalidate the resolved path). The alternative
+  — a tap that activates a widget without focusing it — would make the
+  keyboard's next `Tab` depend on which input family opened the lightbox,
+  and DD-M4-P2-003's click rule is written about the *click*, not about
+  the mouse. Closes the T5 / T7 / T10 line.
+- **A touch contact does not write hover or pressed.** The arms call
+  neither `update_hover` nor `clear_hover`, and do not touch
+  `state.mouse_down`. Three reasons: hover is a cursor concept and a
+  contact that has lifted leaves no cursor behind, so a painted hover
+  would have no natural clearer; the hover record and the painted state
+  are the derived pair T4 made single-writer, and a second producer is
+  the shape DD-M4-P1-002 §Row 6 closed; and `update_hover`'s pressed arm
+  is driven by `state.mouse_down`, which a contact does not own. Closes
+  CF-T4-4 with a decision rather than by omission. The limit — a touch
+  user gets no press feedback from wasamo in M4 — is stated in the same
+  doc comment.
+
+#### Trap selection (implementation-gates §1)
+
+```
+- [x] #1 semantic migration   - [x] #2 side effects   - [x] #3 parallel data   - [x] #4 branch tests
+- [x] #5 carry-forward        - [x] #6 root cause     - [ ] #7 GUI positive control
+```
+
+- **#1 — applies, in the conversion-seam sense.** No enum or schema gains
+  a variant, so the literal trigger is absent. What does apply is its
+  artifact: the pointer-coordinate conversion sites are the enumerable
+  audited class of
+  [architecture.md §12.3](../../../../docs/architecture.md), and this
+  task adds callers to it. The close artifact is a call-site table of
+  every pointer-coordinate conversion in `wnd_proc` with **its input
+  space** (screen or client) classified — the classification fact 3 makes
+  load-bearing, and the one a search for `pair_to_dip` alone would not
+  produce.
+- **#2 — applies.** New message arms change more than they appear to:
+  what the window claims from the OS (promotion for every contact,
+  including gestures no fixture drives), the focus record, the reactive
+  drain reached through a handler's state write, and the four things the
+  arms deliberately do **not** write (`hover`, `mouse_down`,
+  `tracking_mouse`, the host pointer callback slots). Enumerated at
+  close, including the deliberate non-writes, because "did not write it"
+  is exactly the side effect an enumeration is for.
+- **#3 — applies, folded into #2.** The hover record and painted state
+  pair is the parallel structure in reach; the decision is that neither
+  arm touches either half.
+- **#4 — applies.** Every arm added is a branch, and the arms that
+  deliberately do nothing but return are the ones no incidental test
+  fires. Each needs a test that fires it directly.
+- **#5 — applies.** Three things carry: the stated limit (synthesized
+  injection does not establish that a physical digitizer produces these
+  messages), the taxonomy row, and the two decisions above, which
+  M4-Phase 4's pointer capture and drag surface will be the first to
+  re-open.
+- **#6 — applies, armed rather than triggered.** Injection is
+  timing-dependent (the contact is delivered asynchronously and has to be
+  pumped for). A "no messages arrived" result must be root-caused, not
+  re-rolled — and fact 6 is already one instance of that discipline
+  paying off: the first probe's `ok=False err=0x57` was a wrong
+  `pressure` and a PowerShell copy-semantics bug, not a missing
+  capability. Reading it as "injection is unavailable here" would have
+  swapped the task to its weaker fallback on a false premise.
+- **#7 — does not apply as a rendering claim, and its principle applies
+  anyway.** Nothing this task builds paints: the decision above is that
+  touch writes no presentation state, so there is no frame in which a
+  correct implementation differs from a wrong one. The **positive-control
+  obligation** is met where the claim actually lives — at the message
+  level, with the promotion leg (fact 4) as the leg that shows "two
+  deliveries" is reachable. The injection evidence does render (the
+  lightbox opens), but the rendering is the *readout*, not the claim.
+
+#### Review lane — corrected to full independent review
+
+[preamble.md](./preamble.md) predicts **branch/test-focused**: *"new
+message arms routing into the already-reviewed seam; the single-delivery
+assertion is the artifact"*. Corrected here, on the Phase 1 F-12 / T12
+precedent for a stale lane, for a reason the prediction could not have:
+fact 3 makes this a **new conversion site on the input path**, which is
+the class DD-M4-P1-002's audit governs and the class this phase's whole
+T1 / T2 migration exists to keep enumerable. A second reason is that the
+arms change what the window claims from the OS for *every* contact,
+including members no fixture drives. The branch/test-focused check
+composes in for the arms themselves.
+
+#### Boundaries this task does not cross (and what would retract each)
+
+1. **No authored surface.** No new signal, attribute or grammar. Retract
+   if a fixture cannot express what it must assert without one — it
+   cannot; `clicked` already covers a tap.
+2. **No new ABI function** (cross-task obligation). The host pointer
+   callback slots stay uninstalled, as `key_down_fn` does.
+3. **No change to `hit`, `focus` or `emit`.** The arms call existing
+   primitives. Retract if the fixture needs a runtime accessor that does
+   not exist — T10's boundary 1 was retracted for exactly that, so the
+   condition is written down this time rather than discovered.
+4. **No `EnableMouseInPointer`** — DD-M4-P2-001, not a judgement call.
+5. **No pointer capture, no drag, no gesture** — deferred to M4-Phase 4
+   by DD-M4-P2-001.
+6. **No pointer-type filtering.** A pen contact routes like a touch
+   contact. Filtering would add a branch no test in this phase can fire
+   with the widget set available, which is trap #4 in the direction that
+   creates untestable code.
+
+### Close gate (recorded 2026-08-09)
+
+What landed: five `WM_POINTER*` arms in `wnd_proc` behind two pure
+predicates, one new conversion helper, ten integration fixtures in
+`touch_pointer_integration.rs`, two unit tests in `window.rs`, two
+evidence scripts, and a taxonomy row plus an observation in
+[verification-environments.md](../../../../docs/notes/verification-environments.md).
+No authored surface, no ABI, no change to `hit` / `focus` / `emit` /
+`widget`. `cargo fmt --all -- --check`, `cargo build --workspace`,
+`cargo test --workspace` (0 failing blocks; `wasamo_runtime` lib 609,
+`touch_pointer_integration` 10) and `cargo build --release --workspace`
+are all green.
+
+#### Three facts measured *after* the start gate
+
+- **Fact 9 — promotion suppression is per contact, gated on the
+  button-transition members.** The start gate's fact 4 measured only the
+  two ends (all claimed / none claimed), and both the arm's comment and
+  the independent review's counter-hypothesis (that promotion is
+  per-message) were wrong about the middle. Measured per member, on a
+  stationary contact:
+
+  | claimed set | promoted mouse messages |
+  |---|---|
+  | all five | 0 |
+  | none | 4 |
+  | all but `DOWN` / all but `UP` / all but `ENTER` | 0 |
+  | `DOWN`+`UP` only | 0 |
+  | `DOWN` only / `UP` only | 0 |
+  | `ENTER` only / `LEAVE` only | 4 |
+
+  and on a **moving** contact (`DOWN`, three `UPDATE` frames, `UP`):
+
+  | claimed set | promoted mouse messages |
+  |---|---|
+  | all five | 0 |
+  | `DOWN`+`UP` only, `UPDATE` unclaimed | 0 |
+  | none | 6 |
+
+  So claiming `WM_POINTERDOWN` **or** `WM_POINTERUP` — either alone —
+  suppresses the whole contact, including the `WM_MOUSEMOVE` an unclaimed
+  `WM_POINTERUPDATE` would otherwise produce; claiming only `ENTER` or
+  only `LEAVE` suppresses nothing. **The shipped code is unchanged and its
+  reason is not.** All five are claimed not because dropping one would
+  re-enable promotion (measured: it would not) but so that no member of a
+  contact this runtime has taken responsibility for reaches
+  `DefWindowProcW` — which keeps the arm correct independently of a
+  promotion rule the OS owns.
+- **Fact 10 — an injected contact carries `POINTER_MESSAGE_FLAG_PRIMARY`
+  on every member of its sequence** (`flags=0x6017` on `ENTER` / `DOWN`,
+  `0x6000` on `UP` / `LEAVE`), through both injection APIs. This is what
+  made the review's multi-contact correction safe to take: gating dispatch
+  on the primary bit cannot change what a single-contact tap does.
+- **Fact 11 — the message-level suite cannot see the suppression at
+  all.** Mutation witness W2 made the `WM_POINTERUP` arm fall through to
+  `DefWindowProcW` and the whole suite stayed green: a `SendMessageW`-borne
+  pointer message carries no real pointer id, so `DefWindowProcW` promotes
+  nothing either way. This is the measurement that splits the evidence into
+  two tiers rather than a preference.
+
+#### #1 — call-site audit table (pointer-coordinate conversions)
+
+Query: `rg "pair_to_dip|pointer_physical|pointer_message_to_client_dip|ScreenToClient" wasamo-runtime/src`.
+Every hit classified; the column that matters is the **input space**,
+which a search for `pair_to_dip` alone would not surface.
+
+| # | Site | Message | Input space | Conversion | Classification |
+|---|---|---|---|---|---|
+| 1 | `window.rs:1163` | `WM_MOUSEMOVE` | client | `pair_to_dip(pointer_physical(lparam))` | must-not-translate — the mouse family is already client-space |
+| 2 | `window.rs:1202` | `WM_LBUTTONDOWN` | client | as above | as above |
+| 3 | `window.rs:1214` | `WM_LBUTTONUP` | client | as above | as above |
+| 4 | `window.rs:1334` | `WM_POINTERUP` | **screen** | `pointer_message_to_client_dip` = `pointer_physical` → `ScreenToClient` → `pair_to_dip` | must-translate — the one new site |
+| — | `window.rs:368`, `:784`, `:1027`, `emit.rs:171` | `WM_SIZE` / attach / `WM_DPICHANGED` / drain | client **extent**, not a pointer coordinate | `pair_to_dip` | ignore-OK — an extent has no origin to translate |
+| — | `dip_scale.rs:148`, `:309` | — | — | the definition and its unit test | ignore-OK |
+
+`pointer_physical` now has callers in two different coordinate spaces, so
+its doc was rewritten to state that it is a raw `lParam` unpacker with no
+opinion on space, and each caller names its own. Tests: the translation is
+pinned by `a_touch_tap_fires_the_handler_of_the_widget_it_lands_on` and
+`a_pointer_message_carrying_an_untranslated_client_point_resolves_to_nothing`,
+the division by
+`a_touch_tap_at_a_non_unit_scale_resolves_the_widget_whose_dip_rectangle_contains_it`
+— each shown red under its own mutation below.
+
+#### #2 / #3 — structural side-effect enumeration, including the deliberate non-writes
+
+| Derived state | What the arms do | Why |
+|---|---|---|
+| OS mouse promotion for the contact | **Changed for every contact this window receives**, including pen and gesture contacts no fixture drives | Claiming is the mechanism §13.2 names; fact 9 measures what it is keyed on |
+| `WindowState::focus` | Written by `WM_POINTERUP`, before dispatch | A touch contact moves focus exactly as a click does; a handler's synchronous rebuild can invalidate the resolved path |
+| Reactive drain / re-layout / `arranged_rect` store | Reached through `hit_test_click`'s handler, exactly as the mouse path reaches it | Not new; the arm adds no drain point |
+| `WindowState::hover` | **Not written by any arm** | The record and the painted state are T4's single-writer derived pair; a lifted contact leaves no cursor to clear it |
+| `WindowState::mouse_down` | **Not written** | It is the mouse's pressed-painting flag; a contact does not own it |
+| `WindowState::tracking_mouse` | **Not written** | `TrackMouseEvent` is the mouse-leave mechanism; the pointer family has its own `LEAVE` |
+| Host pointer callback slots | **Not installed** | Cross-task obligation: no new ABI surface (framing agreement ⑦) |
+| Non-primary contacts | Claimed, but dispatch nothing | Only the primary contact activates a widget; claiming must not become contact-dependent or promotion returns |
+
+The parallel-data trap (#3) reduces to the hover pair, and the answer is
+that neither half is touched — recorded here rather than left as an
+absence, because "did not write it" is exactly what an enumeration is for.
+
+#### #4 — branch tests, each shown red under its own mutation
+
+| Branch | Test that fires it | Mutation | Result |
+|---|---|---|---|
+| `pointer_message_to_client_dip`'s translation | `a_touch_tap_fires_the_handler_of_the_widget_it_lands_on`; `a_pointer_message_carrying_an_untranslated_client_point_resolves_to_nothing` | **W1** delete `ScreenToClient` | 7 of 9 fixtures red |
+| its division | `a_touch_tap_at_a_non_unit_scale_resolves_the_widget_whose_dip_rectangle_contains_it` | **M1** drop `pair_to_dip`; **M2** apply it twice | 1 red each, same assertion, `left: 0 right: 1` |
+| claimed-but-inert arm (`ENTER`/`DOWN`/`UPDATE`/`LEAVE`) | `the_claimed_pointer_messages_that_act_on_nothing_change_no_state` fires each member directly | **M5** drop `WM_POINTERUPDATE` from the set | the unit test red |
+| the claimed **set's membership** | `claims_pointer_message_without_acting_is_pinned_by_name` | **M3** rewrite as `matches!(msg, 577..=582 \| 584..=586)` | unit test red naming `0x0241` (`WM_NCPOINTERUPDATE`); all 10 fixtures stayed green |
+| `WM_POINTERUP` dispatch | `one_touch_contact_reaches_the_handler_exactly_once`, and `two_deliveries_of_the_same_contact_are_reachable` as the ceiling control | **W2** fall through to `DefWindowProcW` | **nothing red** — fact 11 |
+| the primary gate | `a_non_primary_contact_is_claimed_but_dispatches_nothing` | **M4** drop the primary check | 1 red, `left: 1 right: 0` |
+| the primary bit itself | `pointer_message_is_primary_reads_the_high_word` | — | pure-logic pin, both directions |
+
+**DD-V-029 applies and is discharged.** `pointer_message_to_client_dip`
+is a newly authored coordinate-conversion rule, so its named test had to
+be shown going red under a deliberately wrong implementation: W1 for the
+translation half, M1 and M2 for the division half. The division half was
+**not** discharged at first — the fixture written to be that leg targeted
+a full-width, 72-DIP-tall `Box` whose centre survives both mutations, so
+it stayed green under each. The independent review found it; the fixture
+was retargeted at a small `Button` with a precondition assertion that the
+undivided point falls outside its rectangle, and only then did M1 and M2
+go red. The start gate's trap #4 paragraph did not name DD-V-029, which is
+the catalog item its selection missed.
+
+#### #5 — carry-forward ledger
+
+| Item | Evidence | Class | Re-trigger criterion |
+|---|---|---|---|
+| **CF-T11-1 — the synthesized-touch limit.** Injection establishes that this message path works, not that a physical digitizer produces the same messages. Same shape as Phase 1's synthesized-`WM_DPICHANGED` limit | The evidence scripts and their recorded output | `stated limit` | Any task claiming touch-hardware behaviour, and M4-Phase 4's drag surface, which is the first to need a *moving* contact |
+| **CF-T11-2 — pointer capture, drag and gesture are not built.** `WM_POINTERCAPTURECHANGED` is reachable (the system can take a gesture over mid-contact) and is deliberately unclaimed | The claimed-set unit test's must-not-claim list | `carry-forward` | **M4-Phase 4**, whose scrollbar is DD-M4-P2-001's named trigger for pointer capture. It is also the first task that would need the moving-contact path to do anything |
+| **CF-T11-3 — multi-contact behaviour is one decision, not a mechanism.** Only the primary contact activates; a second simultaneous contact is claimed and does nothing | `a_non_primary_contact_is_claimed_but_dispatches_nothing`, and the M4 mutation | `carry-forward` | The first surface that wants two contacts to mean something — pinch, two-finger scroll — which is at the earliest M4-Phase 4 |
+| **CF-T11-4 — `pointer_physical` has two callers in two coordinate spaces, with nothing in the type system separating them.** This is the near-miss form of the phantom-typed length newtype (`Dip<T>` / `Px<T>`) the M4-Phase 1 handoff reserved "only if a unit-confusion defect actually recurs" | The #1 audit table's Input-space column | `carry-forward` | A third caller, or the first actual unit-confusion defect. The reserve condition has **not** fired: no defect occurred, and the classification is currently carried by a doc comment and a table rather than by the compiler |
+| **CF-T11-6 — the injection half is deliberately outside the CI gate, and the reservation is open.** Owner-settled 2026-08-09: not needed for now, revisited when it is. The two tiers that exist close AC1's touch half; a CI-gated injection test would be additive | The disposition below, and fact 11 (the message-level tier cannot make the suppression claim) | `carry-forward` | A touch surface whose regression would go unnoticed between desktop captures — the first is M4-Phase 4's drag, which needs a *moving* contact — or a CI runner known to support injection. Adding it needs a GitHub Actions capability probe, which needs a push |
+| **CF-T11-5 — an evidence script's fixed wait encodes the machine's load at the moment it was written.** `capture-t11-touch-counter.ps1` slept 3 s and looked for the host's window once; on a loaded machine the titled window appears between 3 s and 5 s, and the run failed with "no visible Counter HWND" while the host was alive and healthy. Replaced by a poll to a deadline, with a failure message that lists the windows the process actually owns | The measured appearance times (none at 1 s / 2 s, untitled-only at 3 s, titled at 5 s) | `carry-forward` | Any later capture or smoke script that waits for a host to be ready. [verification-environments.md](../../../../docs/notes/verification-environments.md) Observation 4 already states this for foreground activation — "a single refusal is not an environment verdict" — and the step before it had been left on a fixed sleep |
+
+#### #6 — deterministic failures, root-caused rather than re-rolled
+
+Three, none of them re-rolled to green:
+
+- **`InjectTouchInput` returning `ok=False err=0x57`** at the first probe.
+  Read as "injection is unavailable on this machine" it would have swapped
+  the task to its weaker fallback on a false premise. Root cause was two
+  bugs in the probe, not a missing capability: `pressure` was a pen-scale
+  value where the touch range is 0–1024, and PowerShell assignment to a
+  **nested** value-type field mutates a copy, so the contact reached the OS
+  still zeroed. Fixed by building the structure in the C# layer.
+- **The probe reporting `OVERALL: FAIL` on a correct runtime.** The claim
+  leg's log contained a `WM_MOUSEMOVE`, and the verdict counted any mouse
+  message as promotion. Root cause: genuine physical-cursor traffic —
+  the coordinates `(291,335)` are not the contact's client point
+  `(241,176)` and it arrived *before* the pointer sequence. Fixed at the
+  source (park the cursor off-window, clear the log, then inject) **and**
+  in the verdict (count only a mouse message that follows the contact's
+  pointer sequence and carries the contact's client point).
+- **A stale `GetLastError` printed beside `ok=True`.** Cosmetic in effect
+  and not in an artifact: a non-zero error code next to a success reads as
+  a defect to whoever re-runs it. The error is now printed only on failure.
+
+#### #7 — not applicable as a rendering claim; where the obligation was met instead
+
+Nothing this task builds paints — the decision is that a touch contact
+writes no presentation state — so there is no frame in which a correct
+implementation differs from a wrong one, and trap #7's screenshot artifact
+has nothing to be about. The **positive-control principle** still applies
+and is met where the claim lives: at the message level,
+`two_deliveries_of_the_same_contact_are_reachable` is the leg that shows
+the counter can reach two, so "exactly once" is a count rather than a
+ceiling; and at the OS level, fact 9's unclaimed legs show the promoted
+messages the claimed legs are absent of. The counter-app frame set is a
+readout of a state change, not a rendering claim.
+
+#### Independent review — six defects taken, two dispositioned
+
+The lane was corrected to full independent review at the start gate, and
+the review earned it: it found a defect no mutation in the task's own plan
+would have caught.
+
+- **Taken and fixed:** the non-discriminating scale fixture (above); two
+  false statements in `pointer_message_to_client_dip`'s doc (`ScreenToClient`
+  returns `BOOL`, not a `Result`, and the precedent it cited *reports*
+  rather than swallows); the claimed-set unit test omitting the non-client
+  variants, where a plausible range-based rewrite passed every assertion
+  while breaking touch caption interaction; multi-contact dispatch; two
+  comments claiming more than facts 2 and 4 measured; and the unit test's
+  own doc claiming it pinned the call site when it pins only the predicate.
+- **Dispositioned rather than implemented:** the phantom-typed newtype
+  suggestion is CF-T11-4 — the M4-Phase 1 handoff reserved it for an actual
+  recurrence, and none occurred. The frame-retention finding is CF-T11-5.
+
+The review's own counter-hypothesis about per-message promotion was itself
+wrong, which is why fact 9 was measured rather than argued.
+
+#### Re-decided at close (start-gate selection is a prediction)
+
+Two changes. **#7 stays non-applicable** but its principle is recorded
+against the message-level control rather than left as "not applicable
+therefore nothing". **#4 widened**: the start gate counted arms, and the
+task ended with two pure predicates and a primary gate that arms alone do
+not cover, plus the DD-V-029 obligation it did not name. The trap that was
+*under*-selected was #4, not over-selected.
+
+#### Re-audit of the whole task list
+
+Read T12 and T13 again at close, not only T11's own item.
+
+- **T12 — unaffected.** Its four controls are mouse- and keyboard-driven
+  and none is a touch control; this task neither owes it a frame nor takes
+  one from it. One usable fact: `capture-t11-touch-counter.ps1` is a
+  working two-input-family comparison harness with cursor parking and a
+  fail-loud "the step did not change" guard, which is the shape control A's
+  re-take would want if T12 chooses to re-capture rather than cite T10's.
+- **T13 — gains four re-verification items**, all recorded here rather
+  than fixed:
+  - **§13.2's touch paragraph is satisfied and its wording is now
+    narrower than the measurement.** "Handling the pointer message is what
+    suppresses that promotion — one delivery per contact" is true;
+    fact 9 sharpens it to *which* members carry the suppression. T13
+    decides whether the sentence gains that precision or stays at the level
+    it is written.
+  - **§13.2 says nothing about whether a touch contact moves focus or
+    paints hover.** Both are decided here and neither is normative. T13
+    decides whether §13.2 gains the two sentences.
+  - **§12.3's four-kind conversion enumeration does not mention that the
+    pointer family arrives in screen space.** Row 2 says pointer
+    coordinates are divided at the window procedure and is silent on the
+    translation ahead of it.
+  - **§12.3 row 2's second sentence is false and is in no task's list.**
+    "Where hit-testing reads a widget's rectangle back off its Visual
+    (§7.5), that readback is converted alongside them" was falsified by
+    T2's migration; a grep of this log for `12.3` returned nothing before
+    this task, and T13's check list names §4.x and §13.x only.
+- **Cross-task obligations** — "no new ABI function" holds: the arms call
+  private runtime functions and install no callback slot.
+
+#### The desktop-tier evidence, taken against the landed runtime
+
+[evidence/t11-frames/](./evidence/t11-frames/) holds two full capture
+runs of the shipped `counter-rust.exe` at `e0cb862` — the commit that
+carries the primary-contact gate — one driven by real OS touch injection
+and one by mouse, differing in nothing else. Three touch contacts render
+`Count: 3`, agreeing with three mouse clicks at every step within the
+F-33 tolerance (`max_channel` 0 or 1, no pixel over the visible-change
+threshold), while step 0 versus step 1 differs by 6,628 px in both
+families. A contact delivered twice — the state the suppression exists to
+prevent — would have rendered `Count: 2` against the mouse run's
+`Count: 1`, so the agreement leg fails on a whole digit rather than on a
+rounding difference. Read directly: step 1 also shows the Button in its
+focus indicator, which is the "a touch contact moves focus" decision
+rendered rather than only read back as state.
+
+**Two defects in the artifact itself were found while taking it**, both
+of the class that makes an evidence script lie rather than fail:
+
+- The script slept a fixed 3 s and looked for the host's window **once**.
+  On a loaded machine the titled window appears between 3 s and 5 s, so
+  the run aborted with "no visible Counter HWND" while the host was alive
+  and healthy. Measured (nothing at 1 s / 2 s, an untitled visible window
+  at 3 s, the titled one at 5 s) rather than guessed at, then replaced by
+  a poll to a deadline whose failure message lists the windows the
+  process actually owns. Recorded as CF-T11-5.
+- The comparison reported `differing_px=0` and a within-set jitter of
+  `0 px` for frames that differ by 1 per channel over 4,638 pixels. The
+  verdicts were sound — they check `max_channel` against the tolerance —
+  but the *counter* being reported was "pixels over a 60-per-channel-sum
+  visible-change threshold" under a label that reads as "pixels that
+  differ". F-33's whole point is that the noise floor is a measured
+  quantity, and the artifact was reporting a threshold artifact as that
+  quantity. Now reports all three numbers under names that say which is
+  which, and the measured noise floor is `max_channel` 1 over 4,638 px in
+  the mouse set and 0 in the touch set.
+
+#### Owner disposition — the injection half stays out of the CI gate (2026-08-09)
+
+The plan predicted one artifact, a cargo test gated on CI. Fact 5 (start
+gate) and fact 11 split it into two tiers instead: the message-level
+fixture is CI-gated and green, and the injection half is desktop-tier.
+Whether the injection half should *additionally* be a cargo test that
+fails rather than skips on GitHub Actions
+([CLAUDE.md §Testing rules](../../../../CLAUDE.md)) could not be settled
+from here — a runner may or may not have the capability, probing it needs
+a push, and push is its own gate.
+
+**Owner-settled 2026-08-09: not needed for now, revisited when it is.**
+This is a reservation rather than a closed question — the owner kept the
+possibility of change open — so it is recorded with its re-trigger rather
+than as a decision the phase is done with (CF-T11-6). Nothing in the
+phase is blocked by it: AC1's touch half is closed by the two tiers that
+exist, and adding the CI-gated variant later is additive, needing a
+GitHub Actions capability probe and nothing else.

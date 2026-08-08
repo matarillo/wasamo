@@ -6,10 +6,13 @@ use windows::{
     core::Interface,
     Foundation::Numerics::Vector2,
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
-        Graphics::Dwm::{
-            DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
-            DWMWINDOWATTRIBUTE, DWM_SYSTEMBACKDROP_TYPE,
+        Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM},
+        Graphics::{
+            Dwm::{
+                DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
+                DWMWINDOWATTRIBUTE, DWM_SYSTEMBACKDROP_TYPE,
+            },
+            Gdi::ScreenToClient,
         },
         UI::{
             HiDpi::GetDpiForWindow,
@@ -19,10 +22,11 @@ use windows::{
             WindowsAndMessaging::{
                 CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, LoadCursorW, PostQuitMessage,
                 RegisterClassExW, SetWindowLongPtrW, SetWindowPos, ShowWindow, CS_HREDRAW,
-                CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, SWP_NOACTIVATE, SWP_NOMOVE,
-                SWP_NOZORDER, SW_SHOW, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN,
-                WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SIZE, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+                CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, POINTER_MESSAGE_FLAG_PRIMARY,
+                SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SW_SHOW, WM_DESTROY, WM_DPICHANGED,
+                WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
+                WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
+                WM_SIZE, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -826,8 +830,8 @@ unsafe fn refresh_text_at_new_scale(state_ptr: *mut WindowState) {
     finish_text_refresh(failure.as_deref(), target.dpi(), emit_runtime_diagnostic);
 }
 
-/// The **physical** client-area pointer position packed into a mouse message's
-/// `lParam`, sign-extended per axis.
+/// Unpack a **physical** pointer position from a message's `lParam`,
+/// sign-extended per axis.
 ///
 /// Hoisted at M4-Phase 1 T5 because the conversion seam would otherwise have
 /// divided this expression at three sites that each wrote it out again — the
@@ -835,11 +839,147 @@ unsafe fn refresh_text_at_new_scale(state_ptr: *mut WindowState) {
 /// extraction is deliberate and is *not* shared with `WM_SIZE`: a pointer
 /// coordinate is negative when the cursor leaves the client area to the left or
 /// above, while a client extent is unsigned.
+///
+/// **A raw `lParam` unpacker, nothing more — it does not say which
+/// coordinate space the result is in.** That is each caller's to know (M4-
+/// Phase 2 T11 fact 3): the mouse family (`WM_MOUSEMOVE`, `WM_LBUTTONDOWN`,
+/// `WM_LBUTTONUP`) packs a **client**-area position here, and their arms use
+/// this value directly; the pointer family (`WM_POINTER*`) packs a
+/// **screen** position instead, and its arms go through
+/// [`pointer_message_to_client_dip`], which calls this function and then
+/// translates before dividing.
 fn pointer_physical(lparam: LPARAM) -> (f32, f32) {
     (
         (lparam.0 & 0xFFFF) as i16 as f32,
         ((lparam.0 >> 16) & 0xFFFF) as i16 as f32,
     )
+}
+
+/// Unpack a `WM_POINTER*` message's `lParam` and convert it to this
+/// window's client-area DIP.
+///
+/// **Why this helper exists, and why the mouse arms must not use it.** The
+/// pointer family arrives in **screen** coordinates where the mouse family
+/// arrives in **client** coordinates — measured directly (M4-Phase 2 T11
+/// fact 3): on the same stationary contact, client centre `(241,176)`,
+/// pointer `lParam` `(450,414)`, promoted `WM_LBUTTONDOWN` `lParam`
+/// `(241,176)`, window at `(200,200)`. `ScreenToClient` is therefore a
+/// translation this input path needs that the mouse arms do not; running a
+/// mouse message's already-client `lParam` through it would mistranslate
+/// it.
+///
+/// **This adds a translation, not a second conversion.** The division that
+/// follows is the same audited seam every other pointer-coordinate site
+/// uses (`docs/architecture.md` §12.3 row 2, DD-M4-P1-002): [`pointer_physical`]
+/// unpacks the raw pair and `scale.pair_to_dip` divides it, exactly as the
+/// mouse arms do. `ScreenToClient` is the one new step, and it runs on the
+/// physical pair, ahead of that division, not instead of it.
+///
+/// `ScreenToClient` returns `BOOL`, not a `Result` — there is no `Result`
+/// to propagate. `let _ = ScreenToClient(...)` below deliberately discards
+/// that `BOOL` (`ClientToScreen` is the same shape, which is why this
+/// file's integration fixtures check `ok.as_bool()` on it themselves
+/// instead of `?`). This is safe to leave unchecked because
+/// `ScreenToClient` fails only for an invalid `HWND`, and this procedure
+/// only ever runs with the `HWND` its own `wnd_proc` invocation was called
+/// on — not a candidate for invalidity mid-call. On that unreachable
+/// failure path `point` is left at its screen value, which would resolve
+/// against the wrong origin rather than panic on a coordinate the OS
+/// itself supplied.
+fn pointer_message_to_client_dip(hwnd: HWND, scale: DipScale, lparam: LPARAM) -> (f32, f32) {
+    let (screen_x, screen_y) = pointer_physical(lparam);
+    let mut point = POINT {
+        x: screen_x as i32,
+        y: screen_y as i32,
+    };
+    unsafe {
+        // Sound to call here, inside the caller's `&mut *state_ptr` borrow:
+        // unlike `WM_DPICHANGED`'s `SetWindowPos` (hoisted out of that
+        // block for exactly this reason — see the comment above the
+        // `WM_DPICHANGED` arm), `ScreenToClient` is a geometry query that
+        // sends no messages and does not re-enter `wnd_proc`.
+        let _ = ScreenToClient(hwnd, &mut point);
+    }
+    scale.pair_to_dip((point.x as f32, point.y as f32))
+}
+
+/// Whether `msg` is a `WM_POINTER*` member this window **claims without
+/// acting on it**: `wnd_proc` returns `LRESULT(0)` for it and never reaches
+/// `DefWindowProcW`, which is what suppresses mouse promotion for the
+/// contact (M4-Phase 2 T11 fact 4), but the arm itself writes no state.
+/// `WM_POINTERUP` is deliberately excluded — it has its own arm below,
+/// which *does* act (`focus_on_click` + `hit_test_click`), so it must not
+/// also satisfy this predicate.
+///
+/// Pure logic, no Win32 call — extracted from `wnd_proc`'s inline
+/// `matches!` so the membership itself can be pinned by a unit test
+/// (`CLAUDE.md` §Testing rules) rather than living only as an expression no
+/// test names.
+///
+/// **What a wrong answer costs, in each direction.** Drop a real member
+/// (e.g. `WM_POINTERUPDATE`) from this set and that message falls through
+/// to `DefWindowProcW` instead of being claimed.
+///
+/// **What suppression is actually keyed on was measured per member**, at
+/// this task's independent-review correction, and it is not what "claim
+/// every member or promotion returns" would suggest. Promotion is
+/// suppressed **per contact**, gated on the button-transition members
+/// alone: claiming `WM_POINTERDOWN` *or* `WM_POINTERUP` — either one, on
+/// its own — suppresses the whole contact's promotion, including the
+/// `WM_MOUSEMOVE` an unclaimed `WM_POINTERUPDATE` would otherwise produce
+/// on a *moving* contact; claiming only `WM_POINTERENTER`, or only
+/// `WM_POINTERLEAVE`, suppresses nothing. So dropping `ENTER`,
+/// `UPDATE` or `LEAVE` from this set would not, on the measurement,
+/// reawaken promotion. They are claimed anyway, so that **no member of a
+/// contact this runtime has taken responsibility for reaches
+/// `DefWindowProcW`** — the property that keeps the arm's behaviour
+/// independent of a promotion rule the OS is free to change, rather than
+/// a suppression this set is load-bearing for. Either way, nothing here
+/// paints (trap #7's principle, T11's start gate), so there is no frame a
+/// reviewer could see go wrong, and every integration test that only
+/// exercises a stationary tap would stay green (M4-Phase 2 T11 stage 1
+/// mutation witness W2). Add a member that a contact does not actually
+/// produce (one of the routed / non-client / device-change / activate /
+/// wheel variants) and this window silently swallows a message
+/// [DD-M4-P2-001 §Risks](../../process/milestone-4/phase-2/decisions/dd-m4-p2-001-event-routing-model.md)
+/// says must fall through to `DefWindowProcW` — the "unhandled pointer
+/// message degrades to today's behaviour rather than to silence"
+/// mitigation that row depends on.
+fn claims_pointer_message_without_acting(msg: u32) -> bool {
+    matches!(
+        msg,
+        WM_POINTERENTER | WM_POINTERDOWN | WM_POINTERUPDATE | WM_POINTERLEAVE
+    )
+}
+
+/// Whether a `WM_POINTER*` message's `wParam` marks its contact as the
+/// **primary** contact. Windows packs a pointer message's flags into the
+/// **high word** of `wParam` (`POINTER_MESSAGE_FLAG_*`, one bit per
+/// condition) and its pointer id into the low word;
+/// `POINTER_MESSAGE_FLAG_PRIMARY` is `0x2000`. Only the flags half is read
+/// here — the pointer id is not needed, because no arm holds an id across
+/// messages (M4-Phase 2 T11 start gate, "identifiers held across
+/// messages: none").
+///
+/// **Why this bit is safe to gate dispatch on.** Measured directly, as
+/// part of this task's independent-review correction: an injected single
+/// contact carries `POINTER_MESSAGE_FLAG_PRIMARY` on every member of its
+/// sequence — `flags=0x6017` on `WM_POINTERENTER` / `WM_POINTERDOWN`,
+/// `flags=0x6000` on `WM_POINTERUP` / `WM_POINTERLEAVE` — and both
+/// injection paths (`InjectTouchInput`, `InjectSyntheticPointerInput`)
+/// report `primary=YES`. Gating dispatch on this bit therefore does not
+/// change what a single-contact tap does; it only changes what a second,
+/// simultaneous, non-primary contact's `WM_POINTERUP` does — see this
+/// predicate's call site in `wnd_proc`'s `WM_POINTERUP` arm for the
+/// stated limit.
+///
+/// Pure logic, no Win32 call — the same shape as
+/// [`claims_pointer_message_without_acting`], so this bit test can be
+/// pinned by name rather than exercised only incidentally through a
+/// fixture.
+fn pointer_message_is_primary(wparam: WPARAM) -> bool {
+    let flags = (wparam.0 as u32 >> 16) & 0xFFFF;
+    flags & POINTER_MESSAGE_FLAG_PRIMARY != 0
 }
 
 unsafe extern "system" fn wnd_proc(
@@ -1110,6 +1250,111 @@ unsafe extern "system" fn wnd_proc(
             }
             return LRESULT(0);
         }
+
+        // Touch is consumed as `WM_POINTER*`, never through mouse promotion
+        // (`docs/architecture.md` §13.2 "Pointer, mouse and touch";
+        // DD-M4-P2-001 §Touch), and `EnableMouseInPointer` is deliberately
+        // never called (DD-M4-P2-001, not a judgement call here). No
+        // pointer-type filtering either: a pen contact routes exactly like a
+        // touch contact, because the widget set this phase can test with
+        // gives no branch on pointer type anything to fire against.
+        //
+        // Claiming a member — returning `LRESULT(0)` without reaching
+        // `DefWindowProcW` — is what suppresses the mouse messages Windows
+        // would otherwise synthesize for *that contact* (measured, M4-Phase
+        // 2 T11 fact 4: the handled leg produces `ENTER`/`DOWN`/`UP`/`LEAVE`
+        // and nothing else, while the unclaimed leg additionally produces
+        // `WM_MOUSEMOVE`/`WM_LBUTTONDOWN`/`WM_LBUTTONUP`/`WM_MOUSEMOVE`).
+        // `ENTER`/`DOWN`/`LEAVE` are three of the four members fact 2
+        // measured a stationary contact producing (in that order); the same
+        // measurement explicitly recorded **no** `WM_POINTERUPDATE` for a
+        // stationary contact; a *moving* contact was measured separately
+        // and does produce `UPDATE`. This four-member list is the set a
+        // contact is observed to produce, not an exhaustive enumeration of
+        // `WM_POINTER*`: `WM_POINTERCAPTURECHANGED` is also reachable for a
+        // touch contact (the system can take a gesture over mid-contact)
+        // and is deliberately left unclaimed below like every other
+        // unlisted member.
+        //
+        // **What the suppression is keyed on was measured per member, and
+        // it is narrower than this set.** Promotion is suppressed per
+        // *contact*, gated on the button-transition members alone: claiming
+        // `WM_POINTERDOWN` or `WM_POINTERUP` — either one, alone —
+        // suppresses the whole contact, including the `WM_MOUSEMOVE` an
+        // unclaimed `WM_POINTERUPDATE` would otherwise produce on a moving
+        // contact; claiming only `ENTER`, or only `LEAVE`, suppresses
+        // nothing. `ENTER`/`UPDATE`/`LEAVE` are therefore claimed **not**
+        // because dropping one would re-enable promotion (measured: it
+        // would not), but so that no member of a contact this runtime has
+        // taken responsibility for reaches `DefWindowProcW` at all — which
+        // keeps the arm correct independently of a promotion rule the OS
+        // owns and may change. Every other `WM_POINTER*` member (`WM_POINTERACTIVATE`,
+        // `WM_POINTERWHEEL`, `WM_POINTERHWHEEL`, `WM_POINTERCAPTURECHANGED`,
+        // the routed and non-client variants, …) is deliberately left
+        // unclaimed and falls through to `DefWindowProcW` at the bottom of
+        // this procedure — DD-M4-P2-001's own recorded mitigation ("only
+        // the subset the fixture and the two apps exercise is handled, and
+        // unhandled members fall through to `DefWindowProc`... an unhandled
+        // pointer message degrades to today's behaviour rather than to
+        // silence").
+        //
+        // None of the four arms below writes any state (M4-Phase 2 T11;
+        // closes CF-T4-4). **A touch contact writes no hover or pressed
+        // state**: neither `update_hover` nor `clear_hover` is called here,
+        // and `state.mouse_down` / `state.tracking_mouse` are never
+        // touched. Three reasons record the decision rather than leaving it
+        // by omission: a lifted contact leaves no cursor behind, so a
+        // painted hover would have no natural clearer; the hover record and
+        // the painted state are the single-writer derived pair T4 made them
+        // (a second producer here is exactly the shape DD-M4-P1-002 §Row 6
+        // closed); and `update_hover`'s pressed arm is driven by
+        // `state.mouse_down`, which a contact does not own. **Stated
+        // limit:** a touch user gets no press feedback from wasamo in M4.
+        if claims_pointer_message_without_acting(msg) {
+            return LRESULT(0);
+        }
+
+        if msg == WM_POINTERUP {
+            // Dispatch only for the **primary** contact
+            // (`pointer_message_is_primary`'s doc comment records the
+            // measurement this rests on). Claiming this message — the
+            // unconditional `return LRESULT(0)` below — still happens for
+            // every contact regardless of this check, exactly like the
+            // claimed-but-inert arm above: claiming is what suppresses
+            // promotion and must not become contact-dependent. Only
+            // *dispatch* is gated here: a non-primary `WM_POINTERUP` is
+            // still claimed and still returns `LRESULT(0)`, it simply runs
+            // no handler, moves no focus and touches no hover record.
+            // **Stated limit:** only the primary contact activates a
+            // widget; a simultaneous second contact is claimed (so it is
+            // not promoted to a mouse message either) and does nothing.
+            // Multi-contact gestures are outside M4-Phase 2 (DD-M4-P2-001:
+            // "no pointer capture, no drag, no gesture").
+            if pointer_message_is_primary(wparam) {
+                let (x, y) = pointer_message_to_client_dip(hwnd, scale, lparam);
+                if let Some(root) = state.root_widget.as_mut() {
+                    // Same order as `WM_LBUTTONUP` above, for the same
+                    // reason: focus moves first because a handler's
+                    // synchronous rebuild can invalidate the resolved path
+                    // (T3's carry-forward to T4, extended by T5; M4-Phase 2
+                    // T11 closes the T5/T7/T10 line by deciding **a touch
+                    // contact moves focus, exactly as a click does**).
+                    // Unlike `WM_LBUTTONUP`, no `update_hover` call
+                    // follows: a touch contact writes no hover/pressed
+                    // state, per the decision recorded on the
+                    // claimed-but-inert arm above.
+                    let _ = focus::focus_on_click(
+                        root,
+                        &runtime::get().compositor,
+                        &mut state.focus,
+                        x,
+                        y,
+                    );
+                    root.hit_test_click(x, y);
+                }
+            }
+            return LRESULT(0);
+        }
     }
 
     DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -1118,8 +1363,18 @@ unsafe extern "system" fn wnd_proc(
 #[cfg(test)]
 mod tests {
     use super::{
-        client_extent_or_failure, finish_rectangle_application, finish_text_refresh,
+        claims_pointer_message_without_acting, client_extent_or_failure,
+        finish_rectangle_application, finish_text_refresh, pointer_message_is_primary,
         GeometryProgress, RectangleSnapshot,
+    };
+    use windows::Win32::Foundation::WPARAM;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
+        WM_NCPOINTERUPDATE, WM_POINTERACTIVATE, WM_POINTERCAPTURECHANGED, WM_POINTERDEVICECHANGE,
+        WM_POINTERDEVICEINRANGE, WM_POINTERDEVICEOUTOFRANGE, WM_POINTERDOWN, WM_POINTERENTER,
+        WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERROUTEDAWAY, WM_POINTERROUTEDRELEASED,
+        WM_POINTERROUTEDTO, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_TOUCH,
+        WM_TOUCHHITTESTING,
     };
 
     const SUGGESTED: RectangleSnapshot = RectangleSnapshot {
@@ -1258,5 +1513,130 @@ mod tests {
             );
         }
         assert_ne!(GeometryProgress::NotProjected, GeometryProgress::Failed);
+    }
+
+    /// Pins `claims_pointer_message_without_acting`'s membership by name, in
+    /// both directions (M4-Phase 2 T11 part A). No message-level integration
+    /// test can pin this: `SendMessageW`-delivered pointer messages carry no
+    /// real OS pointer id, so `DefWindowProcW` promotes nothing regardless of
+    /// which members are claimed (stage 1 mutation witness W2) — the
+    /// suppression claim only shows up under real OS injection (part B/C).
+    ///
+    /// **What this test pins, precisely: the membership, not the use.** It
+    /// proves the predicate returns the right answer for every message named
+    /// here. It does not prove `wnd_proc` consults the predicate at all —
+    /// deleting the `if claims_pointer_message_without_acting(msg) { return
+    /// LRESULT(0); }` call site in `wnd_proc` leaves this test green, and
+    /// every fixture in `touch_pointer_integration.rs` green too, for the
+    /// same reason the message-level suite cannot pin the suppression
+    /// property itself: a `SendMessageW`-synthesised pointer message with a
+    /// fabricated pointer id makes `DefWindowProcW` promote nothing whether
+    /// or not the call site is there. The *use* of the membership is pinned
+    /// only by the desktop-tier injection evidence (part B/C).
+    #[test]
+    fn claims_pointer_message_without_acting_is_pinned_by_name() {
+        // The four members a contact is observed to produce beside
+        // WM_POINTERUP (fact 2 for a stationary contact, plus the
+        // moving-contact measurement that adds WM_POINTERUPDATE): all four
+        // must be claimed, so that no member of a claimed contact reaches
+        // DefWindowProcW.
+        for msg in [
+            WM_POINTERENTER,
+            WM_POINTERDOWN,
+            WM_POINTERUPDATE,
+            WM_POINTERLEAVE,
+        ] {
+            assert!(
+                claims_pointer_message_without_acting(msg),
+                "{msg:#06x} is one of the four claimed-but-inert members and must be \
+                 claimed, or a member of a contact this runtime already took \
+                 responsibility for would reach DefWindowProcW"
+            );
+        }
+
+        // WM_POINTERUP has its own arm, which acts (focus_on_click +
+        // hit_test_click). It must not also match the inert set.
+        assert!(
+            !claims_pointer_message_without_acting(WM_POINTERUP),
+            "WM_POINTERUP has its own acting arm and must not match the claimed-but-\
+             inert set"
+        );
+
+        // Every other WM_POINTER* member is deliberately left to
+        // DefWindowProcW (DD-M4-P2-001 §Risks: only the subset the fixture
+        // and the two apps exercise is handled). This set must include the
+        // non-client and touch variants named in `wnd_proc`'s comment, not
+        // only the client-area / routed ones: a range-based rewrite of the
+        // predicate (e.g. `matches!(msg, 577..=582 | 584..=586)`) can claim
+        // every message asserted above while additionally claiming
+        // WM_NCPOINTER* — which would return LRESULT(0) for a touch on the
+        // title bar and break touch window-dragging, the caption buttons
+        // and the system menu, with nothing red anywhere unless one of
+        // those constants is in this list.
+        for msg in [
+            WM_POINTERACTIVATE,
+            WM_POINTERWHEEL,
+            WM_POINTERHWHEEL,
+            WM_POINTERCAPTURECHANGED,
+            WM_POINTERROUTEDTO,
+            WM_POINTERROUTEDAWAY,
+            WM_POINTERROUTEDRELEASED,
+            WM_POINTERDEVICECHANGE,
+            WM_POINTERDEVICEINRANGE,
+            WM_POINTERDEVICEOUTOFRANGE,
+            WM_NCPOINTERUPDATE,
+            WM_NCPOINTERDOWN,
+            WM_NCPOINTERUP,
+            WM_TOUCH,
+            WM_TOUCHHITTESTING,
+        ] {
+            assert!(
+                !claims_pointer_message_without_acting(msg),
+                "{msg:#06x} is deliberately left unclaimed, falling through to \
+                 DefWindowProcW; claiming it would swallow a message this phase does \
+                 not own"
+            );
+        }
+
+        // The mouse family must never match either.
+        for msg in [WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP] {
+            assert!(
+                !claims_pointer_message_without_acting(msg),
+                "{msg:#06x} is a mouse message, not a WM_POINTER* member, and must \
+                 never match this predicate"
+            );
+        }
+    }
+
+    /// Pins `pointer_message_is_primary`'s bit-extraction, in both
+    /// directions, against realistic full flag words rather than only an
+    /// isolated bit (M4-Phase 2 T11 independent-review correction C4). The
+    /// two `0x6017` / `0x6000` words are exactly what an injected single
+    /// contact was measured to carry (see the function's doc comment); the
+    /// two `0x4017` / `0x4000` words are the same shapes with only the
+    /// primary bit cleared, standing in for a second, non-primary contact.
+    #[test]
+    fn pointer_message_is_primary_reads_the_high_word() {
+        // Primary set: the two full flag words measured on an injected
+        // single contact, each paired with an arbitrary pointer id in the
+        // low word.
+        for wparam in [0x6017_0001usize, 0x6000_0002usize] {
+            assert!(
+                pointer_message_is_primary(WPARAM(wparam)),
+                "{wparam:#010x} carries POINTER_MESSAGE_FLAG_PRIMARY (0x2000) in its \
+                 high word and must read as primary"
+            );
+        }
+
+        // Primary clear: the same two flag words with only the primary
+        // bit (0x2000) removed -- what a second, non-primary contact's
+        // message would carry.
+        for wparam in [0x4017_0001usize, 0x4000_0002usize] {
+            assert!(
+                !pointer_message_is_primary(WPARAM(wparam)),
+                "{wparam:#010x} has POINTER_MESSAGE_FLAG_PRIMARY cleared in its high \
+                 word and must not read as primary"
+            );
+        }
     }
 }
