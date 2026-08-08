@@ -245,6 +245,24 @@ and §Phase dependencies.
   and the caret / composition rectangle in screen coordinates — so
   Phase 6 is wiring rather than redesign.
 
+  **The handler half of that precedent does not exist for strings yet,
+  and this phase is where it lands** (measured at M4-Phase 2 T9; revision
+  1 below). `ToggleButton.checked` works because a handler can write a
+  `bool` state — the write M3-Phase 1 added for exactly that purpose. A
+  handler cannot write a scalar `string` state at all, for any
+  right-hand side: `wasamoc check` accepts `s = "abc"`, the compiler
+  emits it, and the evaluator rejects it at invocation, because
+  `dsl_spec.md` §8.9 marks the string forms binding-only and the runtime
+  has no string write. `string` is the only declarable state type a
+  handler cannot write. Two things follow for this phase: the capability
+  itself, and the evaluator change it needs — assignment currently picks
+  its typed path from the **right-hand side's shape**, which cannot type
+  an `item` read (whose type comes from the collection, not the
+  expression), so a `for`-body handler writing a string binder needs
+  dispatch on the left-hand side's declared type. Whether handler-body
+  assignments gain type checking at the same time is a separable, wider
+  question. `dsl_spec.md` §4.6 and §8.9 both move.
+
   Consumer (B4): the list window's first runnable form — a one-line
   entry field, an Add button, and the item rows.
 
@@ -766,11 +784,48 @@ M4 is complete when **all** of the following hold:
 
 ### Revision log
 
-*(No revisions yet. Revisions to this `Frozen agreement` follow the
-plan-revision discipline —
-[workflow.md](../procedures/workflow.md),
+Revisions to this `Frozen agreement` follow the plan-revision discipline
+— [workflow.md](../procedures/workflow.md),
 [DD-V-026](../cross-milestone/decisions/plan-revision-discipline.md):
-owner-authorised, critically checked, proportionally recorded.)*
+owner-authorised, critically checked, proportionally recorded.
+
+**Revision 1 (2026-08-08) — M4-Phase 5 gains a named prerequisite: the
+handler-side scalar `string` write.**
+
+- **What changed.** One paragraph added to the M4-Phase 5 description.
+  No scope, acceptance criterion, phase boundary or dependency moves;
+  the phase already owned "how a typed string reaches author-visible
+  state" through its one-way-binding-plus-handler approach.
+- **The premise that changed.** The phase's stated approach is "matching
+  the M3 `ToggleButton.checked` precedent" — one-way binding plus the
+  author's handler writing the state. M4-Phase 2 T9 measured that the
+  handler half of that precedent is **unavailable for strings**: there
+  is no scalar string write in the runtime, and `dsl_spec.md` §8.9
+  already marks the string expression forms binding-only. When this plan
+  was drafted (2026-07-28) nobody had checked whether the bool
+  precedent's mechanism had a string twin; it does not.
+- **Critical check.** The revision was proposed by the agent after the
+  measurement and authorised by the owner on 2026-08-08. The premise was
+  verified rather than assumed: the compiler was run against a probe
+  `.ui` (all three string right-hand sides — literal, state read,
+  interpolation — pass `check` and emit IR that §8.9 marks binding-only),
+  and the evaluator was run against each of the three (all reject at
+  invocation). The alternative placements were checked and rejected on
+  the phases' own stated scope: M4-Phase 3 says "String concatenation
+  stays out" and its consumers need reads, not writes; M4-Phase 4 is
+  scrolling / `Image` / `fill`; M4-Phase 7 is two phases past the point
+  where the one-way form is needed.
+- **Why the milestone plan rather than a phase handoff.** A phase
+  handoff carries one hop (phase N → phase N+1's `constraints.md`).
+  Three hops would have to survive Phase 3 and Phase 4 forwarding it,
+  and this plan is the only document M4-Phase 5's framing is guaranteed
+  to read.
+- **Not included.** The *interim* half of the same finding — that the
+  unsupported form is accepted silently today rather than diagnosed — is
+  not a milestone-plan item. It is an M4-Phase 3 pre-doc intake
+  (owner-settled the same day), because enforcing §8.9's existing
+  binding-only statement is a defect fix against normative text already
+  in force, not a new surface.
 
 ## Progress
 
