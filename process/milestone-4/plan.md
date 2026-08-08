@@ -229,6 +229,30 @@ and §Phase dependencies.
   §二層取り込み方針; withdrawing them costs a one-line disposition back
   to the candidate pool.
 
+  **This phase also specifies what a `Row` / `HStack` does when its
+  children do not fit** (owner-settled 2026-08-08; Revision 2). Today it
+  overlaps — the toolbar's two groups overflow their `Grid` columns
+  toward each other at a narrow client — and no decision stands behind
+  that: wrapping, clipping, shrinking and scrolling were all available
+  and none was chosen. **The overlap is not only visual.** A non-clipping
+  container is itself a hit-test candidate across its whole arranged
+  rectangle ([dsl_spec.md §4.19](../../docs/dsl_spec.md)), so the
+  overflowing group takes the clicks aimed at the widgets it covers:
+  M4-Phase 2 T10 measured every gallery tab `ToggleButton`'s own centre
+  resolving to a scroll `Button` instead, with `checked` unchanged after
+  a real click. Routing behaves as specified; what is undecided is the
+  layout rule. **"Overlapping is acceptable" remains an available
+  answer** — what this phase owes is not a particular fix but a rule
+  **written into [dsl_spec.md](../../docs/dsl_spec.md)**, where every
+  other layout primitive's behaviour already is (§4.9 `Box`, §4.10
+  `WrapPanel`, §4.11 `ScrollView`, §4.12 `Grid`, §4.13 `ZStack`). An
+  internal decision does not discharge it: today's overlap *is* a
+  decision of a kind — the implementation makes it every time — and the
+  gap is that no document states it.
+  `gallery_slice_integration.rs`'s `g7_the_overflowing_toolbar_swallows_clicks_aimed_at_the_tab_buttons`
+  is the tripwire and says in its own failure message that a red there
+  means the overflow was changed rather than broken.
+
 - **M4-Phase 5 — Single-line text editing.** The editable text widget:
   caret (click positioning, ← → / Home / End, rendering, follow-scroll
   on overflow), the **internal selection model** plus its user-facing
@@ -826,6 +850,48 @@ handler-side scalar `string` write.**
   (owner-settled the same day), because enforcing §8.9's existing
   binding-only statement is a defect fix against normative text already
   in force, not a new surface.
+
+**Revision 2 (2026-08-08) — M4-Phase 4 gains a named deliverable: what a
+`Row` / `HStack` does when its children do not fit.**
+
+- **What changed.** One paragraph added to the M4-Phase 4 description. No
+  acceptance criterion, phase boundary or dependency moves, and no
+  particular layout rule is chosen here — the phase owes **a rule stated
+  in `dsl_spec.md`**, and "overlapping is acceptable" is one of its
+  available contents. The obligation is the *stating*: the runtime
+  already behaves one way, and what is missing is a document that says
+  so, which is why "we decided internally to leave it" would not
+  discharge this.
+- **The premise that changed.** M4-Phase 2's framing agreement ④
+  (owner-approved 2026-08-05) already sent the question here, on the
+  basis of an M4-Phase 1 observation recorded as a **visual** overlap.
+  M4-Phase 2 T10 measured a second half nobody had: the overflowing group
+  also **takes the clicks** aimed at the widgets it covers, so the
+  overlapped controls stop working rather than merely looking wrong. That
+  changes what the receiving phase is deciding — a cosmetic question
+  became a functional one.
+- **Critical check.** Measured, not inferred, and by a fixture that
+  prints its evidence: each gallery tab `ToggleButton`'s own centre
+  resolves to a scroll `Button` (`All` → `Scroll down`, `Albums` →
+  `Scroll down`, `Favorites` → `Scroll up`), and a real click at
+  `Albums`' centre leaves all three `checked` values unchanged. The cause
+  was checked against the specification rather than assumed to be a
+  defect: [dsl_spec.md §4.19](../../docs/dsl_spec.md) makes every widget
+  with a visual a candidate, a layout container included, and the runtime
+  does exactly that. Authorised by the owner on 2026-08-08 after the
+  measurement was presented with that reading.
+- **Why the milestone plan rather than a phase handoff.** The same test
+  Revision 1 applied: a handoff carries one hop, and M4-Phase 4 is two
+  from the phase that measured this. It would have to survive M4-Phase 3
+  forwarding a finding that is not M4-Phase 3's. Two documents a reader
+  might follow point elsewhere — this plan's M4-Phase 4 entry did not
+  mention it at all, and
+  [M4-Phase 1's handoff](phase-1/implementation/handoff.md) still names
+  **M4-Phase 2** as the landing place, which framing ④ superseded. That
+  row is not edited: a closed phase's handoff is its record of what was
+  known then, and this entry is the authoritative placement.
+- **Not included.** What the rule should say. Also not included: any
+  change to hit-testing, which behaves as specified.
 
 ## Progress
 
