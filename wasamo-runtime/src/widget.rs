@@ -2286,13 +2286,15 @@ impl WidgetNode {
 
     /// Test-only accessor for hit resolution against `self` as the root of
     /// the search — forwards to `hit::resolve_topmost(self, DipPoint { x,
-    /// y })`, the **production** resolver. This is a second **caller**, not
-    /// a second predicate implementation, so a test using it cannot drift
-    /// from what `hit_test_click` / `update_hover` actually do — contrast
+    /// y })`, the **production** resolver. This is **an additional caller
+    /// of that one resolver, not a second implementation of it**, so a
+    /// test using it cannot drift from what the three production call
+    /// sites actually do: `Self::hit_test_click`, `Self::update_hover`,
+    /// and `focus::focus_on_click` — contrast
     /// [`Self::__clips_children_for_test`], which T2's close gate
     /// deliberately retained as a direct-reader *agreement pin* against a
-    /// predicate two other call sites already exercise; this accessor is
-    /// the resolver itself, called a second time.
+    /// predicate other call sites already exercise; this accessor is the
+    /// resolver itself, called again.
     ///
     /// **Exists because `ffi::__hover_target_for_test` cannot witness a
     /// resolved non-Button target at all.** That seam reads

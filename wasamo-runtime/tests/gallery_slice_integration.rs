@@ -215,9 +215,10 @@
 //! is a **new** production accessor, the one exception to this file's
 //! "no runtime, compiler or IR code" boundary, added in the same commit as
 //! this file's own edits. It forwards to `hit::resolve_topmost` — the
-//! same function `hit_test_click` and `update_hover` call — so it is a
-//! second **caller**, not a second predicate implementation; a test using
-//! it cannot drift from production hit-testing behaviour. Its coordinates
+//! same function `hit_test_click`, `update_hover`, and
+//! `focus::focus_on_click` all call — so it is an additional **caller**,
+//! not a second predicate implementation; a test using it cannot drift
+//! from production hit-testing behaviour. Its coordinates
 //! are DIP, the same space `__arranged_rect_for_test()`'s rectangle is in,
 //! never physical pixels. G1 and G5(fact 6) use it to turn what would
 //! otherwise be a geometric deduction into a direct measurement; G7 uses
@@ -768,10 +769,11 @@ fn g1_thumbnail_click_carries_which_thumbnail_through_the_ancestor_walk() {
                 // The ancestor-walk evidence — a **direct measurement**
                 // through `WidgetNode::__resolve_topmost_for_test`, which
                 // forwards to `hit::resolve_topmost` itself (the same
-                // function `hit_test_click` / `update_hover` call — a
-                // second caller, not a second predicate). Coordinates are
-                // DIP, the same space `arranged_rect` is in, so the centre
-                // of `text0_rect` is used directly, with no scale factor.
+                // function `hit_test_click`, `update_hover`, and
+                // `focus::focus_on_click` all call — an additional caller,
+                // not a second predicate). Coordinates are DIP, the same
+                // space `arranged_rect` is in, so the centre of
+                // `text0_rect` is used directly, with no scale factor.
                 let (cx_dip, cy_dip) = (
                     text0_rect.x + text0_rect.width / 2.0,
                     text0_rect.y + text0_rect.height / 2.0,
@@ -978,9 +980,29 @@ fn g2_opening_the_lightbox_enters_the_scope() {
 // ── G3 — Esc closes through dismiss, and focus restores (two legs) ─────────
 
 /// See this file's module header for the full rationale. Leg (a): nothing
-/// focused beforehand. Leg (b): Tab once first, so a real Button was
-/// focused before the lightbox opened — the leg that makes "restores"
-/// mean something rather than merely "clears".
+/// focused beforehand. Leg (b): Tab **twice** first, so focus lands on
+/// the domain's **second** stop before the lightbox opens.
+///
+/// **Why the second stop, not the first — found by the independent
+/// review, not designed in from the start.** An earlier version of this
+/// leg Tabbed once, landing on `All`, the domain's first stop. Restoring
+/// to `All` is then indistinguishable from an implementation that ignores
+/// the captured restore target entirely and always succeeds to the
+/// domain's first stop on exit (structural succession, not restoration) —
+/// the two rules give the same answer, so a runtime with no restore
+/// capture at all would still pass. The reviewer measured this rather
+/// than arguing it: mutating `focus::sync_scopes_to_tree` to substitute
+/// `t.initial_focus(s)` for the captured restore target left this fixture
+/// green while `modal_scope_integration.rs`'s
+/// `exit_restores_and_restoration_beats_succession` went red — see that
+/// fixture's own doc comment (around its `SCOPE_UI`/`exit_restores…`
+/// definitions) for the identical reasoning applied there first, which
+/// this leg now follows: capture a stop that is *not* the domain's first,
+/// so restoration and structural succession disagree, and only the
+/// correct rule can pass. The inequality is asserted by name below (not
+/// left as a comment), so a later `.ui` edit that made the two stops
+/// coincide again would redden this leg instead of silently losing its
+/// discriminating power.
 #[test]
 fn g3_escape_closes_through_dismiss_and_focus_restores() {
     run_on_owning_runtime_thread_or_skip(
@@ -1038,8 +1060,11 @@ fn g3_escape_closes_through_dismiss_and_focus_restores() {
                 ffi::wasamo_window_destroy(window);
             }
 
-            // Leg (b): Tab once first, landing on the toolbar's first stop
-            // (read back by label, not assumed).
+            // Leg (b): Tab twice first, landing on the toolbar's **second**
+            // stop (read back by label, not assumed) — the domain's first
+            // stop would not discriminate restoration from structural
+            // succession (this fixture's own doc comment has the full
+            // argument, and the reviewer's mutation below confirms it).
             unsafe {
                 let window = load_window(&ir);
                 let hwnd = (*window).hwnd;
@@ -1057,6 +1082,31 @@ fn g3_escape_closes_through_dismiss_and_focus_restores() {
                 eprintln!(
                     "G3b measurement: the first Tab stop is {first_stop_label:?} at \
                      {first_stop_path:?}"
+                );
+
+                send_tab(hwnd);
+                let second_stop_path = ffi::__focus_path_for_test(window)
+                    .expect("a second Tab must focus the domain's second stop");
+                let second_stop_label = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    label_of(node_at_path(root, &second_stop_path))
+                };
+                eprintln!(
+                    "G3b measurement: the second Tab stop is {second_stop_label:?} at \
+                     {second_stop_path:?}"
+                );
+
+                // The discriminating premise, asserted by name: the stop
+                // this leg captures as the restore target must not be the
+                // domain's first stop, or restoration and structural
+                // succession would agree by coincidence and this leg would
+                // not distinguish them (this fixture's own doc comment).
+                assert_ne!(
+                    second_stop_path, first_stop_path,
+                    "G3b's premise: the second Tab stop ({second_stop_label:?} at \
+                     {second_stop_path:?}) must differ from the first ({first_stop_label:?} at \
+                     {first_stop_path:?}), or this leg cannot tell restoration from structural \
+                     succession"
                 );
 
                 let box0_rect = {
@@ -1085,13 +1135,15 @@ fn g3_escape_closes_through_dismiss_and_focus_restores() {
                 );
                 assert_eq!(
                     ffi::__focus_path_for_test(window),
-                    Some(first_stop_path.clone()),
+                    Some(second_stop_path.clone()),
                     "G3b: focus must restore to the widget focused before the lightbox opened \
-                     ({first_stop_label:?} at {first_stop_path:?})"
+                     ({second_stop_label:?} at {second_stop_path:?}) — not to the domain's \
+                     first stop ({first_stop_label:?} at {first_stop_path:?}), which is what \
+                     structural succession would answer instead of restoration"
                 );
                 assert_eq!(
-                    label_of(node_at_path(root, &first_stop_path)),
-                    first_stop_label,
+                    label_of(node_at_path(root, &second_stop_path)),
+                    second_stop_label,
                     "G3b: the restored node's own label must be unchanged"
                 );
 
