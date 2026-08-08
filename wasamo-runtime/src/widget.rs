@@ -2284,6 +2284,45 @@ impl WidgetNode {
         self.clips_children()
     }
 
+    /// Test-only accessor for hit resolution against `self` as the root of
+    /// the search — forwards to `hit::resolve_topmost(self, DipPoint { x,
+    /// y })`, the **production** resolver. This is a second **caller**, not
+    /// a second predicate implementation, so a test using it cannot drift
+    /// from what `hit_test_click` / `update_hover` actually do — contrast
+    /// [`Self::__clips_children_for_test`], which T2's close gate
+    /// deliberately retained as a direct-reader *agreement pin* against a
+    /// predicate two other call sites already exercise; this accessor is
+    /// the resolver itself, called a second time.
+    ///
+    /// **Exists because `ffi::__hover_target_for_test` cannot witness a
+    /// resolved non-Button target at all.** That seam reads
+    /// `WindowState::hover`, which `Self::update_hover`'s
+    /// `is_enabled_button` gate deliberately narrows to an *enabled
+    /// Button-family* resolved target only — so a click or hover that
+    /// resolves to a `Box`, `Text`, `Grid`, or any other non-Button-family
+    /// node is invisible through it (`hover.target` reads back `None`
+    /// regardless of which such node actually resolved). This accessor
+    /// answers the general question `__hover_target_for_test` cannot: which
+    /// node, of any kind, does a point resolve to.
+    ///
+    /// **`x` / `y` are DIP, absolute within the window's client area** —
+    /// the same space [`Self::__arranged_rect_for_test`]'s rectangle is in
+    /// — never physical pixels. This is the unit trap M4-Phase 2 T1 / T2
+    /// spent an entire migration closing (the non-unit-scale resolution
+    /// fixture exists for exactly this reason), so a caller must convert a
+    /// physical point (e.g. one read off a `WM_LBUTTONUP` `lParam`) before
+    /// calling this, the same conversion every production input-path
+    /// reader performs before it ever reaches `resolve_topmost`.
+    ///
+    /// Call this on the **window content root**, not an arbitrary
+    /// descendant, so the returned path is root-relative — the same
+    /// convention `ffi::__focus_path_for_test` and
+    /// `ffi::__hover_target_for_test` already use.
+    #[doc(hidden)]
+    pub fn __resolve_topmost_for_test(&self, x: f32, y: f32) -> Option<Vec<usize>> {
+        crate::hit::resolve_topmost(self, crate::hit::DipPoint { x, y })
+    }
+
     /// Test-only accessor naming this node's `WidgetData` kind.
     ///
     /// Exists so an integration test can assert *which* kind an instance
