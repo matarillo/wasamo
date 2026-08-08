@@ -4290,3 +4290,111 @@ build time.
 - No frame was captured. This task paints nothing, and a gallery frame
   taken now would be produced identically by the pre- and post-T8 runtime —
   the gallery carries no `key-down` handler until T10.
+
+#### Independent review and its remediation (recorded 2026-08-08)
+
+The review lane
+([implementation-gates.md §4](../../../procedures/implementation-gates.md))
+was executed as a **full independent review** — the lane this task's start
+gate corrected the preamble's prediction to — by a second agent that did
+not write the code, against `36829ea` … `e0f52a7`. It built its own
+branch-coverage table from the diff rather than from the close gate's,
+re-ran the call-site greps, traced the validate recursion on both gates for
+the Button-family rule, checked every `peek_next()` site in `wasamoc`'s
+parser for a sibling of the Grid track-list collision, searched outside the
+diff for claims the change invalidated, and independently reproduced the
+suite numbers and the per-file test-count reconciliation.
+
+It confirmed as sound: that all eight then-existing fixtures reach the
+branch each is claimed to reach, through the claimed path, with
+`send_key` / `key_and_drain` correctly chosen for whether Phase 2 is needed
+(the exact gap T7's review found three times, not recurring here); that
+the `0u16..=255` sweep is not vacuous, every mapped virtual key being
+`≤ 0xFF`; that no second key-name table and no second composer of the
+storage key exists anywhere in the workspace, and that
+`crate::ir::is_recognised_key_name` in `check.rs` is the `pub use
+wasamo_ir as ir` re-export rather than a copy; the `WM_KEYDOWN` borrow
+pattern against its three siblings; that `focus_landing` gates the root on
+`enabled` where `collect_stops` does not; that neither Button-family gate
+over-rejects and both reach a Button generated inside a `for` or an `if`;
+that the `has_binding` deferral matches its ToggleButton sibling and
+`WidgetNode::button`'s four other callers were correctly left alone; that
+`parse_grid_track_list` is the parser's only bare-word-absorption
+ambiguity, with no sibling; that nothing else depended on the two removed
+per-kind rules; and that `focused_path`'s "only caller" claim is still
+accurate.
+
+Three findings, all dispositioned. **F1 is a defect the close gate's own
+artifact got wrong**, and it is the artifact-shaped failure this review
+exists to catch.
+
+- **F1 — `deliver_key_down`'s declined suppression arm was declined on a
+  false premise, and the arm is reachable.** The close gate's #5 recorded
+  a branch *not* added, with the reasoning that a disabled Button can
+  never be on a `key-down` chain. That covers only the `focus.focused()`
+  start. `key_down_on_key`'s **other** start is `traversal_root`, which
+  is the tree root, and `collect_stops` never gates the root node —
+  it is visited with `is_root = true`, which skips the role and enabled
+  checks entirely for that one node. A component whose root widget *is* a
+  disabled Button reaches the arm. **Re-measured by the lead** with a
+  throwaway probe before acting: a root `Button { enabled: gate_enabled
+  key-down("Enter") => { root.gate_enabled = true; } }` with nothing
+  focused reports `enabled=Some(false)` before the key and `Some(true)`
+  after — the disabled Button's own handler ran.
+  **Fixed** (`ecc07ac`): a disabled Button-family node now suppresses its
+  own `key-down` dispatch and **does not consume**, the same disposition
+  `click_disposition_for` gives a click and the reading §4.8's own focus
+  clause supports ("cannot be reached or activated from the keyboard").
+  Delivering one authored signal while suppressing the other is an
+  asymmetry an author could only find by hitting it.
+  `a_disabled_root_button_suppresses_its_own_key_down_without_consuming`
+  fires the arm with both legs — disabled and enabled — so "the handler
+  did not run" cannot be satisfied by a key that never arrives.
+- **The gap behind F1, found while fixing it: `signal_key`'s argument was
+  not observable at the behaviour level at all.** Running the W9 mutation
+  the close gate had planned and not run (§6's numbering gap, the review's
+  F2) reddened **only** `wasamo-ir`'s own unit test — the whole
+  1,201-test workspace stayed green. The reason is the single-owner design
+  itself: the loader writes the storage key with `signal_key` and the
+  dispatcher looks it up with the same function, so an argument dropped on
+  *both* sides is invisible to any fixture carrying one `key-down` handler
+  per node. `two_key_down_handlers_on_one_node_are_told_apart_by_their_key`
+  is the smallest shape where the argument has to survive; the mutation
+  now reddens it and `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`.
+- **F2 — §6's witness numbering skipped W9 and W13 with no explanation.**
+  Correct, and both are now accounted for: **W9** (`signal_key` ignoring
+  its argument) was planned, not run, and is exactly the witness that
+  would have exposed the gap above — it is run and recorded in the table
+  below; **W13** (`rebase` removed from `key_down_on_key`) was planned and
+  is not run, because no fixture in this task mutates structure between
+  two key presses — which the close gate's §Verification means already
+  records as a stated residual rather than a claim.
+- **F3 — `key_down_on_key`'s unresolvable-path arm returns `false` where
+  `dismiss_on_key`'s returns `true`.** Not changed: the asymmetry is the
+  two signals' consumption rules rather than an oversight. Escape is
+  consumed by an entered scope *existing* — writing no `dismiss` handler
+  is how a scope declines to close — so `dismiss_on_key` has decided
+  consumption before it resolves a path; a `key-down` is consumed only by
+  a handler that *runs*, so a walk that cannot start has consumed nothing.
+  Written onto the branch rather than left to be re-derived.
+
+Two further mutation witnesses, both applied by the lead, confirmed
+present by re-reading, run, then reverted and the revert confirmed:
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W9 (run at last)** | `signal_key` ignores its argument and returns the bare signal name | before the remediation: **only** `wasamo-ir`'s `signal_key_with_arg_returns_dsl_spelling`, nothing else in 1,201 tests. After: that test **plus** `two_key_down_handlers_on_one_node_are_told_apart_by_their_key` and `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot` | The single-owner design that prevents drift also hides a symmetric error. A behaviour-level discriminator was missing and now exists |
+| **W16** | the `enabled` suppression arm removed from `deliver_key_down` | `a_disabled_root_button_suppresses_its_own_key_down_without_consuming` alone | The new arm is load-bearing for exactly the shape F1 named, and no other fixture depends on it |
+
+**Re-verification after the remediation** (superseding the counts in
+§Verification means above, which were taken before it):
+`cargo fmt --all -- --check` zero exit, `cargo build --workspace`
+successful, `cargo test --workspace --no-fail-fast` **48
+binaries/sections, 1,203 passed, 0 failed, 0 ignored** — the two added
+tests are `key_down_integration.rs`'s eighth and ninth fixtures. The clean
+`cargo clean` rebuild in both profiles recorded in §Verification means was
+taken before the remediation and is **not** re-run here; the remediation
+touches three files and changes no build input the rebuild was measuring.
+
+**External-agent (codex) review is not performed**, per the owner's
+standing disposition for this phase (T1–T7).

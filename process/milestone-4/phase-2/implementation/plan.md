@@ -584,11 +584,14 @@ handler table — not how an event travels.
     the innermost modal focus scope", which is that function's own
     definition. The walk is upward-only, so a handler below the start can
     never fire; carried to T10 as CF-T8-5.
-  - **`key-down` gets no `enabled` suppression arm.** §4.8's disabled
-    contract is written over clicks, and the case is unreachable from any
-    authored tree — a disabled Button is not a focus stop, and after this
-    task a Button carries no children. A branch no test can fire is what
-    trap #4 forbids; the reasoning lives on the function instead.
+  - **A disabled Button-family node suppresses its own `key-down` and
+    does not consume**, the same disposition §4.8 gives a click. This
+    item first shipped the opposite, on the false reasoning that the case
+    was unreachable — true of the `focus.focused()` start, false of the
+    `traversal_root` one, because `collect_stops` never gates the tree
+    root itself. **The independent review found it and the lead
+    re-measured it** with a probe: a disabled root Button's own
+    `key-down("Enter")` handler ran ([log.md](./log.md) §T8 review F1).
   - **Adding the `(` route collided with a shared sub-parser.**
     `parse_grid_track_list`'s word-continuation lookahead absorbed
     `key-down(` as a trailing track word; the stop set gained `LParen`
@@ -612,6 +615,17 @@ handler table — not how an event travels.
     the host key slot. `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`
     asserts both legs against the slot's recorder and goes red under that
     mutation ([log.md](./log.md) §T8 close gate W12).
+  - **A fifth was added at the independent review**, for the same reason
+    in a different place: `wasamo_ir::signal_key`'s *argument* was not
+    observable at the behaviour level at all. Both the loader and the
+    dispatcher compose the storage key through that one function, so
+    dropping the argument symmetrically reddened only its own unit test
+    and nothing else in 1,201 tests. Two `key-down` handlers for
+    different keys on one node is the smallest shape where the argument
+    has to survive ([log.md](./log.md) §T8 review W9). **The single-owner
+    design that prevents drift is also what hides a symmetric error** —
+    a shape worth carrying to any later task that gives two sides one
+    shared encoder.
 - **Button keyboard activation does not exist and is not built here**
   (start gate fact 6). This item's "Button keeps … its keyboard
   activation" presupposed a behaviour the runtime has never had —
