@@ -13,8 +13,9 @@ The host performs no imperative widget construction and no
 ## What It Does
 
 - Opens the integrated Photo Gallery declared by the shared DSL file.
-- Shows the `ToggleButton` tab band, thumbnail placeholders, scroll
-  controls, status strip, and lightbox placeholder surface.
+- Shows the tab band, thumbnail grid, and status strip declared in
+  `gallery.ui`, whose lightbox opens on a thumbnail click, confines the
+  keyboard, and responds to Esc and Left/Right.
 - Uses the same embedded `.uic` loading path as the counter C example.
 
 ## Build
