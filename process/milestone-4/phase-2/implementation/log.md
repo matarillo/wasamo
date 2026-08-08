@@ -4960,10 +4960,61 @@ code moves.
 | Item | Evidence | Class | Re-trigger |
 |---|---|---|---|
 | **CF-T9-1 — CF-T7-1's collision was not reached.** The shape was built and run: focus the last `for`-generated row, then one handler body that runs `xs.drop-last()` and `xs.append(9)`. The run records the freed row at `0x1bd36699970` and the row allocated in the same message at `0x1bd36722640` — **the address was not reused**, so the anchor collision never occurred and focus fell to the domain's first surviving stop | the fixture, which prints the address relation every run | `carry-forward` — CF-T7-1 stays open, **narrowed** | Any change to allocation timing around `mutate_for_loop_subtree`, or the fixture's collision arm firing. Per [DD-V-030](../../../cross-milestone/decisions/dd-v-030-carry-forward-buildability.md) the artifact is the recorded run, and this run does **not** close the residual — it measures that M4-Phase 2's nearest expressible shape does not reproduce it |
-| **CF-T9-2 — handler-body assignments are not type-checked, and a scalar `string` state cannot be written from a handler at all.** `root.n = "abc"` on an `i32` state passes `check` with exit 0; there is no `set_string` in the runtime for any right-hand side. This task inherits the absence rather than creating it, and deliberately did not add a type rule for binder reads alone | start-gate fact 5 (probe P9); `rg "fn set_string\b"` returns nothing | `finding` (owner = **T13 or later**) | The first authored case that wants a string state written from a handler. §4.19's own per-item example writes an `i32`, so the surface has no consumer yet |
+| **CF-T9-2 — handler-body assignments are not type-checked, and a scalar `string` state cannot be written from a handler at all.** `root.n = "abc"` on an `i32` state passes `check` with exit 0; there is no `set_string` in the runtime for any right-hand side. This task inherits the absence rather than creating it, and deliberately did not add a type rule for binder reads alone | start-gate fact 5 (probe P9); `rg "fn set_string\b"` returns nothing | `finding` — **owner-dispositioned 2026-08-08, split in two** (below) | see below |
 | **CF-T9-3 — §4.15's Diagnostics table carries two rows this task makes false**: "Handler inside a `for` body" and "Binder read in handler position" are still listed as rejected shapes, three paragraphs above the subsection that says they are admitted | the table and the subsection, both in §4.15 | `finding` (owner = **T13**) | T13 already re-verifies §4.15's per-item handler text; these are false statements rather than gaps, so they are the first thing that pass should reach |
 | **CF-T9-4 — F2 is the only test in the suite that constrains invocation-time resolution.** W-F reddened it and nothing else | witness W-F | `carry-forward` | Any later task that touches handler attachment in the loader, the loop-scope snapshot, or `ForItemHandlerEvalContext`'s item reads. If F2 is ever deleted or narrowed, the property loses its only pin |
 | **CF-T9-5 — a per-item `modal-scope` with a `dismiss` handler is now authorable and is exercised at neither runtime end.** Both gates accept `for x in xs { Box { modal-scope: true  dismiss => { … } } }`; what a scope generated per item does to entry, restore and the scope stack is T7 machinery this task did not drive | the two accept tests, which are compile/load-level only | `finding` (owner = **M4-Phase 9**, the phase that owns scope composition) | The first authored per-item overlay. No M4 app has one — T10's lightbox is a root `ZStack` branch, not a `for` body |
+
+##### Owner disposition of CF-T9-2 (2026-08-08)
+
+The owner reads the absence as a **gap to be filled**, not a limit to be
+documented: a handler should be able to write a string state, and it
+should land in M4. Two things were separated before placing it, because
+they have different sizes and different owners.
+
+**The capability → M4-Phase 5. No plan change was needed to *find* it a
+home; one line was added so a reader of the plan can see the
+prerequisite.** M4-Phase 5's stated approach is "one-way binding plus a
+handler, matching the M3 `ToggleButton.checked` precedent". That
+precedent works for `bool` because a handler can write a `bool` state —
+the write M3-Phase 1 added for that purpose. **The string twin does not
+exist, so the handler half of the precedent is unbuildable for a text
+field**, which makes the write a strict sub-problem of the phase's own
+ADR obligation rather than an addition to it. The alternatives were
+checked against the phases' own scope and rejected: M4-Phase 3 says
+"String concatenation stays out" and its consumers need reads (index
+read, equality selection), not writes; M4-Phase 4 is scrolling /
+`Image` / `fill`; M4-Phase 7 is two phases past the point where the
+one-way form is needed. Recorded as
+[milestone plan](../../plan.md) revision 1 under
+[DD-V-026](../../../cross-milestone/decisions/plan-revision-discipline.md).
+
+**The silence → an M4-Phase 3 pre-doc intake.** Until the capability
+lands, `s = "abc"` is accepted by both gates and does nothing but log —
+the authorable-accepted-silently-broken class this phase treats as
+first-class. Closing it needs **no new decision**: `dsl_spec.md` §8.9
+already marks `StrLit`, `Interpolation` and `StrPropRead` **binding-only**,
+so a diagnostic *enforces normative text already in force* rather than
+narrowing a surface. The rule is narrow — a handler assignment whose
+left-hand side is a scalar `string` state; a `string[]` append stays
+legitimate. No shipped `.ui` is affected (measured: no example writes a
+string state from a handler).
+
+**A sharper reading of the defect than this task's own start gate had.**
+Start-gate fact 5 recorded "no section says a handler cannot write a
+scalar string state". That is true of §4, and **false of §8.9**, whose
+mapping table marks the string forms binding-only and whose `(assign …)`
+row enumerates the admitted right-hand sides as `i32` (default), `bool`
+(M3-Phase 1) and collections (M3-Phase 7), omitting string. So the
+runtime matches the spec and **the compiler does not**: `s = "abc"`
+lowers to `(assign s "abc")`, `s = t` to `(assign s (str-prop-read t))`,
+and `s = "n is \{n}"` to `(assign s (interp …))` — three binding-only
+forms placed in handler position, accepted by the loader, and rejected
+only by the evaluator. Measured with a probe `.ui` through
+`wasamoc build` and a throwaway evaluator probe (all three return
+`TypeMismatch`). CF-T9-3's sibling item on T13's list is corrected
+accordingly: the gap is not "unstated", it is "stated in §8.9 and
+unenforced at three layers".
 
 **CF-T4-1 and CF-T5-1 are touched but not closed**, and take no new row.
 This task adds `for` regeneration, which is their named re-trigger, but
