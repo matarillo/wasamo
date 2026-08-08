@@ -29,6 +29,7 @@ component Gallery inherits Window {
                 HStack {
                     spacing: 8px
                     padding: 8px
+                    focus-group: true
 
                     ToggleButton {
                         text: "All"

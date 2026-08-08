@@ -103,6 +103,29 @@
 //!   then `<` twice is asserted to reach the **same** state
 //!   `ArrowRight` / `ArrowLeft` x2 reaches from the same start (G4) —
 //!   one bound value, two authored routes.
+//! - [`g9_the_lightbox_close_button_closes_it`] (G9) — the lightbox's `x`
+//!   Button's `clicked` handler is the one authored closing route with no
+//!   firing test (CF-T10-6): reachable at [`G8_CLIENT_W`] x
+//!   [`G8_CLIENT_H`] for the same column-3 reason G8 needs that client
+//!   (`x` sits in the lightbox `Grid`'s column 3, beside `>`), and
+//!   unreachable at [`CLIENT_W`] x [`CLIENT_H`]. The premise is asserted
+//!   on `x`'s own centre point — inside the client, and
+//!   `__resolve_topmost_for_test` resolves it to `x`'s own path — before
+//!   `click_and_drain` fires it and the lightbox subtree's removal is
+//!   read back (root child count, the caption `Text` no longer
+//!   findable). Pins the **other** authored closing route beside G3's
+//!   `dismiss`: an ordinary `clicked` on a Button, in `gallery.ui` since
+//!   M3-Phase 6 and untested until now.
+//! - [`g10_the_toolbar_tab_strip_is_one_tab_stop`] (G10) — `focus-group:
+//!   true`, landed on the toolbar-left `HStack` (`All` / `Albums` /
+//!   `Favorites`). Part 1: from the before-state, one Tab focuses `All`
+//!   and a second Tab focuses `Scroll down` — Tab leaves the group
+//!   rather than stepping to `Albums`, the domain's old second stop.
+//!   Part 2: with focus on `All`, `ArrowRight` moves it to `Albums` and
+//!   `ArrowLeft` moves it back — the landed `Left`/`Up` = previous,
+//!   `Right`/`Down` = next mapping (`focus::arrow_direction`) applied to
+//!   the toolbar's declaration order. Every stop is read back by label,
+//!   never assumed from a hard-coded path.
 //!
 //! # Standing conventions
 //!
@@ -183,7 +206,10 @@
 //! the fixtures share. [`assert_gallery_before_state`] and
 //! [`assert_focus_is_labelled`] are this file's shared assertion
 //! sequences (established before-state; "focus is on the node labelled
-//! X", discovered rather than hard-coded).
+//! X", discovered rather than hard-coded). [`read_focus_label`] (added
+//! for G10) reads back the currently focused Button/ToggleButton as its
+//! own `(path, label)` pair, for a fixture that prints and asserts
+//! several successive Tab/arrow stops rather than one.
 //!
 //! **A shipped layout defect, unrelated to this task's own changes,
 //! surfaced while building G5 / G6(c) and is measured directly by
@@ -225,22 +251,23 @@
 //! it to turn the toolbar-overlap finding into its own measured artifact;
 //! G8 uses it to establish, before deriving any point inside the
 //! lightbox, that `<` and `>` are actually reachable at G8's own client
-//! size — see each fixture's own doc comment for what it measured.
+//! size; G9 uses it the same way for `x` — see each fixture's own doc
+//! comment for what it measured.
 //!
 //! # The client stays small (M4-Phase 1 T8 finding)
 //!
-//! Every fixture except G8 normalises to 96 DPI at an explicitly chosen
-//! 360x240 physical client — the same ceiling every other integration
-//! test file in this crate records (a hosted CI desktop failed a larger
-//! request twice). The shipped gallery's own toolbar row
+//! Every fixture except G8 and G9 normalises to 96 DPI at an explicitly
+//! chosen 360x240 physical client — the same ceiling every other
+//! integration test file in this crate records (a hosted CI desktop
+//! failed a larger request twice). The shipped gallery's own toolbar row
 //! (`rows: 56 1* 28`) fits this client with an 88 DIP `item-cross-size`
 //! thumbnail grid wrapping into it (T10 start-gate fact 7), which is what
 //! makes driving the fixtures against the shipped `.ui` itself possible
-//! without a gallery-shaped miniature. **G8 is the one exception**,
-//! documented at [`G8_CLIENT_W`] / [`G8_CLIENT_H`]'s own doc comment: its
-//! 560x320 stays under the 720x480 `dpi_scale_matrix_integration.rs`
-//! already requests, so it does not raise this file's own ceiling, only
-//! use more of the headroom already shown to be honoured.
+//! without a gallery-shaped miniature. **G8 and G9 are the exception**,
+//! documented at [`G8_CLIENT_W`] / [`G8_CLIENT_H`]'s own doc comment: G9
+//! reuses G8's wider client for the same column-3 reason (its own doc
+//! comment states it), rather than raising this file's own ceiling a
+//! second time.
 
 #![cfg(windows)]
 
@@ -277,8 +304,9 @@ const REFERENCE_DPI: u32 = 96;
 const CLIENT_W: i32 = 360;
 const CLIENT_H: i32 = 240;
 
-/// G8's own, wider client — a property of the **app under test**, not a
-/// fixture convenience: the shipped lightbox `Grid`'s fixed columns
+/// G8's own, wider client (also reused by G9, for the same reason) — a
+/// property of the **app under test**, not a fixture convenience: the
+/// shipped lightbox `Grid`'s fixed columns
 /// (`columns: 1* 56 400 56 1*`) total `56 + 400 + 56 = 512` DIP, so at
 /// [`CLIENT_W`] (360) column 3 lands entirely past the client's right edge
 /// and both `>` and `x` are unreachable by any click — measured directly
@@ -703,6 +731,19 @@ unsafe fn assert_focus_is_labelled(
          indicator"
     );
     assert_eq!(label_of(node), expected_label);
+}
+
+/// Read back the currently focused Button/ToggleButton as `(path, label)`,
+/// discovered from the retained focus record rather than assumed — this
+/// file's own addition for [`g10_the_toolbar_tab_strip_is_one_tab_stop`],
+/// which reads several successive Tab/arrow stops and must print and
+/// assert each one rather than only the last.
+unsafe fn read_focus_label(window: *mut ffi::WasamoWindow, what: &str) -> (Vec<usize>, String) {
+    let path = ffi::__focus_path_for_test(window)
+        .unwrap_or_else(|| panic!("{what}: nothing is focused at all"));
+    let root = (*window).root_widget.as_ref().expect("content root");
+    let label = label_of(node_at_path(root, &path));
+    (path, label)
 }
 
 // ── G1 — a thumbnail click carries which thumbnail, through the ancestor walk ─
@@ -2266,6 +2307,250 @@ fn g8_the_lightbox_prev_next_buttons_step_the_same_bound_value() {
                  selected_index from the same start — {caption_via_click:?} via click vs \
                  {caption_via_key:?} via key"
             );
+        },
+    );
+}
+
+// ── G9 — the lightbox's `x` close Button fires its own clicked route ───────
+
+/// Reuses [`G8_CLIENT_W`] / [`G8_CLIENT_H`] for the same column-3 reason
+/// G8 needs that client (see [`G8_CLIENT_W`]'s own doc comment): the `x`
+/// Button sits in the lightbox `Grid`'s column 3, beside `>`, and is
+/// unreachable by any click at [`CLIENT_W`] x [`CLIENT_H`].
+///
+/// **CF-T10-6** (T10 close gate): the `x` Button's `clicked` handler is
+/// the one authored closing route with no firing test. It predates this
+/// task (M3-Phase 6) and is unchanged by it. This is its own fixture —
+/// not a leg bolted onto
+/// [`g8_the_lightbox_prev_next_buttons_step_the_same_bound_value`], whose
+/// claim ("one bound value, two authored routes") is complete on its own
+/// and stays single.
+///
+/// What this pins that
+/// [`g3_escape_closes_through_dismiss_and_focus_restores`] does not: G3
+/// pins the `dismiss` route — Escape raises a dismissal request that the
+/// authored `dismiss` handler answers by writing `is_lightbox_open =
+/// false`. This pins the **other** authored closing route: an ordinary
+/// `clicked` handler on a Button, wired to the same state write, with no
+/// `dismiss` / Escape involved at all.
+///
+/// The premise is asserted on `x`'s own **centre point**, not its whole
+/// rectangle (G8's own doc comment states why a whole-rectangle check
+/// would be fragile near a client edge; the same reasoning applies here):
+/// the centre must lie inside the client, and
+/// `WidgetNode::__resolve_topmost_for_test` at that centre must return
+/// `x`'s own path — printed (rectangle, centre, resolved path and kind),
+/// not assumed, before the click fires.
+#[test]
+fn g9_the_lightbox_close_button_closes_it() {
+    run_on_owning_runtime_thread_or_skip(
+        "G9: the lightbox's x close Button closes it",
+        move || {
+            let ir = lower_ui_to_ir(GALLERY_UI);
+            let g9_client_rect = DipRect {
+                x: 0.0,
+                y: 0.0,
+                width: G8_CLIENT_W as f32,
+                height: G8_CLIENT_H as f32,
+            };
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, G8_CLIENT_W, G8_CLIENT_H, "G9 baseline");
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+                assert_gallery_before_state(window, "G9 before-state");
+
+                // Establish the before-state, then open the lightbox by
+                // clicking a thumbnail (this file's module header: opening
+                // the lightbox always uses `click_and_drain`).
+                let box0_rect = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let text0_path =
+                        find_text_path(root, "IMG 001 #0").expect("thumbnail 0's Text must exist");
+                    let mut box0_path = text0_path;
+                    box0_path.pop();
+                    node_at_path(root, &box0_path).__arranged_rect_for_test()
+                }
+                .expect("thumbnail 0's Box must be laid out");
+                let (cx, cy) = rect_center_physical(box0_rect, factor);
+                click_and_drain(hwnd, cx, cy);
+                {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    assert_eq!(
+                        root.children.len(),
+                        2,
+                        "G9: the click must have opened the lightbox"
+                    );
+                }
+
+                // Find `x` by label and read its arranged rectangle.
+                let (x_path, x_rect) = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let p = find_button_path(root, "x").expect("the x Button must exist");
+                    let r = node_at_path(root, &p)
+                        .__arranged_rect_for_test()
+                        .expect("x must be laid out");
+                    (p, r)
+                };
+                let (cx_dip, cy_dip) = (
+                    x_rect.x + x_rect.width / 2.0,
+                    x_rect.y + x_rect.height / 2.0,
+                );
+
+                // The premise, on the centre point — a direct measurement
+                // through `WidgetNode::__resolve_topmost_for_test` (this
+                // file's module header, "The resolved-target accessor"),
+                // printed before it is relied on.
+                let (resolved_path, resolved_kind) = {
+                    let root = (*window).root_widget.as_ref().unwrap();
+                    let path = root.__resolve_topmost_for_test(cx_dip, cy_dip);
+                    let kind = path
+                        .as_ref()
+                        .map(|p| node_at_path(root, p).__kind_name_for_test());
+                    (path, kind)
+                };
+                eprintln!(
+                    "G9 measurement: x rect={x_rect:?} centre=({cx_dip}, {cy_dip}) \
+                     resolved_path={resolved_path:?} resolved_kind={resolved_kind:?} \
+                     (x's own path={x_path:?})"
+                );
+                assert!(
+                    dip_rect_contains_point(g9_client_rect, cx_dip, cy_dip),
+                    "G9 premise: x's centre ({cx_dip}, {cy_dip}) must lie inside the G9 \
+                     client rectangle {g9_client_rect:?}"
+                );
+                assert_eq!(
+                    resolved_path,
+                    Some(x_path.clone()),
+                    "G9 premise: a click at x's own centre must resolve to x's own path \
+                     {x_path:?} — measured resolved_path={resolved_path:?} \
+                     (kind={resolved_kind:?}) instead"
+                );
+
+                // Fire it.
+                let (px, py) = rect_center_physical(x_rect, factor);
+                click_and_drain(hwnd, px, py);
+
+                let root = (*window).root_widget.as_ref().unwrap();
+                assert_eq!(
+                    root.children.len(),
+                    1,
+                    "G9: clicking x must close the lightbox (the subtree must be gone)"
+                );
+                assert!(
+                    find_path(root, &|n| n
+                        .__text_content_for_test()
+                        .is_some_and(|c| c.starts_with("Photo #")))
+                    .is_none(),
+                    "G9: the caption Text must no longer be findable once x has closed the \
+                     lightbox"
+                );
+
+                ffi::wasamo_window_destroy(window);
+            }
+        },
+    );
+}
+
+// ── G10 — the toolbar's tab strip is one Tab stop, arrows move inside it ───
+
+/// `focus-group: true`, landed on the toolbar-left `HStack` (`All` /
+/// `Albums` / `Favorites`). Two parts, both read back by label rather
+/// than assumed from a hard-coded path.
+///
+/// Part 1 ("one stop, not three"): from the established before-state, one
+/// Tab focuses `All`; a second Tab focuses `Scroll down` — Tab leaves the
+/// group instead of stepping to `Albums`, which was the domain's second
+/// stop before this annotation landed.
+///
+/// Part 2 ("arrows move inside it"): with focus on `All`, `ArrowRight`
+/// moves focus to `Albums`, and `ArrowLeft` moves it back to `All`. dsl_spec
+/// §4.19 fixes only that arrow keys move *within* a group, not which axis
+/// moves which way; the landed mapping (`wasamo_runtime::focus::arrow_direction`:
+/// `Left` / `Up` = previous, `Right` / `Down` = next) applied to the
+/// toolbar's own declaration order (`All`, `Albums`, `Favorites`) is what
+/// is measured and printed here, not assumed.
+#[test]
+fn g10_the_toolbar_tab_strip_is_one_tab_stop() {
+    run_on_owning_runtime_thread_or_skip(
+        "G10: the toolbar's tab strip is one Tab stop",
+        move || {
+            let ir = lower_ui_to_ir(GALLERY_UI);
+
+            // Part 1: one stop, not three.
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "G10a baseline");
+                assert_gallery_before_state(window, "G10a before-state");
+
+                send_tab(hwnd);
+                let (first_path, first_label) = read_focus_label(window, "G10a first Tab");
+                eprintln!(
+                    "G10a measurement: the first Tab stop is {first_label:?} at {first_path:?}"
+                );
+                assert_eq!(
+                    first_label, "All",
+                    "G10a: the first Tab must focus All, the group's first member"
+                );
+
+                send_tab(hwnd);
+                let (second_path, second_label) = read_focus_label(window, "G10a second Tab");
+                eprintln!(
+                    "G10a measurement: the second Tab stop is {second_label:?} at \
+                     {second_path:?}"
+                );
+                assert_eq!(
+                    second_label, "Scroll down",
+                    "G10a: a second Tab must leave the group (one stop, not three) and land \
+                     on Scroll down rather than stepping to Albums — measured second stop \
+                     {second_label:?} at {second_path:?}"
+                );
+
+                ffi::wasamo_window_destroy(window);
+            }
+
+            // Part 2: arrows move inside it.
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "G10b baseline");
+                assert_gallery_before_state(window, "G10b before-state");
+
+                send_tab(hwnd);
+                let (setup_path, setup_label) = read_focus_label(window, "G10b setup Tab");
+                assert_eq!(
+                    setup_label, "All",
+                    "G10b setup check: Tab must land on All first (measured {setup_label:?} \
+                     at {setup_path:?})"
+                );
+
+                send_key(hwnd, VK_RIGHT.0);
+                let (right_path, right_label) = read_focus_label(window, "G10b after ArrowRight");
+                eprintln!(
+                    "G10b measurement: ArrowRight from All moves focus to {right_label:?} at \
+                     {right_path:?}"
+                );
+                assert_eq!(
+                    right_label, "Albums",
+                    "G10b: ArrowRight from All must move focus to Albums — measured \
+                     {right_label:?} at {right_path:?}"
+                );
+
+                send_key(hwnd, VK_LEFT.0);
+                let (left_path, left_label) = read_focus_label(window, "G10b after ArrowLeft");
+                eprintln!(
+                    "G10b measurement: ArrowLeft from Albums moves focus to {left_label:?} at \
+                     {left_path:?}"
+                );
+                assert_eq!(
+                    left_label, "All",
+                    "G10b: ArrowLeft must move focus back to All — measured {left_label:?} at \
+                     {left_path:?}"
+                );
+
+                ffi::wasamo_window_destroy(window);
+            }
         },
     );
 }
