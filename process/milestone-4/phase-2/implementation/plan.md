@@ -763,9 +763,21 @@ one example host:
   in the runtime for any right-hand side — so the per-item handler writes
   `root.selected_index = index;`, which is §4.19's own example shape and
   is what T9 landed end to end.
-- The lightbox is a **root `ZStack` branch** and stays one; its scrim is
-  an authored covering widget, and it is what blocks background clicks —
-  the scope confines the keyboard only.
+  - **The click resolves to the thumbnail's `Text`, not to the `Box` that
+    carries the handler**, so the shipped app is the gallery's first
+    production exercise of T3's ancestor walk rather than of target
+    dispatch alone. Measured, not inferred (fixture G1).
+- The lightbox is a **root `ZStack` branch** and stays one; a covering
+  widget inside the scope blocks background clicks — the scope confines
+  the keyboard only.
+  - **Which covering widget was wrong in this item and is now measured.**
+    It said the scrim blocks them. At a background point the resolver
+    returns the lightbox's own `Grid`: it is declared after the scrim and
+    is also stretch/stretch, so it wins the reverse-order walk, and the
+    scrim never gets the chance. Both are inside the scope subtree, so
+    the blocking behaviour §4.19 describes holds either way — but T12's
+    control C rests on this, so it is recorded as measured rather than
+    left as the prediction it was (fixture G5).
 - Esc closes through an authored `dismiss` handler and Tab is contained.
   **Focus restores to the widget focused before the lightbox opened**
   (or to none, when nothing was). The thumbnail itself becomes the
@@ -783,6 +795,12 @@ one example host:
   the scope's first stop, a descendant, so the walk reaches them. That is
   a property of entry rather than an accident, and moving the handlers
   below the focused stop would make them unreachable.
+  - **The `<` / `>` Buttons gained `clicked` handlers too**, which this
+    item did not ask for. They are the visible prev/next affordance and
+    were inert; leaving them inert while the arrow keys worked would fail
+    the owner's smoke for a reason that has nothing to do with the phase.
+    They use only the M3 Button surface, and the two routes are asserted
+    to reach the same bound value.
 - **Scrolled hit-testing is exercised**, because the gallery is the
   clip rule's consumer: with `scroll_y` non-zero, a thumbnail inside the
   viewport resolves and opens the lightbox, and a toolbar click above
@@ -791,9 +809,37 @@ one example host:
 - **Host artifacts rebuild in order**: the new grammar and attributes
   change `.uic`, so `wasamoc` builds before the C / Zig gallery hosts
   re-embed their IR (the M4-Phase 1 T9 shape); A stays runnable on all
-  three hosts.
+  three hosts. **No `.uic` is tracked**, so this is a build-order
+  obligation with nothing to keep in step in the repository.
+- **The fixtures drive the shipped file itself.**
+  `gallery_slice_integration.rs` reads `examples/gallery/gallery.ui` with
+  `include_str!` rather than building a gallery-shaped miniature, so what
+  is under test is the artifact the hosts embed. It finds nodes by label
+  and rendered text, so a later `.ui` edit reddens a named assertion
+  instead of silently measuring a different node.
+- **This task writes production Rust after all**, which its start gate
+  forbade and the lead re-decided mid-task:
+  `WidgetNode::__resolve_topmost_for_test` forwards to the production
+  `hit::resolve_topmost`, because `ffi::__hover_target_for_test` reports
+  only *enabled Button-family* targets and so cannot witness a resolved
+  `Box` / `Text` / `Grid` at all. It is what turned this item's own
+  scrim claim from a prediction into a measurement.
+- **Two things ship that no consumer exercises, and both are named rather
+  than left to be found**: `focus-group` has no shipped `.ui` carrying it
+  (the group's canonical spelling is M5's, per the framing), and
+  `selected_index` is unclamped at both ends because this phase has no
+  conditional expression to guard with — §4.19's own example has the same
+  shape.
+- **The known toolbar overlap has an input-side half nobody had
+  measured**: where the toolbar `HStack`s overflow their `Grid` columns,
+  every tab `ToggleButton` becomes unclickable, because a non-clipping
+  container is itself a hit target across its whole rectangle. Recorded
+  as a finding with M4-Phase 4 (which owns the overflow semantics per
+  [constraints.md §6](../requirements/constraints.md)) and pinned by a
+  fixture that says, in its own failure message, that a red there means
+  the overflow was fixed.
 
-- [ ] T10
+- [x] T10
 
 ## T11 — Touch
 
@@ -862,12 +908,34 @@ The four controls from the [framing](../requirements/framing.md)
   discriminated; now it can, and the state-level equivalent is pinned by
   `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`.
 
+- **Control A is already taken, at T10, in the shape this row describes**
+  ([evidence/t10-frames/](./evidence/t10-frames/)): caption differs by
+  thumbnail (79 px), agrees for the same thumbnail twice (0 px), and the
+  `[photo]` box agrees (0 px) so the difference is localised. Taken at
+  scale 1.25, which also discharges the ≠ 100% row below for control A.
+  What T12 owes on this row is a decision, not a repeat: either cite T10's
+  frames or re-take them beside the other three so the set is captured at
+  one sitting.
+- **Control C's blocker is the lightbox's own `Grid`, not the scrim**
+  (T10 close gate, measured through `__resolve_topmost_for_test`). The
+  `Grid` is declared after the scrim and is also stretch/stretch, so it
+  wins the reverse-order walk at a background point. Both are inside the
+  scope subtree, so containment holds either way and the control is
+  unchanged — but the row's *description* should not say "the scrim
+  blocks it", because that is not what the runtime does.
+
 - Capture is preceded by `cargo build --release --workspace`, takes
   **multiple frames on each side**, uses the **client** rectangle, and
   states the display scale (Phase 1 F-21 / F-33 / T10).
 - The capture width keeps the toolbar's content within the client, or
   names the known width-driven overlap as a known observation
-  ([constraints.md §6](../requirements/constraints.md)).
+  ([constraints.md §6](../requirements/constraints.md)). **That rule now
+  has an input-side reason as well as a visual one** (T10's G7): where the
+  toolbar overflows, the overlapped tab `ToggleButton`s stop being
+  clickable at all, so a control that clicks one at a narrow width would
+  measure the overlap rather than the property it is aimed at. T10's own
+  captures at a 785.6 DIP client show the toolbar **not** overlapping, so
+  a comparable width is the safe one.
 - **At least one control repeats at a display scale ≠ 100%** (A or C):
   a wrong pointer conversion is invisible at 100%
   ([preamble.md §What "green" is worth](./preamble.md)), so a capture
@@ -1007,6 +1075,19 @@ The four controls from the [framing](../requirements/framing.md)
     §4.4's registry is where the container / leaf distinction is visible
     and is what the diagnostic cites, so either it gains the sentence or
     the rule is recorded as unspecified;
+  - **§4.19's "every widget with a visual is a candidate" is accurate and
+    its consequence is unstated** (T10 close gate, measured by G7). A
+    *layout container* is such a widget, so a non-clipping one is a hit
+    target across its whole arranged rectangle — including the part that
+    overflows its parent's cell, where it silently takes clicks aimed at
+    the siblings it overlaps. The shipped gallery reproduces this at a
+    narrow client: every toolbar tab `ToggleButton`'s own centre resolves
+    to a scroll `Button` instead. The runtime matches the specification;
+    what is missing is a sentence saying that a container is a candidate
+    too, which is what makes overflow an input problem and not only a
+    visual one. The overflow *semantics* stay M4-Phase 4's
+    ([constraints.md §6](../requirements/constraints.md)); T13 decides
+    only whether §4.19 gains the sentence;
   - **§4.16's placement example is corrected by T8**, not here, so this
     is a confirmation rather than a repair;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
