@@ -2477,13 +2477,12 @@ fn check_members_inner(
                 body,
                 span,
             } => {
-                if inside_for_template {
-                    diags.push(error(
-                        filename,
-                        span,
-                        "handlers inside a `for` body template are deferred in M3-Phase 7; put mutation handlers outside the `for` body",
-                    ));
-                }
+                // M4-Phase 2 T9: a handler inside a `for` body template is
+                // admitted (dsl_spec §4.15 "Handlers inside a `for` body
+                // (admitted in M4-Phase 2)"). The M3-Phase 7 rejection that
+                // used to sit here is lifted; `check_block_statement` below
+                // still threads `loop_ctx` into the handler body, so a
+                // binder read resolves the same way it does in a binding.
                 // `dismiss` is admitted only on a container carrying
                 // `modal-scope: true` (dsl_spec §4.19); written anywhere
                 // else it could never be raised, so it is rejected here
@@ -3033,7 +3032,7 @@ fn check_expr_type_in_loop_context(
                     filename,
                     span,
                     format!(
-                        "loop binder `{}` may be read only inside its `for` body expression bindings",
+                        "loop binder `{}` may be read only inside its `for` body",
                         name
                     ),
                 ));
@@ -3606,15 +3605,17 @@ mod tests {
     }
 
     #[test]
-    fn for_body_rejects_handler_and_nested_for_at_any_depth() {
-        let handler_errs = errors(
-            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Button { clicked => { root.missing = 1; } } } } }",
+    fn for_body_accepts_handler_but_still_rejects_nested_for_at_any_depth() {
+        // M4-Phase 2 T9: a handler inside a `for` body template is now
+        // admitted (dsl_spec §4.15); nested `for` stays rejected (out of
+        // scope per §4.15 "Out of scope").
+        let handler_result = check_src(
+            "component C inherits W { state xs: i32[] = [] state n: i32 = 0 WrapPanel { for x in xs { Button { clicked => { root.n = 1; } } } } }",
         );
         assert!(
-            handler_errs
-                .iter()
-                .any(|e| e.contains("handlers inside a `for` body")),
-            "{handler_errs:?}"
+            !handler_result.has_errors(),
+            "{:?}",
+            handler_result.diagnostics
         );
         let nested_errs = errors(
             "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { VStack { for y in xs { Text {} } } } } }",
@@ -6980,33 +6981,21 @@ mod tests {
     #[test]
     fn dismiss_handler_inside_for_wrapped_container_without_modal_scope_rejected() {
         // The `for` counterpart of the `if`-wrapped reject case above.
-        // The pre-existing "handlers inside a `for` body template are
-        // deferred in M3-Phase 7" gate (`inside_for_template`) fires
-        // unconditionally on every handler reached inside a `for` body,
-        // so a `dismiss` handler in a `for` body can only ever be a
-        // reject case, never an accept one — `inside_for_template` is
-        // threaded unchanged through the `Member::WidgetDecl` recursion,
-        // so it stays `true` all the way down to this handler. Both
-        // diagnostics are asserted: the deferred one proves that
-        // pre-existing gate still runs, and the modal-scope one proves
-        // the `Member::For` recursive call still reaches the handler and
-        // re-scans its own siblings for `carries_modal_scope` rather than
-        // the check being skipped because the handler was already
-        // rejected for the other reason.
+        // M4-Phase 2 T9 lifted the M3-Phase 7 "handlers inside a `for`
+        // body template are deferred" gate, so a `dismiss` handler inside
+        // a `for` body now reaches `carries_modal_scope`'s admission rule
+        // on the same terms as everywhere else: rejected here because the
+        // enclosing `Box` does not carry `modal-scope: true`, not because
+        // handlers were deferred inside `for` at all. The `Member::For`
+        // recursive call re-scans its own siblings for `carries_modal_scope`
+        // — the same thing the `if`-wrapped test above proves for
+        // `Member::Conditional`.
         let errs = errors(
             "component C inherits W { state open: bool = true state items: i32[] = [] VStack { for it, idx in items { Box { dismiss => { open = false; } } } } }",
         );
-        assert_eq!(errs.len(), 2, "{:?}", errs);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
         assert!(
-            errs.iter()
-                .any(|e| e
-                    .contains("handlers inside a `for` body template are deferred in M3-Phase 7")),
-            "{:?}",
-            errs
-        );
-        assert!(
-            errs.iter()
-                .any(|e| e.contains("`dismiss` handler can never be raised")),
+            errs[0].contains("`dismiss` handler can never be raised"),
             "{:?}",
             errs
         );
@@ -7157,5 +7146,149 @@ mod tests {
             let result = check_src(&src);
             assert!(!result.has_errors(), "key={key}: {:?}", result.diagnostics);
         }
+    }
+
+    // ── M4-Phase 2 T9: per-item handlers inside `for` (dsl_spec §4.19
+    // "Per-item handlers", §4.15 "Handlers inside a `for` body (admitted
+    // in M4-Phase 2)", DD-M4-P2-005) ───────────────────────────────────
+
+    #[test]
+    fn for_body_handler_reads_index_binder_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state labels: string[] = ["a", "b"]
+                state n: i32 = 0
+                WrapPanel { for label, i in labels { Box { clicked => { root.n = i; } } } }
+            }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn for_body_handler_reads_item_binder_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state xs: i32[] = [1, 2]
+                state sel: i32 = 0
+                WrapPanel { for n in xs { Box { clicked => { root.sel = n; } } } }
+            }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_with_argument_accepted_inside_for_body() {
+        let result = check_src(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Box { key-down(\"Enter\") => { } } } } }",
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_accepted_inside_for_body_with_modal_scope() {
+        // Newly reachable: before this task, `inside_for_template`
+        // rejected every handler in a `for` body unconditionally, so this
+        // shape could never reach `carries_modal_scope`'s admission rule
+        // at all. It does now.
+        let result = check_src(
+            "component C inherits W { state open: bool = true state items: i32[] = [] VStack { for it, idx in items { Box { modal-scope: true dismiss => { open = false; } } } } }",
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_without_argument_rejected_inside_for_body() {
+        // T8's rule ("a bare `key-down` can never fire") still fires
+        // inside a `for` body — lifting the M3-Phase 7 gate does not
+        // relax any other admission rule.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Box { key-down => { } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`key-down` handler can never be raised"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn index_binder_read_in_handler_outside_for_body_rejected() {
+        // A handler outside any `for` body reading a binder that is
+        // declared by a `for` elsewhere in the file: still a scope
+        // violation, and the corrected wording (no "expression bindings"
+        // qualifier — a handler body is inside the `for` body too) is
+        // what fires.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] state n: i32 = 0 WrapPanel { for a, i in xs { Box {} } } Button { clicked => { root.n = i; } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("loop binder `i` may be read only inside its `for` body")
+                && !errs[0].contains("expression bindings"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn handler_reads_a_different_for_loops_binder_rejected() {
+        // Two sibling `for` members with different binders; the second
+        // for-body's handler reads the *first* for's binder. Nested `for`
+        // is rejected, so a node inside a `for` body has at most one loop
+        // scope (dsl_spec §4.15) — a binder belonging to a sibling `for`
+        // is out of scope exactly like one belonging to no `for` at all,
+        // and hits the same diagnostic.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] state ys: i32[] = [] state n: i32 = 0 WrapPanel { for a, i in xs { Box {} } } WrapPanel { for b, j in ys { Box { clicked => { root.n = i; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("loop binder `i` may be read only inside its `for` body"),
+            "{:?}",
+            errs
+        );
+    }
+
+    /// A per-item handler that mutates the collection its own subtree
+    /// rides, over **all three** element types. This combination was
+    /// unreachable before this task: collection mutation only appears in
+    /// handler statements, never in a `bind`, and a handler inside a `for`
+    /// body was rejected outright — so the two preconditions could not
+    /// co-occur.
+    ///
+    /// The runtime gained a binder-read arm for each of the three element
+    /// types (they take three different evaluators), and the independent
+    /// review found the *checker* side pinned end-to-end for `string[]`
+    /// only, with `i32[]` and `bool[]` covered lower down the stack. This
+    /// is the accept-side half at the gate that decides whether the shape
+    /// can be authored at all.
+    #[test]
+    fn for_body_handler_may_append_its_own_binder_for_every_element_type() {
+        let result = check_src(
+            r#"component C inherits W {
+                state nums: i32[] = [1]
+                state labels: string[] = ["a"]
+                state flags: bool[] = [true]
+                VStack {
+                    WrapPanel { for n in nums { Box { clicked => { nums = nums.append(n); } } } }
+                    WrapPanel { for label, i in labels { Box { clicked => { labels = labels.append("row \{i}"); } } } }
+                    WrapPanel { for f in flags { Box { clicked => { flags = flags.append(f); } } } }
+                }
+            }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn undeclared_identifier_inside_for_body_handler_rejected() {
+        // Name resolution still fires for a handler inside a `for` body:
+        // lifting the M3-Phase 7 gate did not disable
+        // `check_qualified_name`'s ordinary undefined-state diagnostic.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Button { clicked => { root.missing = 1; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("undefined state `missing`"), "{:?}", errs);
     }
 }

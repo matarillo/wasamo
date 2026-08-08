@@ -788,12 +788,11 @@ fn validate_phase7_iteration_invariants(
     node: &IrNode,
     inside_for_template: bool,
 ) -> Result<(), IrLoadError> {
-    if inside_for_template && !node.handlers.is_empty() {
-        return Err(IrLoadError::Validate(
-            "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
-        ));
-    }
-
+    // M4-Phase 2 T9: a handler inside a `for` body template is admitted
+    // (dsl_spec §4.15 "Handlers inside a `for` body (admitted in
+    // M4-Phase 2)"). The M3-Phase 7 rejection that used to sit here is
+    // lifted; `inside_for_template` still gates the nested-`for` rejection
+    // below and is passed through unchanged.
     let current = parent_kind_for(node);
     for member in &node.children {
         match member {
@@ -1717,12 +1716,14 @@ fn validate_node_references_in_scope(
         })?;
     }
     for handler in &node.handlers {
-        if inside_for_template {
-            return Err(IrLoadError::Validate(
-                "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
-            ));
-        }
-        validate_expr_references(&handler.expr, declared, None, &|name| {
+        // M4-Phase 2 T9: a handler inside a `for` body template is
+        // admitted (dsl_spec §4.15 "Handlers inside a `for` body (admitted
+        // in M4-Phase 2)"). The M3-Phase 7 rejection that used to sit here
+        // is lifted; `loop_scope` is threaded through so a binder read in
+        // a handler body resolves through the same in-scope /
+        // wrong-binder / no-scope arms `validate_expr_references` already
+        // has for bindings.
+        validate_expr_references(&handler.expr, declared, loop_scope, &|name| {
             format!(
                 "handler `on {}` references undeclared name `{}`",
                 handler.signal, name
@@ -1876,7 +1877,7 @@ fn validate_expr_references(
                     validate_expr_references(rhs, declared, loop_scope, err_msg)
                 }
                 Some(IrStateType::Collection(_)) => {
-                    validate_collection_assignment_rhs(lhs, rhs, declared, err_msg)
+                    validate_collection_assignment_rhs(lhs, rhs, declared, loop_scope, err_msg)
                 }
                 None => Err(IrLoadError::Validate(err_msg(lhs))),
             }
@@ -1977,10 +1978,18 @@ fn validate_collection_read_path(
     }
 }
 
+/// `loop_scope` is `Some` when this assignment sits in a handler body
+/// inside a `for` body template (M4-Phase 2 T9) — a per-item handler that
+/// mutates the collection its own subtree rides is the shape that reaches
+/// it, and its appended element may be a binder read. It is threaded
+/// rather than passed as `None` because `wasamoc check` resolves the same
+/// binder through `expr_static_type_in_context`'s loop context; dropping
+/// it here would make the loader reject IR the checker emits.
 fn validate_collection_assignment_rhs(
     lhs: &str,
     rhs: &HandlerExpr,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     let elem = match declared.get(lhs) {
@@ -1993,7 +2002,7 @@ fn validate_collection_assignment_rhs(
             elem: rhs_elem,
             value,
         } if path == lhs && rhs_elem == elem => {
-            validate_collection_element_expr(lhs, elem, value, declared, err_msg)?;
+            validate_collection_element_expr(lhs, elem, value, declared, loop_scope, err_msg)?;
             Ok(())
         }
         HandlerExpr::ListDropLast {
@@ -2022,6 +2031,7 @@ fn validate_collection_element_expr(
     elem: &IrType,
     value: &HandlerExpr,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     match (elem, value) {
@@ -2044,10 +2054,10 @@ fn validate_collection_element_expr(
             | HandlerExpr::BoolPropRead { path },
         ) => validate_scalar_value_read(lhs, elem, path, declared, err_msg),
         (IrType::Str, HandlerExpr::Interpolation(_)) => {
-            validate_expr_references(value, declared, None, err_msg)
+            validate_expr_references(value, declared, loop_scope, err_msg)
         }
         (_, HandlerExpr::ItemRead { .. } | HandlerExpr::IndexRead { .. }) => {
-            validate_expr_references(value, declared, None, err_msg)
+            validate_expr_references(value, declared, loop_scope, err_msg)
         }
         _ => Err(IrLoadError::Validate(format!(
             "collection assignment `{lhs}` appends a value that does not match element type `{}`",
@@ -3310,6 +3320,15 @@ fn build_node_with_loop_context(
     let modal_scope = extract_bool_prop(&node.props, "modal-scope").unwrap_or(false);
     widget.set_focus_annotation(focus_group, modal_scope);
 
+    // M4-Phase 2 T9: write the generated subtree's loop scope (dsl_spec
+    // §4.19 "Per-item handlers") from the *same* `loop_context` parameter
+    // that feeds this subtree's per-item bindings below — one source for
+    // both, right beside the focus-annotation write above, which is the
+    // same single-writer, kind-independent-site discipline applied to a
+    // second field. `None` outside a `for` body template, matching every
+    // constructor's own initial value.
+    widget.set_loop_scope(loop_context.cloned());
+
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
         let Some((prop_key, prop_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name)
@@ -3791,13 +3810,20 @@ fn mutate_for_loop_subtree(
                             // pre-write baseline (review finding #4). `WidgetNode`
                             // has no `Drop`, so a bare drop skips `widget_destroy`'s
                             // `remove_for_widget`; any child holding a `registry`
-                            // entry would leak. Today's handler-free `for`-body
-                            // children hold none (per-item `EffectHandle`s
-                            // self-dispose on `Drop`), so this branch's disposal is
-                            // a *defensive* symmetry with the staging-failure branch
-                            // and the no-`Drop` ⇒ explicit-disposal invariant — not
-                            // an active leak fix for current bodies, but required
-                            // for any future body shape that registers entries.
+                            // entry would leak. M4-Phase 2 T9 lifted the M3-Phase 7
+                            // handler-inside-`for` rejection, so a `for`-body child
+                            // can now carry inline handlers and have a host
+                            // listener connected to one through
+                            // `wasamo_signal_connect` — that connection is exactly
+                            // a `registry` entry keyed by this child's pointer, and
+                            // it does not self-dispose (inline handler bodies
+                            // themselves are plain `Vec` storage on the node and
+                            // drop with it; per-item `EffectHandle`s also
+                            // self-dispose on `Drop`; the host-listener registry
+                            // entry is the one thing here that does not). This
+                            // branch's disposal is therefore load-bearing for that
+                            // shape, not the defensive-only symmetry with the
+                            // staging-failure branch it was before T9.
                             //   (a) remove + destroy the committed prefix, tail-first;
                             for rollback in (0..inserted).rev() {
                                 if let Ok(removed) =
@@ -5156,16 +5182,14 @@ mod tests {
     }
 
     #[test]
-    fn for_member_rejects_handler_and_nested_for_inside_template() {
-        let handler = parse_ir(
+    fn for_member_accepts_handler_but_still_rejects_nested_for_inside_template() {
+        // M4-Phase 2 T9: a handler inside a `for` body template is
+        // admitted (dsl_spec §4.15); nested `for` stays rejected (out of
+        // scope per §4.15 "Out of scope").
+        parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state xs: i32[] = []\n\
              node WrapPanel { for x in xs { node Button { on clicked { 1 } } } }\n}",
-        )
-        .unwrap_err();
-        assert!(
-            matches!(handler, IrLoadError::Validate(ref m) if m.contains("handlers inside a `for` body")),
-            "{handler:?}"
         );
 
         let nested = parse_ir(
@@ -8401,10 +8425,7 @@ mod tests {
     // an `if` / `for` member's body — the `wasamoc` `check.rs` mirror
     // group above tests the same shapes at compile time; this is the
     // runtime half for memory IR that reaches the loader without
-    // traversing `wasamoc`. The `for`-plus-`dismiss` combination cannot
-    // reach the `ControlFlow::For` arm's own `dismiss` check at all (see
-    // that test's comment); the admission-only `for` test right after it
-    // is what actually fires the arm.
+    // traversing `wasamoc`.
 
     #[test]
     fn dismiss_handler_accepted_inside_if_wrapped_modal_scope() {
@@ -8433,40 +8454,27 @@ mod tests {
     }
 
     #[test]
-    fn dismiss_handler_inside_for_wrapped_container_hits_the_pre_existing_handler_gate_first() {
-        // This is *not* the `ControlFlow::For` dismiss-check arm firing —
-        // it is unreachable for this shape. `validate()` runs
-        // `validate_node_references` (which unconditionally rejects any
-        // handler found while `inside_for_template`) before
-        // `validate_focus_annotation_invariants`, and each gate in
-        // `validate()` short-circuits via `?` on its own first error. So a
-        // `dismiss` handler inside a `for` body always surfaces this
-        // earlier, handler-name-agnostic message; `validate_focus_annotation_invariants`
-        // never runs for this node at all. (Confirmed directly: calling
-        // `validate_focus_annotation_invariants` on the parsed tree in
-        // isolation *does* return the `dismiss`-specific error — the gate
-        // itself is correct, it is simply never reached through the public
-        // `parse_ir` entry point for this shape.) This differs from
-        // `wasamoc check`'s `check_members_inner`, which accumulates
-        // diagnostics into one `Vec` in a single pass instead of
-        // short-circuiting per gate, so the checker's `for` counterpart
-        // (see `check.rs`) surfaces both messages together.
+    fn dismiss_handler_inside_for_wrapped_container_rejected_through_parse_ir() {
+        // M4-Phase 2 T9 lifted the M3-Phase 7 handler-inside-`for` gate in
+        // `validate_node_references`, so this shape no longer short-
+        // circuits there. It now reaches `validate_focus_annotation_invariants`'s
+        // `ControlFlow::For` recursion arm and its `dismiss` check fires —
+        // the same message the `if`-wrapped counterpart above surfaces,
+        // through the public `parse_ir` entry point rather than only by
+        // calling `validate_focus_annotation_invariants` in isolation.
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state open: bool = true\n\
              state xs: i32[] = []\n\
              node VStack { for x in xs { node Box { on dismiss { (assign open false) } } } }\n}",
-            "handlers inside a `for` body template are deferred in M3-Phase 7",
+            "`dismiss` handler can never be raised",
         );
     }
 
     #[test]
     fn focus_group_true_on_text_inside_for_body_rejected() {
-        // The reachable way to fire the `ControlFlow::For` recursion arm:
-        // an admission violation carries no handler, so it never trips the
-        // earlier, handler-only `validate_node_references` for-template
-        // gate (see the test above) and reaches
-        // `validate_focus_annotation_invariants` inside the `for` body.
+        // Fires the `ControlFlow::For` recursion arm of
+        // `validate_focus_annotation_invariants`, same as the test above.
         assert_validate_err(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state xs: i32[] = []\n\
@@ -8598,6 +8606,155 @@ mod tests {
              state count: i32 = 0\n\
              node Button { on clicked(\"x\") { (compound-assign += count 1) } }\n}",
             "`clicked` does not take an argument",
+        );
+    }
+
+    // ── M4-Phase 2 T9: per-item handlers inside `for` (dsl_spec §4.19
+    // "Per-item handlers", §4.15 "Handlers inside a `for` body (admitted
+    // in M4-Phase 2)", DD-M4-P2-005) ───────────────────────────────────
+    //
+    // `validate_node_references_in_scope` now threads `loop_scope`
+    // through the handler loop the same way it already does for
+    // bindings, so `validate_expr_references`'s existing in-scope /
+    // wrong-binder / no-scope arms for `ItemRead` / `IndexRead` apply to
+    // handler bodies without a new arm.
+
+    #[test]
+    fn for_body_handler_index_read_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x, i in xs { node Box { on clicked { (assign sel (index-read i)) } } } }\n}",
+        );
+        let for_member = &c.root.children[0];
+        let IrMember::ControlFlow(ControlFlowNode::For { body, .. }) = for_member else {
+            panic!("expected For control-flow, got {for_member:?}");
+        };
+        let IrMember::Widget(box_node) = &body[0] else {
+            panic!("expected Box body");
+        };
+        assert_eq!(box_node.node.handlers[0].signal, "clicked");
+    }
+
+    #[test]
+    fn for_body_handler_item_read_validates() {
+        parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x in xs { node Box { on clicked { (assign sel (item-read x)) } } } }\n}",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_item_read_outside_for_body_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state sel: i32 = 0\n\
+             node Box { on clicked { (assign sel (item-read x)) } }\n}",
+            "may be read only inside its `for` body",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_item_read_wrong_binder_rejected() {
+        // A handler inside a `for` body reading an `item-read` binder
+        // name that is not *this* `for`'s own binder (`label`, not
+        // `wrong`) — the wrong-binder arm, distinct from the no-scope
+        // arm the previous test fires.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for label in xs { node Box { on clicked { (assign sel (item-read wrong)) } } } }\n}",
+            "is not in scope for the current `for` body",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_index_read_with_no_index_binder_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x in xs { node Box { on clicked { (assign sel (index-read i)) } } } }\n}",
+            "loop-local index binder `i` may be read only inside its `for` body",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_inside_for_body_with_modal_scope_validates() {
+        // Newly reachable: before this task, the handler-inside-`for`
+        // gate in `validate_node_references` rejected every handler
+        // found inside a `for` body unconditionally, so this shape could
+        // never reach `validate_focus_annotation_invariants`'s
+        // `dismiss` admission check at all. It does now, and the
+        // `modal-scope` sibling admits it — the accept counterpart to
+        // `dismiss_handler_inside_for_wrapped_container_rejected_through_parse_ir`
+        // above.
+        parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             state xs: i32[] = []\n\
+             node VStack { for x in xs { node Box { prop modal-scope = true on dismiss { (assign open false) } } } }\n}",
+        );
+    }
+
+    #[test]
+    fn key_down_without_argument_inside_for_body_rejected() {
+        // Newly reachable the same way: `validate_key_down_invariants`
+        // runs after the (now-admitting) handler-inside-`for` gate, so a
+        // bare `key-down` inside a `for` body reaches its own argument
+        // check instead of being pre-empted by the deferred-handlers
+        // rejection.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Box { on key-down { 1 } } } }\n}",
+            "`key-down` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_index_read_wrong_binder_rejected() {
+        // The `IndexRead` twin of `for_body_handler_item_read_wrong_binder_rejected`.
+        // The `for` *does* declare an index binder (`i`), and the handler
+        // reads a different name, so this fires `validate_expr_references`'s
+        // `Some(index) if binder == index` guard's `Some(_)` fall-through —
+        // a distinct arm from the `None` (no index binder declared) one the
+        // test above it fires. Structural similarity to the `ItemRead` arm
+        // is not coverage: the two arms read different fields of
+        // `LoopReadScope` and could diverge independently.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x, i in xs { node Box { on clicked { (assign sel (index-read j)) } } } }\n}",
+            "`index-read j` is not in scope for the current `for` body",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_collection_append_reads_its_own_binders() {
+        // A per-item handler that mutates the collection its own subtree
+        // rides, appending the item and an index-interpolated string. Both
+        // reads travel the *collection-assignment* path
+        // (`validate_collection_assignment_rhs` ->
+        // `validate_collection_element_expr`), which is a different route
+        // through the validator than the scalar-assignment path every other
+        // test in this group takes — and it is reachable only now that a
+        // handler is admitted inside a `for` body, because a binding can
+        // never carry a write.
+        //
+        // The IR text is `wasamoc build`'s own output for the equivalent
+        // `.ui`, so this pins the two gates against one input rather than
+        // against each other's transcription.
+        parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = [1, 2]\n\
+             state labels: string[] = [\"a\"]\n\
+             node VStack { for n, i in xs { node Box { on clicked { (block (assign xs (list-append xs (item-read n))) (assign labels (list-append labels (interp \"row \" ((index-read i)))))) } } } }\n}",
         );
     }
 }

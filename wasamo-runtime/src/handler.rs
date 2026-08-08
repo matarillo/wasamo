@@ -130,6 +130,18 @@ pub enum EvalError {
     WriteInBindingContext {
         path: String,
     },
+    /// An `item` binder read (M4-Phase 2 T9, dsl_spec §4.19 "Per-item
+    /// handlers") resolved a matching binder, but the position it was
+    /// captured at is no longer inside its collection — the handler body
+    /// itself shortened the collection earlier in the same statement
+    /// sequence (a collection write drains synchronously; see
+    /// `widget::run_signal_handlers`'s doc comment). Distinct from
+    /// `UnknownProperty`, whose message ("unknown property") would be
+    /// false here: the binder is known and matched, the *item* just is not
+    /// live at that position anymore.
+    ItemOutOfRange {
+        binder: String,
+    },
 }
 
 impl std::fmt::Display for EvalError {
@@ -140,6 +152,9 @@ impl std::fmt::Display for EvalError {
             EvalError::DivisionByZero => write!(f, "division by zero"),
             EvalError::WriteInBindingContext { path } => {
                 write!(f, "write expression not allowed in binding context: {path}")
+            }
+            EvalError::ItemOutOfRange { binder } => {
+                write!(f, "loop item `{binder}` is no longer live at its position")
             }
         }
     }
@@ -158,14 +173,38 @@ pub fn evaluate(expr: &HandlerExpr, ctx: &mut dyn EvalContext) -> Result<i32, Ev
         HandlerExpr::StrLit(_)
         | HandlerExpr::StrPropRead { .. }
         | HandlerExpr::ListPropRead { .. }
-        | HandlerExpr::ItemRead { .. }
-        | HandlerExpr::IndexRead { .. }
         | HandlerExpr::ListAppend { .. }
         | HandlerExpr::ListDropLast { .. }
         | HandlerExpr::ListLit(_)
         | HandlerExpr::Interpolation(_) => Err(EvalError::TypeMismatch {
             path: "<non-integer expression in integer context>".into(),
         }),
+
+        // M4-Phase 2 T9 (dsl_spec §4.19 "Per-item handlers"): a binder read
+        // resolves when the handler runs, against whatever the current
+        // `EvalContext` reports for that position — not at subtree
+        // generation time. `index` always resolves when the binder
+        // matches (it is the captured position itself, not a value looked
+        // up through it); a `None` here would mean the binder did not
+        // match, which every known `EvalContext` already reports as an
+        // `Err` before returning, but the fallback below still turns a
+        // hypothetical `None` into a diagnostic rather than silently
+        // defaulting to 0.
+        HandlerExpr::IndexRead { binder } => ctx
+            .read_index_tracked(binder)?
+            .ok_or_else(|| EvalError::UnknownProperty(binder.clone())),
+
+        // `item` can be legitimately out of range: the handler body may
+        // have shortened its own collection earlier in the same statement
+        // sequence (a collection write drains synchronously), so this is
+        // the reachable, tested boundary condition — not defensive
+        // (DD-V-029).
+        HandlerExpr::ItemRead { binder } => {
+            ctx.read_item_i32_tracked(binder)?
+                .ok_or_else(|| EvalError::ItemOutOfRange {
+                    binder: binder.clone(),
+                })
+        }
 
         // A bare bool literal / bool property-read in integer context is a
         // type mismatch — only `Assign { rhs: BoolLit | BoolPropRead }` is
@@ -340,6 +379,17 @@ fn evaluate_bool_assignment_value(
     match expr {
         HandlerExpr::BoolLit(value) => Ok(*value),
         HandlerExpr::BoolPropRead { path } => ctx.get_bool(path),
+        // M4-Phase 2 T9: the `bool[]` twin of the string and integer append
+        // paths — `flags = flags.append(f)` inside a per-item handler over
+        // a `bool[]`. All three element types the collection surface has
+        // now carry a binder read, rather than two of them working and the
+        // third rejecting at invocation.
+        HandlerExpr::ItemRead { binder } => {
+            ctx.read_item_bool_tracked(binder)?
+                .ok_or_else(|| EvalError::ItemOutOfRange {
+                    binder: binder.clone(),
+                })
+        }
         _ => Err(EvalError::TypeMismatch {
             path: "<non-bool expression in bool list append>".into(),
         }),
@@ -503,6 +553,25 @@ pub fn evaluate_binding(
             Ok(out)
         }
         HandlerExpr::StrPropRead { path } => ctx.read_string_tracked(path),
+        // M4-Phase 2 T9: a binder read in *string* position. The reachable
+        // caller is a per-item handler appending to a `string[]` —
+        // `labels = labels.append(label)` — which `evaluate_collection_assignment`
+        // routes here. Without these two arms the `_` fall-through below
+        // reaches `evaluate_tracked`, which rejects both variants as "string
+        // expression in integer context": a shape both gates accept and
+        // that could then only ever log at click time. `ItemRead`'s `None`
+        // is the same out-of-range boundary [`EvalError::ItemOutOfRange`]
+        // names on the integer path.
+        HandlerExpr::ItemRead { binder } => {
+            ctx.read_item_binding_tracked(binder)?
+                .ok_or_else(|| EvalError::ItemOutOfRange {
+                    binder: binder.clone(),
+                })
+        }
+        HandlerExpr::IndexRead { binder } => ctx
+            .read_index_tracked(binder)?
+            .map(|index| index.to_string())
+            .ok_or_else(|| EvalError::UnknownProperty(binder.clone())),
         // Integer-typed top-level binding (e.g. a bare `root.count` binding).
         _ => evaluate_tracked(expr, ctx).map(|v| v.to_string()),
     }
@@ -542,6 +611,21 @@ fn evaluate_binding_part(
 ) -> Result<String, EvalError> {
     match expr {
         HandlerExpr::StrPropRead { path } => ctx.read_string_tracked(path),
+        // M4-Phase 2 T9: the interpolated counterpart of the two arms in
+        // [`evaluate_binding`] above — `labels = labels.append("row \{i}")`
+        // inside a per-item handler reaches an interpolation *part*, not a
+        // bare read, and would otherwise take the same integer-context
+        // rejection.
+        HandlerExpr::ItemRead { binder } => {
+            ctx.read_item_binding_tracked(binder)?
+                .ok_or_else(|| EvalError::ItemOutOfRange {
+                    binder: binder.clone(),
+                })
+        }
+        HandlerExpr::IndexRead { binder } => ctx
+            .read_index_tracked(binder)?
+            .map(|index| index.to_string())
+            .ok_or_else(|| EvalError::UnknownProperty(binder.clone())),
         _ => evaluate_tracked(expr, ctx).map(|v| v.to_string()),
     }
 }
@@ -1285,16 +1369,17 @@ mod tests {
 
     #[test]
     fn evaluate_rejects_bare_collection_forms_in_integer_context() {
+        // M4-Phase 2 T9 moved `ItemRead` / `IndexRead` out of this reject
+        // list into their own accepting arms (see the
+        // `evaluate_*_read_in_integer_assignment_*` tests below) — a
+        // binder read is no longer a bare collection form in integer
+        // context, it is the per-item handler surface §4.19 defines.
         let mut ctx = MapCtx::new(&[]);
         let exprs = [
             HandlerExpr::ListPropRead {
                 path: "xs".into(),
                 elem: wasamo_ir::IrType::I32,
             },
-            HandlerExpr::ItemRead {
-                binder: "item".into(),
-            },
-            HandlerExpr::IndexRead { binder: "i".into() },
             HandlerExpr::ListAppend {
                 path: "xs".into(),
                 elem: wasamo_ir::IrType::I32,
@@ -1313,6 +1398,119 @@ mod tests {
                 Err(EvalError::TypeMismatch { .. })
             ));
         }
+    }
+
+    // ── M4-Phase 2 T9: `item` / `index` binder reads in integer handler
+    // context (dsl_spec §4.19 "Per-item handlers") ──────────────────────
+
+    /// Item-aware mock context for `evaluate()`'s `ItemRead` / `IndexRead`
+    /// arms. Mirrors the shape `reactive::ForItemContext` +
+    /// `ForItemHandlerEvalContext` give the runtime (a binder name, an
+    /// optional index binder name, and a captured position into a
+    /// collection) without pulling in the reactive registry machinery —
+    /// this module's mock-context pattern, applied to the item surface.
+    struct ItemCtx {
+        inner: MapCtx,
+        binder: String,
+        index_binder: Option<String>,
+        items: Vec<i32>,
+        position: usize,
+    }
+
+    impl EvalContext for ItemCtx {
+        fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
+            self.inner.get_i32(path)
+        }
+        fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError> {
+            self.inner.set_i32(path, value)
+        }
+        fn read_item_i32_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+            if binder != self.binder {
+                return Err(EvalError::UnknownProperty(binder.to_string()));
+            }
+            Ok(self.items.get(self.position).copied())
+        }
+        fn read_index_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+            match self.index_binder.as_deref() {
+                Some(index) if index == binder => Ok(Some(self.position as i32)),
+                _ => Err(EvalError::UnknownProperty(binder.to_string())),
+            }
+        }
+    }
+
+    #[test]
+    fn index_read_in_integer_assignment_evaluates_to_the_position() {
+        let mut ctx = ItemCtx {
+            inner: MapCtx::new(&[("root.pos", 0)]),
+            binder: "x".into(),
+            index_binder: Some("i".into()),
+            items: vec![10, 20, 30],
+            position: 1,
+        };
+        let expr = HandlerExpr::Assign {
+            lhs: "root.pos".into(),
+            rhs: Box::new(HandlerExpr::IndexRead { binder: "i".into() }),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(1));
+        assert_eq!(ctx.inner.get("root.pos"), 1);
+    }
+
+    #[test]
+    fn item_read_in_integer_assignment_evaluates_to_the_element_at_the_position() {
+        let mut ctx = ItemCtx {
+            inner: MapCtx::new(&[("root.sel", 0)]),
+            binder: "x".into(),
+            index_binder: Some("i".into()),
+            items: vec![10, 20, 30],
+            position: 1,
+        };
+        let expr = HandlerExpr::Assign {
+            lhs: "root.sel".into(),
+            rhs: Box::new(HandlerExpr::ItemRead { binder: "x".into() }),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(20));
+        assert_eq!(ctx.inner.get("root.sel"), 20);
+    }
+
+    /// DD-V-029 boundary-condition test: the item read is past the end of
+    /// its collection (the handler's own earlier statement shortened it —
+    /// `xs = xs.drop-last()` then `root.n = item` in the same body, per
+    /// the T9 brief's fact 9 shape). See the task report for the
+    /// deliberately-wrong mutation this test was measured to redden.
+    #[test]
+    fn item_read_past_the_end_yields_item_out_of_range() {
+        let mut ctx = ItemCtx {
+            inner: MapCtx::new(&[]),
+            binder: "x".into(),
+            index_binder: None,
+            items: vec![10, 20],
+            // One past the last valid index (0, 1) — the position this
+            // row was generated at, now stale after a shrink.
+            position: 2,
+        };
+        let expr = HandlerExpr::ItemRead { binder: "x".into() };
+        assert_eq!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::ItemOutOfRange { binder: "x".into() })
+        );
+    }
+
+    #[test]
+    fn item_read_wrong_binder_is_an_error_not_silently_zero() {
+        let mut ctx = ItemCtx {
+            inner: MapCtx::new(&[]),
+            binder: "x".into(),
+            index_binder: None,
+            items: vec![10, 20],
+            position: 0,
+        };
+        let expr = HandlerExpr::ItemRead {
+            binder: "wrong".into(),
+        };
+        assert_eq!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::UnknownProperty("wrong".into()))
+        );
     }
 
     #[test]

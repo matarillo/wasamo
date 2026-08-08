@@ -6,7 +6,7 @@ use crate::layout::{
     self, Alignment, ChildSlots, LayoutChildSlot, LayoutError, LayoutNode, SizeConstraint,
     SlotData, TrackSize,
 };
-use crate::reactive::EffectHandle;
+use crate::reactive::{EffectHandle, ForItemContext};
 use crate::text::{TextRenderer, TypographyStyle};
 use std::ops::{Deref, DerefMut};
 use windows::{
@@ -506,6 +506,32 @@ pub struct WidgetNode {
     /// (both flags `false`, matching an un-annotated container) and only
     /// the IR loader ever writes a non-default value.
     focus_annotation: FocusAnnotation,
+    /// The generated subtree's loop scope (M4-Phase 2 T9, dsl_spec §4.19
+    /// "Per-item handlers"): `Some` for every node inside a `for` body
+    /// template, carrying the collection / binder / captured position a
+    /// per-item handler on this node resolves `item` / `index` against
+    /// *at invocation time* — not at generation time, which is what makes
+    /// a binder read belong to a position rather than to the value that
+    /// happened to be there when the subtree was built (dsl_spec §4.15
+    /// "Identity baseline").
+    ///
+    /// **One field, not a stack**: nested `for` is rejected at both
+    /// compiler gates (dsl_spec §4.15 "Out of scope"), so a node inside a
+    /// `for` body has at most one loop scope.
+    ///
+    /// **Exactly one writer** — the IR loader
+    /// (`ir_loader::build_node_with_loop_context`), through
+    /// [`Self::set_loop_scope`], from the *same* `loop_context` parameter
+    /// that function already threads into this subtree's per-item
+    /// *bindings*. One source for both is what keeps a handler's `item` /
+    /// `index` reads from drifting against a binding's — the same
+    /// single-writer discipline [`FocusAnnotation`]'s doc comment records
+    /// for its own field.
+    ///
+    /// Not `pub` and not `pub(crate)`: every reader is in this module
+    /// ([`signal_handlers_for`], which snapshots it alongside the inline
+    /// handler bodies it clones out of the node).
+    loop_scope: Option<ForItemContext>,
 }
 
 // ── Tree-mutation errors ──────────────────────────────────────────────────────
@@ -592,6 +618,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -619,6 +649,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -646,6 +680,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -689,6 +727,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -739,6 +781,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -784,6 +830,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -845,6 +895,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -883,6 +937,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -909,6 +967,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -1102,6 +1164,10 @@ impl WidgetNode {
             raster_scale: DipScale::default(),
             arranged_rect: None,
             focus_annotation: FocusAnnotation::default(),
+            // M4-Phase 2 T9: every constructor starts with no loop scope;
+            // the IR loader is the only writer (`set_loop_scope`), for a
+            // node it builds inside a `for` body template.
+            loop_scope: None,
         }))
     }
 
@@ -1170,6 +1236,20 @@ impl WidgetNode {
     /// no second writer to keep in step with this one.
     pub(crate) fn set_focus_annotation(&mut self, group: bool, modal_scope: bool) {
         self.focus_annotation = FocusAnnotation { group, modal_scope };
+    }
+
+    /// Write this node's loop scope (M4-Phase 2 T9, dsl_spec §4.19
+    /// "Per-item handlers"). **The only writer**: called once, from the
+    /// IR loader (`ir_loader::build_node_with_loop_context`), immediately
+    /// after construction, from the same `loop_context` parameter that
+    /// function already threads into this subtree's per-item bindings —
+    /// see the `loop_scope` field's doc comment for why one source
+    /// matters here. `None` for every node built outside a `for` body template
+    /// (every constructor's own initial value), matching how
+    /// [`Self::set_focus_annotation`] is the only writer of a non-default
+    /// [`FocusAnnotation`].
+    pub(crate) fn set_loop_scope(&mut self, scope: Option<ForItemContext>) {
+        self.loop_scope = scope;
     }
 
     /// The focus role and enabled state derivable from this node's widget
@@ -2978,6 +3058,14 @@ struct SignalHandlers {
     /// non-empty: a host listener is connected via
     /// `wasamo_signal_connect` — any widget kind.
     has_host_listener: bool,
+    /// This node's loop scope (M4-Phase 2 T9, dsl_spec §4.19 "Per-item
+    /// handlers"), cloned out of `WidgetNode::loop_scope` in the same
+    /// snapshot as `inline` — **not** read a second time later, because
+    /// by then a preceding handler in this same dispatch may already have
+    /// freed the node. `run_signal_handlers` selects the item-aware
+    /// evaluation context when this is `Some` and the plain one
+    /// otherwise.
+    loop_scope: Option<ForItemContext>,
 }
 
 /// Read-only: what would run for `signal` at `widget_ptr`, without running
@@ -3003,9 +3091,14 @@ unsafe fn signal_handlers_for(widget_ptr: *mut WidgetNode, signal: &str) -> Sign
         .map(|(_, expr)| expr.clone())
         .collect();
     let has_host_listener = !crate::registry::signal_tokens_for(widget_ptr, signal).is_empty();
+    // M4-Phase 2 T9: clone the loop scope out of the node in this same
+    // snapshot, beside `inline` — see `SignalHandlers::loop_scope`'s doc
+    // comment for why a second, later read would be unsound.
+    let loop_scope = node.loop_scope.clone();
     SignalHandlers {
         inline,
         has_host_listener,
+        loop_scope,
     }
 }
 
@@ -3050,9 +3143,23 @@ fn run_signal_handlers(widget_ptr: *mut WidgetNode, signal: &str, handlers: Sign
         // DD-M2-P3-003: catch_unwind wrapper logs errors and continues the
         // event loop; location is a coarse identifier (Phase 6 supplies
         // the component name prefix).
+        //
+        // M4-Phase 2 T9: the snapshot's loop scope (cloned alongside
+        // `inline` by `signal_handlers_for`, not re-read from the node)
+        // decides which evaluation context this handler body runs
+        // against — the item-aware one inside a `for` body, the plain
+        // one everywhere else.
         if let Some(reg) = registry.as_deref() {
-            let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
-            handler::invoke_handler(expr, &mut ctx, &location);
+            match &handlers.loop_scope {
+                Some(item) => {
+                    let mut ctx = crate::reactive::ForItemHandlerEvalContext::new(reg, item);
+                    handler::invoke_handler(expr, &mut ctx, &location);
+                }
+                None => {
+                    let mut ctx = crate::reactive::HandlerEvalContext::new(reg);
+                    handler::invoke_handler(expr, &mut ctx, &location);
+                }
+            }
         } else {
             let mut ctx = NullEvalContext;
             handler::invoke_handler(expr, &mut ctx, &location);

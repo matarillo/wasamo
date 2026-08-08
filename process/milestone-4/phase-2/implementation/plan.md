@@ -656,11 +656,59 @@ The four coupled answers M3-Phase 7 routed here:
   structural side-effect enumeration for subtree removal, listing
   handler registrations beside those bindings. This fails silently in
   one direction, so the enumeration is the check, not a rendered frame.
+  **The enumeration measured that a handler has no separate lifecycle to
+  release at all** — an inline body is owned data on the node and is
+  freed with it — so the only releasable thing a `for`-body child can
+  now hold is a host `wasamo_signal_connect` token, which
+  `widget_destroy` already severs. That is what the fixture drives.
 - **Identity** — a binder resolves at invocation time, so the handler
   belongs to a position. **Evidence must include a click after a
   collection mutation**; a test that only clicks a freshly generated row
   cannot distinguish invocation-time resolution from generation-time
-  capture.
+  capture. **The discriminator is a same-length whole-value reset**,
+  which dsl_spec §4.15 says makes no structural edit at all, so the rows
+  under test are provably the original ones (pinned by pointer identity
+  in the fixture, not assumed). It was measured rather than asserted: a
+  working generation-time-capture implementation reddens that fixture
+  **and nothing else in 1,244 tests** ([log.md](./log.md) §T9 close gate,
+  witness W-F).
+- **"The phase's only new IR content" was false as written, and the
+  review lane is corrected on the other ground** (start gate facts 2 and
+  3). `lower` already threaded the loop context into handler bodies,
+  `ItemRead` / `IndexRead` already existed, `emit` already wrote them,
+  and the IR text parser is shared between bindings and handlers — so
+  **no IR type, no grammar production and no lowering change** was
+  needed. What was outstanding is the half DD-005 names beside it: the
+  runtime's handler evaluation context. The lane stays **full
+  independent review** on the runtime structural trigger — a new retained
+  field on every `WidgetNode`, a change to the one snapshot all three
+  signal dispatchers share, and new arms in the evaluator.
+- **The scope rule is the only new authored rule; there is no type
+  rule.** Handler-body assignments are not type-checked at all today
+  (`root.n = "abc"` on an `i32` state passes `check` with exit 0), so a
+  type rule for binder reads alone would make handler position stricter
+  for a binder than for a literal. The consequence is recorded as
+  CF-T9-2: a scalar `string` state cannot be written from a handler at
+  all, for any right-hand side.
+- **The binder read had to reach three evaluators, not one** (found by
+  probe, closed here). Only `i32` collection appends go through
+  `evaluate`; a `string[]` append goes through `evaluate_binding` and
+  `evaluate_binding_part`, a `bool[]` append through
+  `evaluate_bool_assignment_value`. `labels = labels.append(label)`,
+  `labels = labels.append("row \{i}")` and `flags = flags.append(f)`
+  were accepted by both gates and could only ever log at click time. All
+  three now read their binder, each with the same out-of-range boundary.
+- **The loader had a two-gate divergence this task created**, measured
+  red before it was fixed: `validate_collection_element_expr` passed
+  `None` for the loop scope, which was correct only while no writable
+  expression could sit inside a `for` body, so `xs = xs.append(item)` was
+  accepted by `wasamoc check` and rejected by the loader.
+- **Two loader test premises were falsified rather than left to survive
+  silently.** The `dismiss` gate's `ControlFlow::For` arm was documented
+  as unreachable through `parse_ir` because the handler rejection
+  short-circuited ahead of it; admitting the handler makes it reachable,
+  and the bare-`key-down` gate with it. Both are now accept-and-reject
+  pairs.
 - **The focus record's anchors are node addresses, and `for` regeneration
   is where an address can be reused** (T7 close gate CF-T7-1). Freeing a
   subtree and allocating a new one inside the same drain is the nearest
@@ -669,11 +717,27 @@ The four coupled answers M3-Phase 7 routed here:
   since nothing dereferences an anchor — and narrow, because the seam
   rebases at the end of that same drain. This task is where the shape
   exists, so it is where the residual is checked rather than assumed.
+  **Checked, and the collision was not reached**: a fixture focuses the
+  last generated row and runs `xs.drop-last()` then `xs.append(9)` in one
+  handler body, and the run records the freed row and the row allocated
+  in the same message at *different* addresses. CF-T7-1 is therefore
+  **narrowed, not closed** — M4-Phase 2's nearest expressible shape does
+  not reproduce the reuse — and the fixture is retained as its tripwire,
+  asserting per arm so a collision becomes a named observation rather
+  than an allocator-dependent red (CF-T9-1).
 - **The M3-Phase 7 drain residuals are dispositioned in DD-001** (they
   do not fire). This task's click-after-mutation evidence is what
   exercises the nearest case, so the disposition is checked against
   something rather than asserted; a divergence goes in
-  [log.md](./log.md).
+  [log.md](./log.md). **There is one, and it is in the reason rather than
+  the result.** DD-001 says the case is safe because "the handler has
+  already returned when regeneration runs"; the fixture measures the
+  clicked row's own subtree already destroyed *and* the next statement
+  already failed, from one synchronous message — regeneration runs
+  **during** the handler. The conclusion (no cycle: regeneration
+  re-invokes no handler) is unaffected, so this is the "explanation
+  narrows" case, carried to T13 for the owner rather than settled from a
+  task close gate.
 - **The `for`-body handler rejection is intact on both gates** — T8
   touched neither `check_members_inner`'s `inside_for_template` arm nor
   `validate_node_references_in_scope`'s, so admission is still wholly
@@ -681,9 +745,12 @@ The four coupled answers M3-Phase 7 routed here:
   `IrHandler` now carry `arg`, so the loop scope travels beside an
   existing optional field; and `wasamo_ir::signal_key` is the function a
   per-item `key-down` would compose its storage key through, if
-  admission reaches that far.
+  admission reaches that far. **Both held**: `arg` needed no special
+  handling on the loop-scope path, and the loop scope is a *separate*
+  field on the node rather than something baked into the storage key, so
+  no second composer appeared.
 
-- [ ] T9
+- [x] T9
 
 ## T10 — Gallery slice (consumer A)
 
@@ -691,6 +758,11 @@ Wire the `.ui` end to end through `.ui` → IR → runtime, from at least
 one example host:
 
 - Thumbnail click opens the lightbox, carrying which thumbnail.
+  **It carries an index, not a label** (T9 close gate CF-T9-2): a handler
+  cannot write a scalar `string` state at all — there is no `set_string`
+  in the runtime for any right-hand side — so the per-item handler writes
+  `root.selected_index = index;`, which is §4.19's own example shape and
+  is what T9 landed end to end.
 - The lightbox is a **root `ZStack` branch** and stays one; its scrim is
   an authored covering widget, and it is what blocks background clicks —
   the scope confines the keyboard only.
@@ -846,6 +918,26 @@ The four controls from the [framing](../requirements/framing.md)
     reads, position-not-item identity, registration released with the
     generated subtree — matches what T9's click-after-mutation evidence
     landed;
+  - **§4.15's Diagnostics table still lists two rows T9 makes false**
+    (T9 close gate CF-T9-3): "Handler inside a `for` body" and "Binder
+    read in handler position" are listed as rejected shapes three
+    paragraphs above the subsection stating they are admitted. False
+    statements rather than gaps, so they are where this pass starts;
+  - **no section says a handler cannot write a scalar `string` state**
+    (T9 close gate CF-T9-2). There is no `set_string` in the runtime for
+    any right-hand side, and handler-body assignments are not
+    type-checked at all, so `root.s = "x"` is accepted at both gates and
+    logs at invocation. §4.19's per-item example writes an `i32` and so
+    never meets it. Either the limit is stated or it is recorded as
+    unspecified;
+  - **DD-M4-P2-001's reason for residual 1 not firing does not match the
+    runtime** (T9 close gate). "The handler has already returned when
+    regeneration runs" is false — a collection write regenerates inside
+    `Signal::set`, during the handler's own statement, which T9's F5
+    measures directly. The decision's *conclusion* (no cycle) holds, so
+    this is the "explanation narrows" case. **Owner-settled 2026-08-08:
+    a dated annotation on DD-M4-P2-001, not a supersede.** T13 writes it,
+    citing F5 as the measurement;
   - the recognised key table in §4.19 matches the checker's table, and
     §4.19 records that an unconsumed key reaches the default window
     procedure;

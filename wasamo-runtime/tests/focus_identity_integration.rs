@@ -866,3 +866,183 @@ fn structural_succession_lands_on_the_domains_first_surviving_stop() {
         },
     );
 }
+
+// ── Fixture — CF-T7-1: `for` regeneration frees and allocates in one drain ─
+
+/// M4-Phase 2 T7 close gate CF-T7-1, checked here rather than assumed
+/// (plan §T9: "this task is where the shape exists, so it is where the
+/// residual is checked"). A `FocusProjection` anchor is a **node address**,
+/// and `widget_destroy` can hand a freed address back to a later
+/// allocation — so an anchor naming a removed node can in principle match
+/// a *different*, newly built one. `for` regeneration is the nearest shape
+/// that does both halves close together: this handler shrinks the
+/// collection and then grows it back in two statements of one body, each
+/// draining synchronously, with the focus seam
+/// (`emit::flush_layout`'s Phase 2) rebasing once at the end of the
+/// message.
+///
+/// Declaration order: an "anchor" Button, then the `for`-generated rows,
+/// then the `Box` whose handler does the shrink-and-grow. The fixture
+/// focuses the **last row** — the one `xs.drop-last()` frees — because
+/// that is the node whose retained anchor could be handed to the row
+/// `xs.append(9)` allocates immediately afterwards.
+///
+/// This fixture **records** what the runtime does rather than pinning a
+/// behaviour a decision fixes: CF-T7-1's own bound is "focus lands on an
+/// unexpected widget, never an unsound read", because nothing dereferences
+/// an anchor. What must hold either way is the bound itself — the runtime
+/// stays `Healthy`, the record names a node that exists, and that node
+/// paints the indicator it claims.
+const FOR_REGENERATION_FREE_THEN_ALLOCATE_UI: &str = r#"component FocusIdentityForRegeneration inherits Window {
+    state xs: i32[] = [1, 2, 3]
+    VStack {
+        spacing: 0
+        padding: 0
+        Button { text: "anchor" }
+        for x in xs {
+            Button { text: "row \{x}" }
+        }
+        Box { aspect: 4:1 fill: #336699cc clicked => { xs = xs.drop-last(); xs = xs.append(9); } }
+    }
+}"#;
+
+#[test]
+fn a_for_regeneration_that_frees_and_allocates_leaves_a_consistent_focus_record() {
+    run_on_owning_runtime_thread_or_skip(
+        "T9 CF-T7-1: for regeneration frees and allocates in one message",
+        move || {
+            let ir = lower_ui_to_ir(FOR_REGENERATION_FREE_THEN_ALLOCATE_UI);
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "CF-T7-1 baseline");
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+
+                // root.children: [anchor, row 1, row 2, row 3, ctrl].
+                let (last_row_rect, ctrl_rect, freed_addr) = {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(
+                        root.children.len(),
+                        5,
+                        "fixture stopped discriminating: anchor + three rows + the control"
+                    );
+                    assert_eq!(label_of(root.children[0].as_ref()), "anchor");
+                    assert_eq!(label_of(root.children[3].as_ref()), "row 3");
+                    (
+                        root.children[3]
+                            .__arranged_rect_for_test()
+                            .expect("last row laid out"),
+                        root.children[4]
+                            .__arranged_rect_for_test()
+                            .expect("control laid out"),
+                        // The address CF-T7-1 is about: this node is freed
+                        // by `drop-last` and a new one is allocated by
+                        // `append` in the next statement.
+                        root.children[3].as_ref() as *const WidgetNode,
+                    )
+                };
+
+                // Focus the last row by clicking it: a Button is focusable,
+                // and a click focuses the nearest focusable at or above the
+                // resolved target (docs/dsl_spec.md §4.19 "Focus").
+                click_and_drain(
+                    hwnd,
+                    (last_row_rect.x + last_row_rect.width / 2.0) * factor,
+                    (last_row_rect.y + last_row_rect.height / 2.0) * factor,
+                );
+                assert_focused_stop(window, &[3], "row 3");
+
+                // The shape: free the focused row, then allocate a new one,
+                // both inside this one message.
+                click_and_drain(
+                    hwnd,
+                    (ctrl_rect.x + ctrl_rect.width / 2.0) * factor,
+                    (ctrl_rect.y + ctrl_rect.height / 2.0) * factor,
+                );
+
+                let path = ffi::__focus_path_for_test(window);
+                let (child_count, last_label, health, new_addr) = {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    (
+                        root.children.len(),
+                        label_of(root.children[3].as_ref()),
+                        ffi::__runtime_health_for_test(),
+                        root.children[3].as_ref() as *const WidgetNode,
+                    )
+                };
+                // Whether the allocator actually handed the freed address
+                // back is not something this fixture can force, and a run
+                // where it did not would be a run that never reached the
+                // collision at all. Report it either way rather than let a
+                // green result stand for more than it measured; the value
+                // observed on the recording run is in
+                // process/milestone-4/phase-2/implementation/log.md §T9.
+                eprintln!(
+                    "CF-T7-1 measurement: freed row address {freed_addr:p}, address of the row \
+                     allocated in the same message {new_addr:p} — reused: {}",
+                    freed_addr == new_addr
+                );
+
+                assert_eq!(
+                    (child_count, last_label.as_str()),
+                    (5, "row 9"),
+                    "the handler must have removed the tail row and appended a fresh one, or \
+                     this fixture is not exercising a free-then-allocate at all"
+                );
+                assert_eq!(
+                    health, "Healthy",
+                    "CF-T7-1's bound: an address reuse may put focus somewhere unexpected, but \
+                     it must never make the runtime unsound"
+                );
+
+                // Whatever the record names, it must name a node that
+                // exists and that actually paints the indicator — the
+                // second half of CF-T7-1's bound.
+                match &path {
+                    None => {}
+                    Some(p) => {
+                        let root = (*window).root_widget.as_ref().unwrap();
+                        let node = node_at_path(root, p);
+                        assert_eq!(
+                            node.__button_focused_for_test(),
+                            Some(true),
+                            "the record names {p:?} ({}), which must paint the indicator it \
+                             claims",
+                            label_of(node)
+                        );
+                    }
+                }
+
+                // The outcome is asserted per arm rather than
+                // unconditionally, because which arm runs depends on the
+                // allocator, and a test whose pass/fail depends on that is
+                // a flake waiting to be re-rolled (implementation-gates
+                // trap #6). Naming both arms turns the collision into a
+                // *named observation* if it ever occurs, instead of a
+                // surprise red.
+                if freed_addr == new_addr {
+                    // CF-T7-1's collision, actually reached. The retained
+                    // anchor matches a different node, so focus stays on
+                    // the row `append` built. Bounded, as CF-T7-1 records:
+                    // an unexpected focus target, never an unsound read.
+                    assert_eq!(
+                        path.as_deref(),
+                        Some(&[3usize][..]),
+                        "CF-T7-1 reached: the freed row's address was reused, so the retained \
+                         anchor matched the newly allocated row"
+                    );
+                } else {
+                    assert_eq!(
+                        path.as_deref(),
+                        Some(&[0usize][..]),
+                        "the freed focused row's anchor matched nothing, so focus fell to the \
+                         domain's first surviving stop (the 'anchor' Button) — T5's lazy \
+                         successor rule"
+                    );
+                }
+
+                ffi::wasamo_window_destroy(window);
+            }
+        },
+    );
+}
