@@ -3977,3 +3977,316 @@ rather than at close.
   writes state needs the message loop pumped (`key_and_drain`) for the
   drain's Phase 2 to run, exactly as `escapes_two_legs`'s leg A does —
   `SendMessageW` alone reaches the dispatch but not the re-layout.
+
+### Close gate (recorded 2026-08-08)
+
+Commits:
+
+| commit | content |
+|---|---|
+| `36829ea` | start gate (normative-answer table, three normative gaps, nine measured facts, trap selection, corrected review lane, boundaries) |
+| `ef56c68` | `clicked` on every widget — both per-kind blanket handler rules removed, both gates' tests re-pointed |
+| `3d3785e` | the two Button-family defects (CF-1 / CF-2) and §4.16's example |
+| `bc75589` | the `key-down("<key>")` compiler surface (grammar, AST, checker, IR, emit, loader parse + second gate) |
+| `9c378e6` | the `key-down` runtime dispatch (`key_name_for_vk`, `key_down_on_key`, `deliver_key_down`, the `WM_KEYDOWN` arm, seven fixtures) |
+| `7738882` | the `clicked`-widening bound — a disabled Button occluding a lower sibling |
+| `d7c6147` | three claims outside the diff that the key walk made incomplete |
+
+#### #1 — Call-site audit table
+
+Two schema types gained a field. Neither derives `Default` and neither
+construction site used `..`, so **the compiler enumerated the migration**;
+the greps below are for the shapes a compiler cannot enumerate — filter
+helpers keyed on a signal name, which absorb a new one silently.
+
+**Compiler-forced sites** (every one of them changed):
+
+| Site | Type | Classification |
+|---|---|---|
+| `wasamo-ir/src/lib.rs:194` | `IrHandler` definition | field added |
+| `wasamoc/src/lower.rs:170` | `Member::SignalHandler` destructure → `IrHandler` construction | must-carry; `arg` threaded |
+| `wasamoc/src/parser.rs:634` | `Member::SignalHandler` construction | must-produce; the new production writes it |
+| `wasamoc/src/check.rs:2470` | `Member::SignalHandler` destructure (no `..`) | must-dispatch; the three new rules |
+| `wasamo-runtime/src/ir_loader.rs:2943` | `parse_handler` → `IrHandler` construction | must-parse; optional `( STRING )` |
+| `wasamo-runtime/src/ir_loader.rs:~5890` | hand-built `IrHandler` literal in the round-trip test | test fixture; `arg: None` |
+
+**Sites the compiler did *not* force**, found by
+`rg '\.signal\b|signal ==|signal !=|"clicked"|"dismiss"|"key-down"|inline_handlers|Member::SignalHandler'`
+over `wasamoc/src`, `wasamo-runtime/src`, `wasamo-ir/src`, `wasamo-dll/src`,
+`bindings`, `examples`:
+
+| Site | What it does | Classification and reason |
+|---|---|---|
+| `check.rs:1440` (pre-T8) `signal != "dismiss"` in `check_grid` | rejected every non-`dismiss` handler on a `Grid` | **must-change** — the trap's own shape: a filter keyed on one name silently drops every new one. Removed (`ef56c68`) |
+| `ir_loader.rs:1197` (pre-T8) `h.signal != "dismiss"` in `validate_phase6_zstack_node_invariants` | same, on the loader side | **must-change**. Removed (`ef56c68`) |
+| `ir_loader.rs:1370` `h.signal == "dismiss"` | T6's `dismiss` admission gate | ignore-OK — keyed on `dismiss` **positively**, so a new signal name is not affected. Pinned by the two `dismiss` tests re-run on both gates |
+| `ir_loader.rs:1428` `handler.signal == "key-down"` | T8's own second gate | new; its three arms each have a firing test (#5) |
+| `ir_loader.rs:1727` `handler.signal` in a diagnostic | formats the name into a message | ignore-OK — display only. The message omits `arg`, which is a legibility residual rather than a correctness one (#8) |
+| `check.rs:2489` `signal == "dismiss"` | T6's checker admission gate | ignore-OK, same reason as `ir_loader.rs:1370` |
+| `check.rs:1330`, `check.rs:3262` `Member::SignalHandler { span, .. }` | the `if` / `for` body structural rejections | ignore-OK — they reject *any* handler in that position regardless of name, so a new signal cannot slip past |
+| `check.rs:1495` `Member::SignalHandler { .. }` | `check_grid`'s now-inert arm | ignore-OK by construction — this is the removed rule's replacement |
+| `lower.rs:53` `Member::SignalHandler { .. }` | the state/property collection pass | ignore-OK — handlers contribute no state |
+| `widget.rs:1610` `set_inline_handler` | the one write of the storage key | must-change: the loader now passes `signal_key`'s composed form. Documented on the function (`d7c6147`) |
+| `widget.rs:2957` `inline_handlers` filter in `signal_handlers_for` | the one read of the storage key | ignore-OK — it compares whole names, and both sides compose through `signal_key` (#4) |
+| `widget.rs:1733`, `widget.rs:2907`, `widget.rs:3059` — `"dismiss"` / `"clicked"` literals at dispatch | the two pre-T8 dispatch sites | ignore-OK — `signal_key(name, None) == name`, so their keys are byte-identical to before |
+| `abi.rs:1149` `let name = b"clicked"` | `wasamo_button_set_clicked`'s wrapper over `wasamo_signal_connect` | ignore-OK — a no-argument signal; the host path already admits any name, which is why no ABI function was needed |
+| `wasamoc/src/emit.rs:240/245` | IR text emission | must-change; the `Some` arm added, the `None` arm byte-identical (pinned by `no_argument_handler_still_emits_unchanged_form`) |
+
+**Tests deliberately not added**: none. Every must-change site above has a
+firing test in #5.
+
+#### #2 — Structural side-effect enumeration
+
+The new `WM_KEYDOWN` arm is the structural change. What a key dispatch
+pulls in, and what the walk must not observe mid-flight:
+
+| Derived effect | How it is handled |
+|---|---|
+| **The dispatch chain across a handler's synchronous rebuild** | `deliver_key_down` resolves every chain node to a raw pointer **before any handler runs**, and returns as soon as one runs — so no ancestor is ever visited after user code has run. This is `hit_test_click`'s argument, inherited rather than restated (its doc comment says so explicitly) |
+| **Inline bodies vs. the node they live on** | `signal_handlers_for` clones every inline body out of the node before any of them runs; `run_signal_handlers`'s host-enqueue step compares `widget_ptr` and never dereferences it. Both properties are the ones `clicked` and `dismiss` already rest on |
+| **Reactive drain** | A handler's `Signal::set` drains its effects synchronously, exactly as a `clicked` handler's does. `key_down_on_key` writes no focus state and enqueues nothing of its own |
+| **Layout invalidation → drain Phase 2** | A structural mutation inside the handler reaches `emit::flush_layout` at the message-loop boundary, the same seam a click's does. Fixture 7 asserts it by reading a `__arranged_rect_for_test()` that only exists once Phase 2 has run, and needs `key_and_drain` (not `SendMessageW`) to observe it |
+| **Focus record vs. the mutation** | `flush_layout` runs `focus::sync_scopes_to_tree`, which rebases. `key_down_on_key` deliberately performs **no** focus write of its own — the same division `dismiss_on_key` records |
+| **The retained focus id's coordinate system** | `key_down_on_key` projects and rebases **before** reading `focus.core`, the same first step the other three `*_on_key` functions take. It does **not** call `focused_path`, which cannot rebase — see #8 |
+| **`WM_KEYDOWN`'s return path** | Unchanged for an unconsumed key: no `return`, so control still reaches `DefWindowProcW`. The consuming arm returns `LRESULT(0)` like its three siblings |
+| **The host key slot** | Now downstream of one more consumer. Pinned in both directions by `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot` |
+
+The Button-family child rejection has a structural side effect of its own:
+it removes a shape `sync_visuals`' child-count assertion used to abort on.
+That assertion is **kept** — it is still the tripwire for the direct C
+path, which stays ungated by design.
+
+#### #3 — Every `SetOffset` / `SetSize` in the runtime, with its pass
+
+Carried from T5 as the standing artifact of any task that could add a
+geometry write. `rg 'SetOffset|SetSize'` over `wasamo-runtime/src`,
+`wasamo-dll/src`, `bindings`, `examples` returns **six**, all inside
+`sync_visuals` (`widget.rs:2710 / 2715 / 2759 / 2765 / 2795 / 2801`) —
+unchanged from T5, T6 and T7. This task creates no `Visual` and writes no
+Composition geometry.
+
+#### #4 — Parallel-data sync
+
+Two derived pairs, each given one writer.
+
+| Pair | Risk | How it is closed |
+|---|---|---|
+| **The 22 recognised key names**: the spec table, the checker's admission rule, and the runtime's virtual-key map | A name the checker accepts with no virtual-key mapping is a handler that silently never fires — this phase's signature failure | One owner, `wasamo_ir::RECOGNISED_KEY_NAMES`, in the crate `wasamoc` and `wasamo-runtime` both already depend on. The checker calls `is_recognised_key_name`; there is no second list. The runtime's `key_name_for_vk` is the one place a name still appears twice, and `key_name_for_vk_produces_every_recognised_key_name` sweeps every `u16` and asserts the resulting set covers the shared table in full — mutation-verified (#6, W11) |
+| **The handler's storage spelling**: written by the loader at attachment, read by the dispatcher at lookup | Two composers could disagree on the exact string and the handler would never be found | One function, `wasamo_ir::signal_key`. `rg` for `format!("{}(\"` and for `key-down(` over `wasamo-runtime/src` finds it composed nowhere else. `signal_key(name, None) == name`, so `clicked` / `dismiss` storage is byte-identical to pre-T8 |
+
+#### #5 — Branch tests, each fired directly
+
+Each row names the production path the test reaches the branch through
+(the T7 retrospective's close-gate corrective — "a fixture exists" is not
+"the fixture fires this branch").
+
+| Branch | Test | Production path it reaches the branch through |
+|---|---|---|
+| `check_grid` no longer rejects a handler | `clicked_handler_on_grid_accepted` | `check_members_inner` → `check_grid` over a Grid's own members |
+| the generic `dismiss` rule now owns Grid | `dismiss_handler_on_grid_without_modal_scope_rejected_by_generic_rule` | `check_members_inner`'s `SignalHandler` arm; asserts the message is the generic one and **not** the removed Grid-specific one |
+| the ZStack loader gate no longer rejects a handler | `zstack_clicked_handler_validates`, `grid_clicked_handler_validates` | `validate` → `validate_phase6_zstack_node_invariants` |
+| the generic `dismiss` rule still owns ZStack | `dismiss_handler_on_zstack_without_modal_scope_prop_rejected`, `dismiss_handler_accepted_on_zstack_carrying_modal_scope` | `validate` → `validate_focus_annotation_invariants` |
+| Button-family child, checker | `button_with_widget_child_rejected`, `togglebutton_with_widget_child_rejected` | `check_members_inner`'s `WidgetDecl` arm → `check_button_family_children` |
+| …counting conditional / `for` members too | `button_with_conditional_member_rejected`, `button_with_for_member_rejected` | same; measured first that neither `check_if_body` nor `check_for_member` already rejected those positions inside a Button |
+| …without rejecting a legitimate Button | `button_with_only_admitted_members_accepted` | same arm, the control leg |
+| Button-family child, loader | `validate_rejects_button_with_widget_child`, `validate_rejects_togglebutton_with_widget_child`, `childless_button_is_valid` | `validate` → `validate_phase2_node_invariants` |
+| literal `enabled` on `Button` | `literal_enabled_false_on_plain_button_is_respected`, `button_with_no_enabled_prop_constructs_enabled` | `.ui` → `wasamoc` → IR → `construct_widget`'s `"Button"` arm, read back through `__button_enabled_for_test` |
+| the `(` member-dispatch route | `key_down_handler_parses_with_string_argument`, `signal_handler_no_arg_still_parses_with_arg_none` | `parse_member` → `parse_signal_handler` |
+| the four parser rejects | `signal_handler_arg_empty_parens_rejected`, `_bare_ident_rejected`, `_unclosed_paren_rejected`, `_missing_arrow_rejected` (plus `_interpolated_string_rejected`) | `parse_signal_handler` → `parse_signal_handler_arg` / `expect_rparen` |
+| the Grid track-list stop set | `grid_track_list_terminates_before_a_parenthesised_signal_handler` + `grid_track_list_still_absorbs_a_bare_word_track` | `parse_grid_track_list`'s word-continuation lookahead — pinned at the sub-parser's own layer, not only through the checker test that first caught it |
+| bare `key-down`, checker | `key_down_without_argument_rejected` | `check_members_inner`'s `SignalHandler` arm |
+| unrecognised key, checker | `key_down_unrecognised_key_name_rejected`, `key_down_modifier_combo_rejected_as_unrecognised` | same arm → `wasamo_ir::is_recognised_key_name` |
+| argument on a signal that takes none | `argument_on_clicked_rejected`, `argument_on_dismiss_rejected` | same arm's `else if arg.is_some()` |
+| the accept side, on three kinds | `key_down_accepted_on_box` / `_on_button` / `_on_grid`, `key_down_recognised_key_names_spot_check_accepted` | same arm, falling through every reject |
+| the same three rules, loader | `key_down_without_argument_rejected_at_validate`, `key_down_unrecognised_key_name_rejected_at_validate`, `argument_on_clicked_rejected_at_validate` | `validate` → `validate_key_down_invariants` |
+| the IR argument round-trip | `key_down_handler_argument_emitted_in_parenthesised_form`, `no_argument_handler_still_emits_unchanged_form`, `key_down_handler_arg_survives_lowering`, `key_down_handler_surface_emits_parenthesised_argument`, `key_down_handler_parses_with_string_argument` (loader), `clicked_handler_still_parses_with_arg_none` | `lower` → `emit` → the loader's `parse_handler` |
+| the vk map's completeness | `key_name_for_vk_produces_every_recognised_key_name`, `every_name_key_name_for_vk_can_produce_is_recognised`, `vk_tab_is_not_authorable_as_a_key_down_name` | `key_name_for_vk` directly |
+| the walk fires at all, from the `traversal_root` start | `key_down_fires_on_the_root_box_via_the_traversal_root_start` | real `WM_KEYDOWN` → `key_down_on_key` → `deliver_key_down`; asserts `__focus_path_for_test == None` first, so the start it took is stated |
+| the ancestor walk | `key_down_reaches_an_ancestor_containers_handler` | same, with focus established by a real Tab |
+| first match consumes | `key_down_first_match_on_the_focused_node_consumes_before_any_ancestor` | same |
+| arrows, both legs | `key_down_arrow_two_legs_inside_and_outside_a_focus_group` | `arrow_on_key` consuming ahead of `key_down_on_key`; the second leg asserts the group movement actually happened |
+| Escape, both legs | `key_down_escape_two_legs_with_and_without_an_entered_modal_scope` | `dismiss_on_key` consuming ahead; needs `key_and_drain` for the scope's removal and restoration |
+| the host key slot, both legs | `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot` | the `WM_KEYDOWN` arm's ordering itself — **the one branch every other fixture leaves unpinned** (#6, W12) |
+| the drain path | `a_key_down_handlers_state_write_re_lays_out_through_the_same_drain_clicks_use` | `key_and_drain` → `emit::flush_layout`; asserts a rectangle only Phase 2 writes |
+| the `clicked` widening's occlusion bound | `a_disabled_button_occludes_a_lower_sibling_it_paints_over` | `hit_test_click` → `resolve_topmost`; two legs, so "the counter stayed zero" cannot be satisfied by a Box that never receives clicks |
+
+**No branch was added without a firing test**, and one branch was
+*declined* for that reason: `deliver_key_down` has **no `enabled`
+suppression arm**. §4.8's disabled contract is written over clicks, and
+the case is unreachable from any authored tree — a disabled Button is
+excluded from `collect_stops` / `focus_landing` so it can never be the
+focused start, and after this task a Button can carry no children so it
+can never be a non-start node on a chain. The reasoning is on the
+function rather than in a branch no test could fire.
+
+#### #6 — Mutation witnesses
+
+Every mutation was applied by the lead, confirmed present by re-reading
+the file, run, then reverted and the revert confirmed by re-reading and
+`git diff`.
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W1** | `construct_widget`'s `"Button"` arm calls `WidgetNode::button` again, dropping `initial_enabled` | `literal_enabled_false_on_plain_button_is_respected` **only** | The CF-2 fix is what the test measures; the no-prop control stays green, so the test cannot pass by always-disabling |
+| **W2** | the `check_button_family_children` call guarded off | all four Button-child rejects; the control stays green | The checker rule is load-bearing for all four shapes |
+| **W3** | the loader's Button-family child rule guarded off | `validate_rejects_button_with_widget_child`, `..._togglebutton_...` | The second gate is independently pinned |
+| **W4** | the rule counts `WidgetDecl` only, dropping `Conditional` / `For` | exactly `button_with_conditional_member_rejected` and `button_with_for_member_rejected` | The completeness half is real coverage, not incidental |
+| **W5** | `Token::LParen` removed from `parse_grid_track_list`'s stop set | `grid_track_list_terminates_before_a_parenthesised_signal_handler` **and** `key_down_accepted_on_grid` | The shared sub-parser's change is pinned at its own layer as well as through the checker |
+| **W6** | `is_recognised_key_name` returns `true` unconditionally | the `wasamo-ir` reject test, both checker unrecognised tests, and the loader's | One shared table, three consumers, all pinned |
+| **W7 / W8** | the checker's `key-down` block and its `arg.is_some()` sibling both guarded off | all five checker key-down rejects | Each of the three rules is separately load-bearing |
+| **W10** | `validate_key_down_invariants` no longer called from `validate` | all three loader key-down rejects | The second gate is not incidental |
+| **W11** | the `VK_F12` arm removed from `key_name_for_vk` | `key_name_for_vk_produces_every_recognised_key_name` | The anti-drift test detects a table/map divergence, which is the whole reason it exists |
+| **W12** | the consuming `return LRESULT(0)` after `key_down_on_key` removed | **nothing — the entire suite stayed green** | **This is the witness that changed the task.** Every other fixture reads handler *effects*, so the arm's position relative to the host key slot was unpinned in one direction. `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot` was written in response, and the mutation re-run against it goes red |
+| **W14** | the `traversal_root` fallback dropped, so nothing focused means no dispatch | `key_down_fires_on_the_root_box_via_the_traversal_root_start` | The start-node reading of §4.19 is asserted, not assumed |
+| **W15a** | `deliver_key_down` walks only the start node, not `dispatch_chain` | `key_down_reaches_an_ancestor_containers_handler` and the host-slot fixture | The ancestor walk is real |
+| **W15b** | `deliver_key_down` keeps walking after a handler runs | `key_down_first_match_on_the_focused_node_consumes_before_any_ancestor` and the host-slot fixture | First-match consumption is real |
+
+W12 is recorded in full because it is a **method failure caught by the
+method**: the close gate's own branch table would have listed seven key
+fixtures against an arm none of them constrained.
+
+#### #7 — Deterministic-failure disposition
+
+Trap 6 stayed armed and did not fire. No test failed non-deterministically
+at any point; the only red runs were the mutation witnesses above, each
+deliberate, each reverted.
+
+One **deterministic** failure occurred during implementation and was root-
+caused rather than worked around: adding the `(` route to member dispatch
+broke `key_down_accepted_on_grid` with ``expected member, found `(` ``. The
+cause was `parse_grid_track_list`'s word-continuation lookahead treating
+`key-down(` as a trailing track word — a shared sub-parser whose stop set
+did not know about the new production. Fixed at the stop set, and pinned
+with both legs (W5) rather than only through the checker test that
+surfaced it.
+
+#### #8 — Carry-forward
+
+| Constraint | Evidence | Placement | Re-trigger criterion |
+|---|---|---|---|
+| **CF-T8-1 — Button keyboard activation does not exist, and two normative sentences say it does.** `rg "VK_RETURN\|VK_SPACE"` over `wasamo-runtime/src` returns nothing and `run_clicked_handlers` has exactly one caller, `hit_test_click`. §4.19 ("A Button additionally raises it from keyboard activation") and §4.8 ("cannot be reached or activated from the keyboard", of a disabled one) both describe behaviour the runtime has never had, and plan §T8's "Button keeps … its keyboard activation" presupposes it | Start gate fact 6 | `finding` → **owner**, then T13 | Building it is not free: `Enter` and `Space` would join §4.19's "keys the runtime keeps" table, which does not list them, so an authored `key-down("Enter")` would silently never fire while a Button is focused. That is a surface decision of the same kind CF-1 / CF-2 received, not an implementation detail — so it is an owner disposition. If the answer is "the spec wording narrows", T13 records it |
+| **CF-T8-2 — `Text` and `Rectangle` carry the identical childless-layout defect, and are deliberately not rejected.** `build_layout_tree` maps all four of `Rectangle` / `Text` / `Button` / `ToggleButton` to a childless `LayoutNode::rectangle`; `check` accepts a widget child on all four | Start gate fact 4 (probe, exit 0 on all four shapes) | `finding` → **owner**, then whichever task narrows | The owner's 2026-08-07 disposition and the [candidate pool](../../../candidate-pool.md) row both name the **Button family** ("a `Button` / `ToggleButton` holds an authored subtree"), so extending the reject to `Text` / `Rectangle` would narrow an authored surface no decision covers. Re-trigger: the first `.ui` found in the wild carrying such a child, or M5's widget set deciding what a content-holding control is |
+| **CF-T8-3 — three normative gaps around the new production.** §3's grammar is still `signal_handler ::= IDENT "=>" block` and its §Disambiguation table has no `IDENT` `(` row; §8.8's IR grammar is still `handler ::= "on" IDENT "{" expr "}"`; §4.5 still reads "The only recognized signal name is `clicked`" (already false after T6's `dismiss`) | Start gate §Three places where the normative text does not answer | `finding` → **T13** | T13 owns the Moment 2 re-verification. The code landed here is what the wording must be checked against; writing normative prose was outside this task's boundary |
+| **CF-T8-4 — an unrecognised *signal* name is accepted on every widget kind and silently never fires.** `Box { totally_unknown_signal => { } }` passes `check` and the loader. `Grid` was the one kind that rejected it, and this task removed that rule in the direction of uniformity | Start gate fact 2 (probe, exit 0) | `finding` → **T13 or a later phase** | The gap is pre-existing and is now uniform rather than one-kind-exceptional. Adding a diagnostic narrows a surface every kind accepts today, which no decision in the set asks for. Re-trigger: any phase adding a fourth signal name, or the first report of a handler that never fired |
+| **CF-T8-5 — the key walk goes upward only, so a `key-down` handler below the walk's start can never fire.** With nothing focused the start is `traversal_root` (the tree root when no scope is entered), and `dispatch_chain` yields the start and its **prefixes** — never descendants. A handler on a non-root widget therefore needs focus at or below it | `key_down_fires_on_the_root_box_via_the_traversal_root_start`, whose fixture UI comment records the constraint; `hit::dispatch_chain`'s own doc comment | `carry-forward` → this ledger, and `doc-folded` → the fixture's `ROOT_BOX_KEY_DOWN_UI` comment and `deliver_key_down`'s doc | **T10.** The gallery's Left/Right handlers sit on the lightbox's `modal-scope` container, and entry moves focus to the scope's first stop — a descendant — so the walk reaches them. That is a property of entry, not an accident, and T10 must not move those handlers below whatever the scope focuses |
+| **CF-T8-6 — the `key-down` host-listener path has no test of its own.** A `wasamo_signal_connect("key-down(\"ArrowLeft\")")` listener would fire the `has_host_listener` branch of `deliver_key_down`'s emptiness check and `run_signal_handlers`'s enqueue step | The branch is the one `clicked`'s host fixture (`a_host_signal_listener_on_a_non_button_widget_consumes_the_walk_until_disconnected`) already fires; only the `key-down` instantiation is untested | `carry-forward` → this ledger | Exactly the position T7 recorded for `dismiss`'s host delivery, and the same reasoning: the branch is fired, the instantiation is not. Re-trigger: M4-Phase 7, the milestone's ABI phase, or any host that connects a key signal |
+| **CF-T7-2 is touched and not closed, and its prose is still true.** The key walk is CF-T7-2's stated re-trigger ("the first production reader of `focused_path`"), and the shape that avoids firing it was taken deliberately: `key_down_on_key` projects and rebases like the other three `*_on_key` functions instead of calling `focused_path`, which takes `&WindowFocus` and cannot rebase | `focused_path`'s doc comment re-read at this close gate — its claim that "the exposure is bounded by this function's only caller, `ffi::__focus_path_for_test`" is **still accurate**, verified by `rg focused_path` returning that one caller | no new row; CF-T7-2 stands as T7 recorded it | Unchanged: the first production reader of `focused_path`, or a task giving an ABI-created node a focus annotation |
+
+#### Re-decided at close
+
+The start gate selected traps 1, 2, 3, 4 and 5, armed 6, and declined 7.
+**The selection survived**, and each call is confirmed by what was built:
+the two uncompiler-enumerable filters were real and are in the audit table
+(1); the side-effect enumeration is what placed the arm in the `WM_KEYDOWN`
+ordering and identified the drain question fixture 7 asserts (2); two
+derived pairs were given one owner each, one of them mutation-verified (3);
+every authored arm has a firing test, and one arm was declined *because* no
+test could fire it (4); six carry-forwards are recorded with re-triggers
+(5); trap 6 stayed armed and did not fire, though one deterministic failure
+was root-caused rather than re-rolled (#7); and 7 stayed non-applicable —
+nothing this task built paints.
+
+**Two things were built that the gate did not name.** The Grid track-list
+stop set (a shared sub-parser the new production collides with, found by a
+deterministic failure) and `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`
+(written after W12 measured the arm's placement to be unpinned). Both are
+strengthenings within the selected traps rather than deviations, and
+neither changes the review lane.
+
+**The lane stays the corrected one — full independent review** — for the
+reasons the start gate recorded, and the trap-#4 branch check composes into
+it rather than being replaced by it.
+
+#### Re-audit of the whole task list
+
+Per [plan.md](./plan.md) §Cross-task obligations, the full list was re-read
+at this close gate rather than only T8's item.
+
+- **T9** — inherits the `for`-body handler rejection **intact on both
+  gates**: `check_members_inner`'s `inside_for_template` arm and
+  `validate_node_references_in_scope`'s are untouched. What is new for T9
+  is that `Member::SignalHandler` and `IrHandler` now carry `arg`, so the
+  loop scope it must thread into handler bodies travels beside an existing
+  optional field rather than into a two-field struct — and `signal_key` is
+  the function a per-item `key-down` would compose its storage key through,
+  if T9's admission reaches that far. CF-T7-1 (anchor address reuse) is
+  unchanged and still T9's.
+- **T10** — inherits **CF-T8-5**: the walk is upward-only, so the gallery's
+  `key-down` handlers must sit at or above whatever the scope focuses.
+  Also inherits a smaller surface than the plan predicted in one place and
+  a wider one in another: `Grid` and `ZStack` now accept `clicked`, and a
+  `Button` may no longer carry a child (nothing in the shipped `.ui` files
+  does — verified by building all three example hosts).
+- **T11** — unchanged. Touch enters `hit_test_click`; nothing in this task
+  touches the pointer path. Whether a touch contact moves focus is still
+  T11's explicit decision.
+- **T12** — control D (Esc closes the lightbox / an unrelated key does not)
+  now has a runtime that can distinguish the two: before this task an
+  "unrelated key" had no authored path to fire on at all. Its "unrelated
+  key" leg should use a **recognised** key with no handler, which is what
+  `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot` pins at
+  the state level.
+- **T13** — gains **three** re-verification items beyond the three T7 left:
+  CF-T8-3's three normative gaps (§3's grammar production, §8.8's IR
+  grammar, §4.5's stale sentence), CF-T8-1 (whether §4.19 / §4.8's Button
+  keyboard-activation sentences describe the landed runtime), and CF-T8-4
+  (whether an unrecognised signal name should be a diagnostic). §4.16's
+  example is **corrected here**, so T13's check of it is a confirmation
+  rather than a repair. §4.19's recognised-key table and its "keys the
+  runtime keeps" table are both now checkable against named code
+  (`RECOGNISED_KEY_NAMES`, and the four-arm `WM_KEYDOWN` order).
+- **Cross-task obligation "no new ABI function"** — held, and positively
+  evidenced: `wasamo_signal_connect` already admits an arbitrary signal
+  name, so a host listener on `key-down("ArrowLeft")` is the vocabulary
+  widening [constraints §2](../requirements/constraints.md) permits rather
+  than a signature change. No `extern "C"` function was added or altered.
+- **Cross-task obligation "every task that measures something re-reads the
+  whole task list"** — discharged here.
+
+#### Verification means
+
+Run against the **final branch state**.
+
+`cargo fmt --all -- --check` zero exit, `git diff --check` clean,
+`cargo clean` (11,505 files / 3.0 GiB removed), then
+`cargo build --release --workspace` 1m26s success,
+`cargo build --workspace` 1m24s success, and
+`cargo test --workspace --no-fail-fast` **48 binaries/sections, 1,201
+passed, 0 failed, 0 ignored**. T7's baseline was 1,145 across 47 sections;
+the extra section is `tests/key_down_integration.rs`, and the 56 added
+tests reconcile exactly against a per-file `#[test]` count taken between
+`723298d` and this branch: `wasamo-ir` +5, `check.rs` +16, `parser.rs` +9,
+`lower.rs` +1, `emit.rs` +2, `roundtrip.rs` +1, `ir_loader.rs` +9,
+`focus.rs` +3, `togglebutton_runtime_integration.rs` +2,
+`event_routing_integration.rs` +1, `key_down_integration.rs` +7.
+
+**The new fixtures ran rather than skipped**, verified by running
+`key_down_integration` with `--nocapture` and confirming the shared guard's
+`skipping …: runtime compositor unavailable` line does not appear.
+`tests/common/mod.rs` was not touched, so the `0x80070005` two-conjunct
+check ([constraints §8](../requirements/constraints.md)) is intact and the
+standing obligation to verify a newly authored guard does not apply — no
+guard was authored.
+
+`cargo build -p counter-rust -p gallery-rust -p bool-demo-rust` succeeds,
+which is what would catch a shipped `.ui` tripping either new reject: those
+hosts run `wasamoc` over `counter.ui`, `gallery.ui` and `bool-demo.ui` at
+build time.
+
+**What this task's evidence cannot show, stated rather than implied.**
+
+- Every fixture runs at 96 DPI and scale 1. Key delivery is
+  geometry-independent, and the one click-bearing fixture added here (the
+  occlusion leg) derives its coordinates from the scale the runtime
+  committed — but nothing here re-exercises the pointer conversion T2's
+  non-unit-scale fixture owns, and that fixture is unchanged and green.
+- **`key_down_on_key`'s `rebase` call is not pinned by any test in this
+  task.** Fixture 7 performs a key-driven structural mutation but sends no
+  second key afterwards, so no fixture here observes a retained id being
+  re-expressed between two key presses. It is the same call the other three
+  `*_on_key` functions make, and T7's fixtures do exercise it through them;
+  recorded as a residual rather than claimed.
+- The `key-down` **host-listener** delivery has no test (CF-T8-6).
+- No frame was captured. This task paints nothing, and a gallery frame
+  taken now would be produced identically by the pre- and post-T8 runtime —
+  the gallery carries no `key-down` handler until T10.

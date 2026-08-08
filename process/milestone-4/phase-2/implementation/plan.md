@@ -474,6 +474,19 @@ fix:
 this widens *who may carry a handler* — a checker rule over the existing
 handler table — not how an event travels.
 
+- **That framing is true of `clicked` and false of `key-down`** (measured
+  at the start gate, [log.md](./log.md) §T8). `key-down` is a five-layer
+  addition ending in the runtime: the member-dispatch production and an
+  AST field; the checker's recognised-key table and three rejects; an IR
+  field, its emission and its loader parse; the loader's second gate; and
+  **the key walk itself**, which T5 deferred here in as many words ("T5
+  lands the consumption half and the fallthrough half; T8 lands the
+  dispatch between them"). The **review lane is therefore corrected from
+  the branch/test-focused review [preamble.md](./preamble.md) predicted to
+  a full independent review** — runtime structural change plus a schema /
+  IR migration, the Phase 1 F-12 / T12 precedent for correcting a stale
+  lane at the start gate.
+
 - Button keeps its `enabled` suppression and its keyboard activation;
   both are Button behaviour, documented on Button.
 - Reject-side tests pin how far `clicked` widens (DD-005: a previously
@@ -497,6 +510,18 @@ handler table — not how an event travels.
   narrows the authored surface against §4.19's "`clicked` — any widget"
   and hands T13 a divergence
   ([log.md](./log.md) §T6 close gate CF-T6-3).
+  **The three questions resolved as one answer: both rules are removed
+  rather than widened**, so per-kind signal admission ceases to exist and
+  admission is by signal name alone. That answers the third question with
+  *no* — no per-kind handler rule is left for either gate to hold.
+  Widening instead would keep two allow-lists that the next signal name
+  has to be added to twice, which is the drift CF-T6-3 records. Two
+  consequences are named rather than left to be found:
+  `Grid { totally_unknown => … }` becomes accepted, which is what the
+  other ten kinds already did (the uniform question — whether an
+  unrecognised *signal* name should be a diagnostic anywhere — is
+  CF-T8-4, not this task's); and `ZStack { clicked => … }` becomes
+  accepted at the loader, which is what §4.19's table requires.
 - **Two Button-family loader defects land here** (T3 close gate CF-1 /
   CF-2), both measured, neither in T3's lane, and both dispositioned by
   the owner on 2026-08-07 ([log.md](./log.md) §T3 owner disposition):
@@ -525,10 +550,49 @@ handler table — not how an event travels.
     deliberately**, and the capability it withholds is recorded as its
     own row in the [candidate pool](../../../candidate-pool.md) so
     re-opening it is a milestone decision rather than a rediscovery.
+    **The defect spans four widget kinds, and only two are rejected**
+    (start gate fact 4): `build_layout_tree` maps `Rectangle`, `Text`,
+    `Button` and `ToggleButton` alike to a childless
+    `LayoutNode::rectangle`, and `check` accepted a widget child on all
+    four. The owner disposition and the pool row both name the Button
+    family, so `Text` / `Rectangle` are recorded as CF-T8-2 rather than
+    folded in — rejecting them would narrow a surface no decision covers.
 - `key-down` needs the phase's **one new grammar production** — a signal
   handler whose name carries an argument. The key name is validated at
   `check` against the recognised non-character table, and an
   unrecognised name is a diagnostic with its own test.
+  - **Three rules, not one, and both gates carry all three**: a bare
+    `key-down` with no argument, an unrecognised key name, and an
+    argument on a signal that takes none. All three are the
+    silently-never-fires class, and a bare `key-down` parsed and was
+    accepted before this task (start gate fact 2).
+  - **The 22 recognised names get one owner**, `wasamo-ir`, read by both
+    the checker and the runtime's virtual-key map, with a sweep test
+    asserting every name is producible — a name the checker accepts with
+    no virtual-key mapping is a handler that can never fire. The
+    handler's canonical storage spelling gets the same treatment
+    (`wasamo_ir::signal_key`, composed nowhere else).
+  - **The runtime half is the key walk**, a fourth consumption arm in
+    `WM_KEYDOWN` between `dismiss_on_key` and the host key slot,
+    reusing `hit::dispatch_chain` and `run_signal_handlers` rather than
+    adding a second dispatcher. It projects and rebases like the other
+    three `*_on_key` functions rather than calling `focused_path`, which
+    cannot rebase — so this task does **not** become the first production
+    reader CF-T7-2 names as its re-trigger.
+  - **The walk starts at the focused widget, or at `traversal_root`
+    when nothing is focused** — §4.19's "or, when nothing is focused, at
+    the innermost modal focus scope", which is that function's own
+    definition. The walk is upward-only, so a handler below the start can
+    never fire; carried to T10 as CF-T8-5.
+  - **`key-down` gets no `enabled` suppression arm.** §4.8's disabled
+    contract is written over clicks, and the case is unreachable from any
+    authored tree — a disabled Button is not a focus stop, and after this
+    task a Button carries no children. A branch no test can fire is what
+    trap #4 forbids; the reasoning lives on the function instead.
+  - **Adding the `(` route collided with a shared sub-parser.**
+    `parse_grid_track_list`'s word-continuation lookahead absorbed
+    `key-down(` as a trailing track word; the stop set gained `LParen`
+    and is pinned at that sub-parser's own layer with both legs.
 - The keys the runtime keeps (`Tab` always; arrows inside a group;
   `Escape` while a scope is entered) are asserted, since each is a way
   for an authored handler to silently never fire. The group and scope
@@ -541,8 +605,24 @@ handler table — not how an event travels.
 - **Evidence:** a `Box` with a handler fires; a disabled Button still
   occludes what is behind it; a `key-down("ArrowLeft")` handler fires
   outside a group and does not fire inside one.
+  - **A fourth piece was added after a mutation measured the third to be
+    unpinned in one direction.** Removing the consuming arm's early
+    `return` left the whole suite green: every key fixture reads handler
+    *effects*, so none of them constrained where the arm sits relative to
+    the host key slot. `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`
+    asserts both legs against the slot's recorder and goes red under that
+    mutation ([log.md](./log.md) §T8 close gate W12).
+- **Button keyboard activation does not exist and is not built here**
+  (start gate fact 6). This item's "Button keeps … its keyboard
+  activation" presupposed a behaviour the runtime has never had —
+  `rg "VK_RETURN|VK_SPACE"` over the runtime returns nothing and
+  `run_clicked_handlers` has one caller. Building it would put `Enter`
+  and `Space` into §4.19's keys-the-runtime-keeps table, which does not
+  list them, so an authored `key-down("Enter")` would silently never fire
+  while a Button is focused. Recorded as CF-T8-1 for an owner
+  disposition of the same kind CF-1 / CF-2 received.
 
-- [ ] T8
+- [x] T8
 
 ## T9 — DSL: per-item handlers inside `for`
 
@@ -574,6 +654,14 @@ The four coupled answers M3-Phase 7 routed here:
   exercises the nearest case, so the disposition is checked against
   something rather than asserted; a divergence goes in
   [log.md](./log.md).
+- **The `for`-body handler rejection is intact on both gates** — T8
+  touched neither `check_members_inner`'s `inside_for_template` arm nor
+  `validate_node_references_in_scope`'s, so admission is still wholly
+  this task's. What T8 changes for it: `Member::SignalHandler` and
+  `IrHandler` now carry `arg`, so the loop scope travels beside an
+  existing optional field; and `wasamo_ir::signal_key` is the function a
+  per-item `key-down` would compose its storage key through, if
+  admission reaches that far.
 
 - [ ] T9
 
@@ -597,6 +685,12 @@ one example host:
   caption and the selected thumbnail need index reads and equality
   selection, which are M4-Phase 3
   ([framing.md](../requirements/framing.md) §範囲の縫い目).
+  **The key walk is upward-only** (T8 close gate CF-T8-5), so those
+  handlers must sit **at or above** whatever the scope's entry focuses.
+  On the lightbox's `modal-scope` container they do: entry moves focus to
+  the scope's first stop, a descendant, so the walk reaches them. That is
+  a property of entry rather than an accident, and moving the handlers
+  below the focused stop would make them unreachable.
 - **Scrolled hit-testing is exercised**, because the gallery is the
   clip rule's consumer: with `scroll_y` non-zero, a thumbnail inside the
   viewport resolves and opens the lightbox, and a toolbar click above
@@ -669,6 +763,12 @@ The four controls from the [framing](../requirements/framing.md)
   has. Recorded on this row so the obligation is visible where it is
   executed.
 | D — Esc | Esc closes the lightbox | an unrelated key does not |
+
+- **Control D's "unrelated key" leg should use a *recognised* key with no
+  handler** (T8 close gate re-audit). Before T8 an unrelated key had no
+  authored path to fire on at all, so the leg could not have
+  discriminated; now it can, and the state-level equivalent is pinned by
+  `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`.
 
 - Capture is preceded by `cargo build --release --workspace`, takes
   **multiple frames on each side**, uses the **client** rectangle, and
@@ -763,6 +863,28 @@ The four controls from the [framing](../requirements/framing.md)
     click landing is bounded by the traversal root, so it takes the same
     arm as a background click, which is the reading consistent with "no
     widget outside it can be reached by the keyboard";
+  - **§3's grammar has no production for `key-down`'s argument, and
+    §8.8's IR grammar has none either** (T8 close gate CF-T8-3).
+    `signal_handler ::= IDENT "=>" block` and
+    `handler ::= "on" IDENT "{" expr "}"` both predate the Moment 1 sync
+    that added §4.19's `key-down("ArrowLeft")` example, and §3's
+    §Disambiguation table has no `IDENT` `(` row. The landed production
+    is `IDENT ( "(" STRING_LIT ")" )? "=>" block`, and the IR text form
+    is `on key-down("ArrowLeft") { … }`;
+  - **§4.5 still reads "The only recognized signal name is `clicked`"**
+    (T8 close gate CF-T8-3), which T6's `dismiss` already falsified and
+    `key-down` falsifies again;
+  - **§4.19's and §4.8's Button keyboard-activation sentences describe a
+    behaviour the runtime does not have** (T8 close gate CF-T8-1). Either
+    the runtime gains it — which puts `Enter` and `Space` into the
+    keys-the-runtime-keeps table — or the wording narrows. Owner-owned
+    before T13 records the outcome;
+  - **whether an unrecognised *signal* name should be a diagnostic**
+    (T8 close gate CF-T8-4). Today `Box { totally_unknown => … }` is
+    accepted on every kind and silently never fires; T8 removed the one
+    kind-specific exception rather than adding a rule;
+  - **§4.16's placement example is corrected by T8**, not here, so this
+    is a confirmation rather than a repair;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
     framing R2).
 - Phase-end retrospective, verification closure mapping, and
