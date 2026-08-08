@@ -4772,3 +4772,268 @@ Not crossed:
 - **No normative prose.** §4.15's two false diagnostic rows go to T13.
 - **No change to the drain boundary** (T3's), the focus seam (T7's), or
   `plan_tail_range_change`.
+
+### Close gate (recorded 2026-08-08)
+
+Six implementation commits plus the start gate and the review correction:
+
+| commit | content |
+|---|---|
+| `94002c0` | start gate (ten measured facts, the DD-V-031 normative table, trap selection, lane, boundary) |
+| `b9e12fd` | `wasamoc check` admits a handler inside a `for` body |
+| `ed5117b` | the IR loader gate does too, and threads the loop scope through the handler path |
+| `38f4daf` | the runtime evaluates binder reads at invocation time |
+| `9bcbd60` | the per-item handler integration fixtures |
+| `f8a346e` | the CF-T7-1 anchor-reuse check |
+| `bd15ec2` | the two evidence gaps the independent review found |
+
+#### Trap selection re-decided at close (plan's standing instruction)
+
+Unchanged from the start gate: **#1, #2, #3, #4, #5 applied; #6 and #7
+did not.** The task built what it predicted it would build, with one
+addition inside the same traps rather than a new one — the collection-
+append path over three element types (below), which is trap #4 and trap
+#1 material, not a new class.
+
+#### #1 — call-site audit
+
+Two semantic migrations, both compiler-forcing.
+
+**`EvalError` gained `ItemOutOfRange { binder }`.**
+
+| Site | `rg` query | Classification | Reason |
+|---|---|---|---|
+| `handler.rs` `impl Display for EvalError` | `rg "match self" -A 12 handler.rs` | **must-dispatch** — arm added | The only exhaustive match over the enum in the workspace; the compiler forced it |
+| ~100 `EvalError::X` occurrences in `handler.rs` / `reactive.rs` / `widget.rs` | `rg "EvalError::"` | ignore-OK | All are variant *constructions* or `Result<_, EvalError>` return types, not matches |
+| `matches!(…, Err(EvalError::TypeMismatch { .. }))` and `assert_eq!` sites in tests | same | ignore-OK | Compare against one named variant; a new variant cannot be silently absorbed |
+| `wasamo-dll`, `wasamoc`, `bindings/*`, `examples/*` | `rg "EvalError"` outside `wasamo-runtime` | **not reachable** | `EvalContext` / `EvalError` are not re-exported past the crate boundary (`lib.rs` carries no re-export); zero matches |
+
+No wildcard or filtering arm absorbs the new variant.
+
+**`WidgetNode` gained `loop_scope: Option<ForItemContext>`.** Ten
+construction sites, all forced by the compiler, all `None`
+(`rg -c "loop_scope: None" widget.rs` → 10, matching `focus_annotation`'s
+ten one-for-one). Exactly **one writer**: `set_loop_scope`, called once,
+from `ir_loader::build_node_with_loop_context`
+(`rg "set_loop_scope"` returns one call and one definition; the remaining
+hits are doc comments).
+
+**The filtering helper the start gate flagged.**
+`signal_handlers_for`'s `.filter(|(sig, _)| sig == signal)` is the shape
+trap #1 warns about, and it is *not* where the loop scope travels: the
+scope is cloned unconditionally beside the filtered `inline` vector, in
+the same read, so a new signal name cannot lose it. Independently
+confirmed by the review.
+
+#### #2 — structural side-effect enumeration: what a removed generated subtree releases
+
+The failure DD-M4-P2-005 names is silent in one direction — a handler
+left registered against a dropped subtree appears in no rendered frame —
+so this enumeration is the check, and F4 is the one leg of it that can be
+observed at runtime.
+
+| Derived state | Released by | How this task confirmed it |
+|---|---|---|
+| Reactive bindings (`EffectHandle`) | `widget_destroy` → `dispose_subtree_bindings`, recursively | Pre-existing; unchanged by this task |
+| Host signal registrations (`wasamo_signal_connect` tokens) | `widget_destroy` → `for_each_ptr(remove_for_widget)` | **F4**: a host listener on a generated row fires once while the row is live, and never again after the row is removed; its `destroy_fn` fires exactly once, synchronously with the removal |
+| **Inline handler bodies** (this task's addition) | Owned data on the node (`Vec<(String, HandlerExpr)>`); freed with the `Box<WidgetNode>` | No separate lifecycle — which is DD-M4-P2-005's requirement in as many words ("the handler's registration is *not* separately owned"). Nothing to release, so nothing to leak |
+| **The loop scope** (this task's addition) | Same — a plain field on the node | Same reason |
+| The focus record's anchor | Rebased at the end of the drain (`emit::flush_layout` Phase 2 → `focus::sync_scopes_to_tree`) | **CF-T7-1 fixture**: after a free-and-allocate in one message the record names a live node that paints the indicator |
+| The retained hover record | T4's path (index-based, bounds-checked) | Not exercised here: no M4 shape puts a Button-family widget under the pointer inside a `for` body during a reorder. CF-T4-1 stays open, unchanged |
+| Layout / the Visual | `remove_structural_child` + `mark_layout_dirty_for` | Pre-existing |
+
+**One justification in production prose became false and was rewritten.**
+`mutate_for_loop_subtree`'s partial-insert rollback said "today's
+handler-free `for`-body children hold none [no registry entries], so this
+branch's disposal is a *defensive* symmetry". After this task a `for`-body
+child can carry handlers and a host listener can be connected to one, so
+the disposal is load-bearing. The branch's code is unchanged; only its
+reason is.
+
+#### #3 — parallel data: one loop scope, two consumers
+
+The same `ForItemContext` feeds the per-item **bindings** (through
+`register_for_item_binding` / `register_for_item_bool_binding`) and, from
+this task, the per-item **handlers**. Both are written from the one
+`loop_context` parameter inside `build_node_with_loop_context`, in the
+same function body, so the two cannot drift.
+
+T8's recorded learning is that this design hides **symmetric** errors — a
+mutation to the single owner breaks both consumers identically and no
+behaviour-level test reddens. The artifact this trap needs is therefore a
+test that consumes the scope **asymmetrically**, and there are two:
+
+- unit — `for_item_handler_ctx_two_positions_read_different_values`: two
+  contexts over one collection at positions 0 and 2 must read different
+  items *and* different indices;
+- integration — **F1**: clicking row 0 and row 2 of the same `for` must
+  write different values. One row clicked twice would constrain nothing.
+
+Measured, not asserted: mutation **W-E** (the string item read always
+takes position 0) reddens the unit test and **F2**.
+
+#### #4 — branch table
+
+Every branch this task added, with the test that fires it directly.
+
+| Branch | Where | Test |
+|---|---|---|
+| Handler admitted inside a `for` body (checker) | `check.rs` `Member::SignalHandler` | `for_body_accepts_handler_but_still_rejects_nested_for_at_any_depth`, `for_body_handler_reads_index_binder_accepted`, `for_body_handler_reads_item_binder_accepted` |
+| Handler admitted inside a `for` body (loader, two sites) | `validate_phase7_iteration_invariants`, `validate_node_references_in_scope` | `for_member_accepts_handler_but_still_rejects_nested_for_inside_template`, `for_body_handler_index_read_validates`, `for_body_handler_item_read_validates` |
+| Binder read with no loop scope (loader) | `validate_expr_references` `ItemRead`/`IndexRead` `None` arms | `for_body_handler_item_read_outside_for_body_rejected`, `for_body_handler_index_read_with_no_index_binder_rejected` |
+| Binder read naming the wrong binder (loader) | same, `Some(_)` arms | `for_body_handler_item_read_wrong_binder_rejected`, **`for_body_handler_index_read_wrong_binder_rejected`** |
+| Binder read outside the `for` body (checker) | `check_expr_type_in_loop_context`, corrected wording | `index_binder_read_in_handler_outside_for_body_rejected`, `handler_reads_a_different_for_loops_binder_rejected` |
+| Loop scope threaded into the collection-assignment path | `validate_collection_assignment_rhs` / `validate_collection_element_expr` | `for_body_handler_collection_append_reads_its_own_binders` |
+| `evaluate`'s `IndexRead` arm | `handler.rs` | `index_read_in_integer_assignment_evaluates_to_the_position` |
+| `evaluate`'s `ItemRead` arm, `Some` | `handler.rs` | `item_read_in_integer_assignment_evaluates_to_the_element_at_the_position` |
+| `evaluate`'s `ItemRead` arm, **`None` → `ItemOutOfRange`** | `handler.rs` | `item_read_past_the_end_yields_item_out_of_range` (DD-V-029, witness W-C) **and** F5 end-to-end |
+| `evaluate_binding` / `evaluate_binding_part` binder arms (string) | `handler.rs` | `for_item_handler_ctx_collection_append_reads_binders_for_every_element_type`, `for_item_handler_ctx_string_item_read_past_the_end_is_out_of_range` |
+| `evaluate_bool_assignment_value` binder arm, `Some` | `handler.rs` | same append test (bool leg) |
+| `evaluate_bool_assignment_value` binder arm, **`None`** | `handler.rs` | `for_item_handler_ctx_bool_item_read_past_the_end_is_out_of_range` — **added at the review's finding**, witness W-G |
+| `run_signal_handlers`'s loop-scope-vs-plain context selection | `widget.rs` | F1 / F2 / F3 / F6 (witness W-D) |
+| `dismiss` admitted inside a `for` body beside `modal-scope: true` | newly reachable at both gates | `dismiss_accepted_inside_for_body_with_modal_scope`, `dismiss_handler_inside_for_body_with_modal_scope_validates` |
+| `dismiss` rejected inside a `for` body without it | newly reachable at the loader | `dismiss_handler_inside_for_wrapped_container_rejected_through_parse_ir` |
+| Bare `key-down` rejected inside a `for` body | newly reachable at the loader | `key_down_without_argument_inside_for_body_rejected`, `key_down_without_argument_rejected_inside_for_body` |
+| CF-T7-1 fixture's collision arm | `focus_identity_integration.rs` | Not fired — see #5; the arm exists so the collision is a named observation rather than a surprise red |
+
+**Branches deliberately not tested, with the path measured** (the T8
+close-gate corrective — a negative claim is true of one path until every
+path is enumerated):
+
+- `evaluate`'s `IndexRead` `None` fallback. Claim: unreachable. Measured
+  by enumerating **all four** `EvalContext` implementations of
+  `read_index_tracked` in the crate — the trait default (`handler.rs`),
+  the test mock, `ForItemEvalContext`, `ForItemHandlerEvalContext` — every
+  one returns `Err(UnknownProperty)` on a binder mismatch and never
+  `Ok(None)`. Independently re-enumerated by the review, which reached the
+  same conclusion. Kept as a typed fallback rather than an `unwrap()`.
+- The CF-T7-1 collision arm — not reachable on demand; see #5.
+
+#### Mutation witnesses
+
+All seven were applied by the lead, read back from the file before
+running, and re-read plus `git diff`-confirmed after reverting. **W-F is
+not an implementation mutation** — it is a working alternative *design*,
+which is what the T5 corrective asks for at least one of.
+
+| Witness | Mutation | Went red | Reading |
+|---|---|---|---|
+| **W-A** | `evaluate_binding`'s two binder arms removed (the pre-T9 fall-through) | `for_item_handler_ctx_collection_append_reads_binders_for_every_element_type`, `for_item_handler_ctx_string_item_read_past_the_end_is_out_of_range` | The string append path genuinely needed its own arms |
+| **W-B** | `evaluate_bool_assignment_value`'s binder arm removed | the append test | Same for `bool[]` |
+| **W-C** | `evaluate`'s `ItemRead` `None` → `unwrap_or(0)` | `item_read_past_the_end_yields_item_out_of_range` only | DD-V-029's obligation for the boundary arm, re-measured by the lead rather than taken from the subagent's report |
+| **W-D** | `signal_handlers_for` clones `None` instead of the node's loop scope | F1, F2, F3, **F6** | The snapshot is load-bearing. **Run twice**: before F6 existed it left F5 green, which is what made F6 necessary |
+| **W-E** | the string item read always takes position 0 | `for_item_handler_ctx_two_positions_read_different_values`, F2 | Position, not merely presence, is constrained |
+| **W-F** | **generation-time capture**: substitute each `ItemRead` with a literal of the item's value at subtree build time, in the loader's handler-attachment loop | **F2 alone**, out of 1,244 | The decisive artifact. A working wrong design fails exactly the fixture DD-M4-P2-005 says must exist, with F2's own predicted message. It also measures that F2 is the **single** test constraining invocation-time resolution |
+| **W-G** | `evaluate_bool_assignment_value`'s `None` → `unwrap_or(false)` (the review's own probe) | before: nothing; after adding the test: `for_item_handler_ctx_bool_item_read_past_the_end_is_out_of_range` | The review found the gap; the correction is measured rather than asserted |
+
+#### The DD-M4-P2-001 divergence, measured and dispositioned
+
+Start-gate fact 10 predicted it and F5 measured it. DD-M4-P2-001 gives
+residual 1 (cycle detection) this reason for not firing: the near case
+"stays inside the existing machinery for the same reason the drain is
+placed after the walk: **the handler has already returned when
+regeneration runs**."
+
+**It has not.** `register_for_loop_binding` installs an ordinary reactive
+`EffectHandle`, so a collection write regenerates the subtree inside
+`Signal::set`, during the handler's own statement. F5 observes both facts
+from one synchronous `send_click`: the clicked row's own subtree is
+already destroyed (`destroyed == 1`) *and* the second statement's item
+read has already failed. That is regeneration running **before** the
+handler's next statement, not after the handler returned.
+
+**Disposition: the conclusion holds, the explanation does not.** No cycle
+is created, because regeneration re-invokes no handler — it builds fresh
+subtrees with fresh bindings. Under
+[workflow.md](../../../procedures/workflow.md) that is the "explanation
+narrows" case, which takes a dated annotation rather than a supersede,
+and neither is written from a task close gate: it is recorded here and
+carried to **T13** beside the other normative re-verification items, with
+the owner deciding whether the sentence is annotated or left as an
+imprecision with no shipped consequence.
+
+#### #5 — carry-forward
+
+| Item | Evidence | Class | Re-trigger |
+|---|---|---|---|
+| **CF-T9-1 — CF-T7-1's collision was not reached.** The shape was built and run: focus the last `for`-generated row, then one handler body that runs `xs.drop-last()` and `xs.append(9)`. The run records the freed row at `0x1bd36699970` and the row allocated in the same message at `0x1bd36722640` — **the address was not reused**, so the anchor collision never occurred and focus fell to the domain's first surviving stop | the fixture, which prints the address relation every run | `carry-forward` — CF-T7-1 stays open, **narrowed** | Any change to allocation timing around `mutate_for_loop_subtree`, or the fixture's collision arm firing. Per [DD-V-030](../../../cross-milestone/decisions/dd-v-030-carry-forward-buildability.md) the artifact is the recorded run, and this run does **not** close the residual — it measures that M4-Phase 2's nearest expressible shape does not reproduce it |
+| **CF-T9-2 — handler-body assignments are not type-checked, and a scalar `string` state cannot be written from a handler at all.** `root.n = "abc"` on an `i32` state passes `check` with exit 0; there is no `set_string` in the runtime for any right-hand side. This task inherits the absence rather than creating it, and deliberately did not add a type rule for binder reads alone | start-gate fact 5 (probe P9); `rg "fn set_string\b"` returns nothing | `finding` (owner = **T13 or later**) | The first authored case that wants a string state written from a handler. §4.19's own per-item example writes an `i32`, so the surface has no consumer yet |
+| **CF-T9-3 — §4.15's Diagnostics table carries two rows this task makes false**: "Handler inside a `for` body" and "Binder read in handler position" are still listed as rejected shapes, three paragraphs above the subsection that says they are admitted | the table and the subsection, both in §4.15 | `finding` (owner = **T13**) | T13 already re-verifies §4.15's per-item handler text; these are false statements rather than gaps, so they are the first thing that pass should reach |
+| **CF-T9-4 — F2 is the only test in the suite that constrains invocation-time resolution.** W-F reddened it and nothing else | witness W-F | `carry-forward` | Any later task that touches handler attachment in the loader, the loop-scope snapshot, or `ForItemHandlerEvalContext`'s item reads. If F2 is ever deleted or narrowed, the property loses its only pin |
+| **CF-T9-5 — a per-item `modal-scope` with a `dismiss` handler is now authorable and is exercised at neither runtime end.** Both gates accept `for x in xs { Box { modal-scope: true  dismiss => { … } } }`; what a scope generated per item does to entry, restore and the scope stack is T7 machinery this task did not drive | the two accept tests, which are compile/load-level only | `finding` (owner = **M4-Phase 9**, the phase that owns scope composition) | The first authored per-item overlay. No M4 app has one — T10's lightbox is a root `ZStack` branch, not a `for` body |
+
+**CF-T4-1 and CF-T5-1 are touched but not closed**, and take no new row.
+This task adds `for` regeneration, which is their named re-trigger, but
+the shapes that would fire them need a Button-family widget under the
+pointer during a reorder (CF-T4-1) or a retained id renamed in range
+(CF-T5-1, closed by T7's anchor rebase). The CF-T7-1 fixture is the
+nearest thing built, and it is recorded above on its own row.
+
+#### Re-audit of the whole task list (cross-task obligation)
+
+Read T10–T13 again at close, not only T9's own item.
+
+- **T10** — gains what it needs and one warning. §4.19's per-item example
+  (`root.selected_index = i;`) now works end to end, which is exactly the
+  thumbnail-click shape T10's first bullet describes. The warning is
+  CF-T9-2: a handler cannot write a scalar `string` state, so "carrying
+  which thumbnail" must be carried as an **index**, not as a label. Added
+  to T10's item.
+- **T11** — unchanged. Touch enters `hit_test_click`; nothing here
+  touches the pointer path or the message arms.
+- **T12** — control A's state-level equivalent now exists (F1: two rows,
+  two different reads), so control A's frame pair has something to be a
+  second, independent check *of*, rather than the only evidence.
+- **T13** — gains three: CF-T9-3 (§4.15's two false rows), CF-T9-2 (no
+  section states that a handler cannot write a `string` state), and the
+  DD-M4-P2-001 explanation divergence above. Added to T13's item.
+- **Cross-task obligations** — no new ABI function was added (framing
+  agreement ⑦ holds); the stretch checkpoint is unaffected.
+
+#### Review lane
+
+**Full independent review**, as the start gate corrected it (runtime
+structural change, not the schema/IR class the preamble predicted).
+Performed by a subagent that wrote none of the code, over the whole
+branch diff plus the start gate, the plan item, DD-M4-P2-005 and the
+normative sections. It ran the suite, ran the fixtures unskipped, and
+wrote its own throwaway mutation.
+
+Three findings, all dispositioned:
+
+1. **The `bool[]` out-of-range arm had no test** (evidence-gap). Correct,
+   and the sharpest form of it: `unwrap_or(false)` leaves the whole
+   workspace green, and `false` is a *plausible* stale value rather than
+   an obviously wrong one. Fixed in `bd15ec2`, re-measured as W-G.
+2. **A per-item handler appending its own binder was pinned end-to-end
+   for `string[]` only** (evidence-gap). Correct; `i32[]` and `bool[]`
+   were covered below the checker. Fixed in `bd15ec2`.
+3. **The close gate was not on the branch when the review ran**
+   (process). Correct, and a deviation from
+   [implementation-gates.md](../../../procedures/implementation-gates.md)
+   §0's order and from T8's precedent. Recorded rather than
+   rationalised: the reviewer had to reconstruct the artifacts it should
+   have been able to check against, which is real cost, and it is only
+   partly offset by the reviewer's read being unbiased by the lead's own
+   account. The review is not re-run for this document, because the
+   findings it produced are about code it did read; the sequencing itself
+   goes to the retrospective.
+
+The trap-#4 branch/test check composed into the review rather than
+replacing it — findings 1 and 2 are both that check.
+
+#### Verification
+
+`cargo fmt --all -- --check` zero exit. `cargo build --release
+--workspace` successful (18s). `cargo build --workspace` successful.
+`cargo test --workspace --no-fail-fast`: **49 binaries/sections, 1,248
+passed, 0 failed, 0 ignored** — against T8's 48 / 1,212, so one new test
+binary and 36 tests. The new integration binary was confirmed to **run
+rather than skip**: `cargo test --test per_item_handler_integration --
+--nocapture` shows all six fixtures `ok` with no
+`skipping …: runtime compositor unavailable` line, and the expected
+`wasamo: handler error in ?.clicked: loop item \`value\` is no longer
+live at its position` appears exactly once, from F5's production path.
+`cargo build -p counter-rust -p gallery-rust -p bool-demo-rust`
+successful — no shipped `.ui` trips the widened surface, and none uses it
+yet.
