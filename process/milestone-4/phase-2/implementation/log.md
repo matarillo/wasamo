@@ -5091,3 +5091,283 @@ live at its position` appears exactly once, from F5's production path.
 `cargo build -p counter-rust -p gallery-rust -p bool-demo-rust`
 successful — no shipped `.ui` trips the widened surface, and none uses it
 yet.
+
+---
+
+## T10 — Gallery slice (consumer A)
+
+### Start gate (recorded 2026-08-08, before any source edit)
+
+Read first: [AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[plan.md](./plan.md) §T10 and §Cross-task obligations,
+[preamble.md](./preamble.md),
+[framing.md](../requirements/framing.md) §受入れ基準 / §範囲の縫い目 /
+§検証方針, [constraints.md](../requirements/constraints.md),
+[DD-M4-P2-002](../decisions/dd-m4-p2-002-hit-testing-and-generic-click.md),
+[DD-M4-P2-004](../decisions/dd-m4-p2-004-modal-focus-scope.md),
+[DD-M4-P2-005](../decisions/dd-m4-p2-005-dsl-handler-surface.md),
+[dsl_spec §4.19](../../../../docs/dsl_spec.md),
+[architecture §13](../../../../docs/architecture.md), the T2 / T4 / T5 /
+T6 / T7 / T8 / T9 close gates above, and the T9 retrospective.
+
+**The whole plan and log were grepped for `T10`** (the T8 corrective —
+"what has another task sent to this one that this task's own item does
+not say?"). Nine senders. Seven are already in the item; **two are not**,
+and both change what this task builds:
+
+- **T2** — the clip bound is landed and unit-tested; T10 is its first
+  *production* consumer (the item says this).
+- **T3** — T10 is the gallery's first ancestor handler and first
+  non-Button handler. **The item does not say this**: the thumbnail's
+  handler sits on a `Box` whose `Text` child is what a centre click
+  resolves to, so the shipped app exercises the ancestor walk rather than
+  target dispatch alone. **Added to what the fixtures must assert.**
+- **T4** — the hover-through-the-scrim defect is fixed, so T10 starts
+  from a corrected baseline.
+- **T5** — T10 is the first production consumer of Tab traversal in a
+  `.ui` the owner sees.
+- **T6 / CF-T6-1** — a *present* but *un-entered* `modal-scope` was the
+  state DD-M4-P2-004 forbids; T7 closed it, and T10 is the first shipped
+  `.ui` to carry the attribute, so CF-T6-1's "bounded meanwhile: no
+  shipped `.ui` carries it" ends here.
+- **T7** — the throwaway probe is reverted; landing `modal-scope: true`
+  and the `dismiss` handler is T10's work, not a diff to recover. T7's
+  frame pair already measured that the lightbox's **`<` Button is the
+  scope's first stop** on this exact tree.
+- **T8 / CF-T8-5** — the key walk is upward-only, so the `key-down`
+  handlers must sit at or above whatever entry focuses.
+- **T8 (second half)** — `Grid` and `ZStack` now accept `clicked` at both
+  gates, and a `Button` may no longer carry a widget child. The shipped
+  gallery trips neither.
+- **T9 / CF-T9-2** — carry an **index**, not a label.
+- **T12** — controls A / C / D are the phase-level versions of shapes
+  this task must make reachable, and **control C additionally discharges
+  CF-T4-5**. If T10 ships a lightbox whose background click is blocked by
+  something other than an authored covering widget, control C's agreement
+  leg becomes unbuildable. **Added to what the fixtures must measure**
+  (fact 6).
+
+The accumulated per-task start-gate lines, answered in order:
+
+- **T1 — new store / unit / coordinate system?** None. This task writes
+  no runtime code.
+- **T2 — which test pins the property this task deletes?** This task
+  deletes no property. It *adds* the first shipped consumer, and the one
+  existing test that reads the shipped file —
+  `ir_loader_roundtrip::gallery_ui_emits_and_validates_through_runtime_loader`
+  — is re-run against the edited file (fact 1).
+- **T3 — was the evidence a later task needs built once here?** T12 needs
+  controls A / C / D against this tree. This task builds the *state-level*
+  twin of each and records which frame T12 still owes.
+- **T4 — was the negative prediction this task rests on measured once?**
+  The prediction is "the lightbox blocks background clicks because the
+  scrim covers them". Not measured, and **the item's wording may be
+  wrong** — the lightbox `Grid` is declared *after* the scrim and is also
+  stretch/stretch, so the topmost widget at a background point may be the
+  `Grid`. Fact 6 turns this into a fixture measurement rather than a
+  reading.
+- **T5 — identifiers held across messages: what is their lifetime?** One:
+  the scope's captured restore target, from entry to removal. Its failure
+  mode is "focus returns to the wrong widget", and the fixture asserts
+  both legs (something focused beforehand; nothing focused beforehand).
+- **T6 — how many gates does the rule have?** Two, and this task drives
+  both from one input: `wasamoc check` (all three hosts run it) and the
+  runtime loader (all three hosts hand IR to `wasamo_load_ui`).
+- **T7 — which closing carry-forward is `doc-folded`, and where?**
+  CF-T8-5 is folded into `deliver_key_down`'s doc comment and the
+  `ROOT_BOX_KEY_DOWN_UI` fixture comment. This task consumes it and does
+  not change it.
+- **T8 — what has another task sent here?** Answered above.
+- **T9 — how many paths does this surface split into, counted by type /
+  element type / widget kind rather than by call site?** Counted here,
+  and carried into the subagent brief:
+  - **three host build paths**, each re-embedding IR by a different
+    mechanism — Rust `build.rs` (the workspace `wasamoc` crate,
+    in-process), C CMake (`add_custom_command` shelling out to
+    `wasamoc.exe`), Zig `build.zig` (`addSystemCommand` + `@embedFile`);
+  - **two state types written from handlers** — `i32`
+    (`selected_index`) and `bool` (`is_lightbox_open`), which are two
+    different evaluator paths (T9 measured that scalar/element type is
+    what splits handler evaluation);
+  - **four key arms ahead of the host key slot** — traversal (`Tab`),
+    `arrow_on_key` (no group in this tree, so this arm must *not* fire),
+    `dismiss_on_key` (`Escape`), and the authored `key_down_on_key` walk;
+  - **two clip boundaries in the shipped tree** — the `ScrollView`
+    around the thumbnails, and the `Grid` / root `ZStack`.
+
+#### Ten measured facts (probes run before any source edit)
+
+1. **Both gates accept the whole slice.** A reduced gallery carrying
+   `modal-scope: true`, `dismiss`, `key-down("ArrowLeft")` and
+   `key-down("ArrowRight")` on the lightbox's outer `ZStack`, a per-item
+   `clicked` on the thumbnail `Box` writing
+   `root.selected_index = index; root.is_lightbox_open = true;`, `clicked`
+   on the `<` / `>` Buttons, and a caption `Text` bound to
+   `"Photo #\{root.selected_index}"` passes `wasamoc check` (exit 0) and
+   `wasamoc build` (exit 0). Placed at `examples/gallery/gallery.ui`,
+   `cargo test -p wasamo-runtime --test ir_loader_roundtrip` is green — 9
+   passed, including `gallery_ui_emits_and_validates_through_runtime_loader`,
+   which runs the **shipped** file through `parse_ir`'s validate pass.
+   Reverted with `git checkout --`; `git status` clean afterwards.
+2. **All three hosts build at the branch point**, so a red host build
+   after the edit is attributable to the edit: `cargo build --release
+   --workspace` 19.17s; CMake configure + Release build →
+   `build/t10-baseline-gallery-c/Release/gallery-c.exe`; `zig build`
+   exit 0 → `examples/gallery-zig/zig-out/bin/gallery-zig.exe`.
+3. **pwsh splits `-Dkey=value` on the `zig build` command line.** The
+   first invocation failed with `error: no step named
+   '../../target/release/wasamoc.exe'` — the option and its value became
+   two argv entries. Quoting each `-D…` argument fixes it. Recorded so
+   the close gate's rerun is not mis-read as a T10 regression, and
+   because the same shape is a known CI hazard.
+4. **No `.uic` is tracked.** `git ls-files examples/**/*.uic` returns
+   nothing; the `examples/gallery/gallery.uic` in the working tree is an
+   untracked local artifact of an older build. Every host regenerates IR
+   from `.ui` at build time. So "host artifacts rebuild in order" is a
+   **build-order** obligation, not a commit-content one — there is no
+   derived file to keep in step, and none to forget.
+5. **The three host READMEs restate the gallery's behaviour instead of
+   citing it** — trap #3's documentation analogue — and this task makes
+   one restatement false: the C and Zig READMEs both say the app shows a
+   "lightbox placeholder surface". `gallery-rust`'s README is *already*
+   false, describing "ten uniform 1:1 `Box` thumbnails" and an "M3
+   gallery host" while the `.ui` generates 18 through `for`.
+6. **Which widget blocks a background click is not known, and the plan
+   item asserts an answer.** The lightbox branch is
+   `ZStack { Box(scrim, stretch/stretch), Grid(stretch/stretch) }`. Under
+   §4.19's reverse-order topmost rule the `Grid` is the later sibling, so
+   at a point over neither photo nor button the target may be the `Grid`
+   rather than the scrim. Both are inside the scope subtree, so blocking
+   holds either way — but the *reason* the item gives ("its scrim is an
+   authored covering widget, and it is what blocks background clicks")
+   may be wrong, and T12's control C rests on it. The fixture measures
+   which node the click resolves to instead of assuming.
+7. **The shipped tree fits the integration client**, so the fixtures can
+   run against `examples/gallery/gallery.ui` itself rather than a
+   gallery-shaped miniature. At the 360x240 / 96 DPI client every
+   integration file in this crate uses, the gallery's `rows: 56 1* 28`
+   give a 156-DIP viewport; `padding: 12` and `item-cross-size: 88` put
+   thumbnail line 1 at y≈68..156 (inside) and line 2 at y≈168..256
+   (outside). One "Scroll down" click (`scroll_y += 100`) moves line 1 to
+   y≈-32..56 — under the toolbar band — and line 2 into the viewport,
+   which is exactly the plan's scrolled hit-testing shape. **Arithmetic,
+   not measurement**: the fixture asserts the geometric relationship from
+   `__arranged_rect_for_test()` before deriving any click point, per this
+   crate's standing convention.
+8. **The lightbox's own `Grid` is degenerate at that client** — fixed
+   columns `56 + 400 + 56 = 512 > 360`, fixed rows `44 + 300 + 64 = 408 >
+   240` — so **no fixture may derive a coordinate inside the lightbox**.
+   Everything this task asserts inside the scope is reachable without
+   one: focus-path read-back, `WM_KEYDOWN`, and the caption `Text`'s
+   content. §4.19's "a focus stop that is scrolled out of view is still a
+   stop" is what makes that legitimate rather than a workaround.
+9. **There is no test-only getter for an `i32` state on a loaded
+   window.** `ir_loader.rs` exposes `__set_*_for_test` only. The
+   read-back surface is therefore the **bound caption `Text`**, read
+   through `WidgetNode::__text_content_for_test` — which is also the
+   phase's standing "read every result back as a rendered value"
+   discipline (T7's mechanism fixture reads Button labels for the same
+   reason).
+10. **T7's frame pair already measured this tree's scope entry**: with
+    `modal-scope: true` on the lightbox's outer `ZStack`, opening the
+    lightbox moved focus off the accent "Open lightbox" Button and onto
+    the `<` Button — 86.04 max-abs per channel against a tolerance of
+    3.0, with `>` as the agreement leg at exactly 0. That was a throwaway
+    probe on a variant build; this task lands the annotation for real, so
+    **the frame T10 owes is a different one** — item identity (which
+    thumbnail), not entry.
+
+#### Normative statements that already answer this task (DD-V-031)
+
+| Question | Where it is answered | What it fixes |
+|---|---|---|
+| What the thumbnail handler writes | [dsl_spec §4.19 §Per-item handlers](../../../../docs/dsl_spec.md) | The example is `root.selected_index = i;` — an index, which is also the only thing a handler *can* write (CF-T9-2: there is no `set_string`) |
+| Whether clicking a `Box` thumbnail moves focus | [dsl_spec §4.19 §Focus](../../../../docs/dsl_spec.md), [architecture §13.3](../../../../docs/architecture.md) | No — the click moves focus to the nearest focusable widget **at or above** the target, and a thumbnail has none above it, so focus is left unchanged |
+| What the lightbox restores focus to | [dsl_spec §4.19 §`modal-scope`](../../../../docs/dsl_spec.md) | Stated in this exact scenario: "a lightbox opened by clicking a `Box` thumbnail restores to whatever the keyboard was on beforehand — possibly nothing", and restoring to the clicked widget "requires that widget to be focusable, which arrives with the focusability attribute a later milestone adds". **The plan's Phase 5 sentence is the spec's own, not a claim this task invents** |
+| Where the `key-down` handlers may sit | [dsl_spec §4.19 §`modal-scope`](../../../../docs/dsl_spec.md) + CF-T8-5 | Entry "moves focus to the scope's first stop, so … the scope's own key handlers are live without the user pressing Tab first". With the upward-only walk, handlers on the scope container are reachable and handlers below the first stop are not |
+| Where the `dismiss` handler may sit | [dsl_spec §4.19 §`dismiss`](../../../../docs/dsl_spec.md), [DD-M4-P2-005 §Dismissal](../decisions/dd-m4-p2-005-dsl-handler-surface.md) | Only on a container carrying `modal-scope: true`; rejected anywhere else at both gates |
+| What the lightbox `.ui` should look like | [dsl_spec §4.19 §Keyboard input](../../../../docs/dsl_spec.md) | The spec's own example **is** this lightbox: a `modal-scope: true` container carrying `dismiss`, `key-down("ArrowLeft") => { root.selected_index -= 1; }` and `key-down("ArrowRight")`. This task's `.ui` is that example on the shipped tree |
+| Whether Escape and the arrows reach the handlers | [dsl_spec §4.19 §Which keys the runtime keeps](../../../../docs/dsl_spec.md), [architecture §13.2](../../../../docs/architecture.md) | `Escape` while a scope is present becomes a dismissal request on the innermost one; arrow keys **outside a `focus-group`** go to the propagation walk. The gallery declares no group, so the arrows reach the authored handlers |
+| What blocks a background click | [dsl_spec §4.19 §What a scope does not do](../../../../docs/dsl_spec.md), [architecture §13.4](../../../../docs/architecture.md) | The scope confines the keyboard only; a click behind it "is stopped by a covering widget inside the scope (the occlusion rule above), not by the scope itself". **Which** covering widget is fact 6's measurement |
+| What a scrolled-out thumbnail receives | [dsl_spec §4.19 §Click handling](../../../../docs/dsl_spec.md), [architecture §13.2](../../../../docs/architecture.md) | Nothing — a clipping container "bounds its whole subtree to its own rectangle for hit-testing as well as for painting" |
+| Whether `selected_index` is clamped at the ends | — **not answered** | §4.19's own example is `root.selected_index -= 1;` with no guard, and M4-Phase 2 has no conditional expression to write one with |
+
+**Two places where the normative text does not answer, and neither is an
+escalation** (DD-V-031: the specification is the answer, and an
+unanswered *authoring* choice is the author's):
+
+- **Whether the gallery's toolbar should be a `focus-group`.** §4.19's
+  own `focus-group` example is literally the gallery's three tab
+  `ToggleButton`s, but the plan item does not ask for it, and
+  [framing.md](../requirements/framing.md) §含まないもの sends "the
+  group's canonical `.ui` spelling" and radio-like widgets to **M5**.
+  This task does **not** add it, and records the consequence:
+  `focus-group` ships with authored-surface tests and no shipped
+  consumer.
+- **Whether `selected_index` should be clamped.** Not expressible in this
+  phase; carried forward with an owner rather than worked around.
+
+#### Trap selection (implementation-gates §1)
+
+```
+- [ ] #1 semantic migration   - [x] #2 side effects   - [x] #3 parallel data   - [x] #4 branch tests
+- [x] #5 carry-forward        - [~] #6 root cause     - [x] #7 GUI positive control
+```
+
+| # | Applies | Reason |
+|---|---|---|
+| 1 | **no** | This task writes no production Rust. It adds no enum variant, no IR type, no schema field and no traversal; it authors `.ui` against surfaces T6 / T8 / T9 landed and audited. **Re-decide if** the fixtures turn out to need a new runtime accessor |
+| 2 | **yes** | The shipped tree gains a modal scope, so its *presence* now drives focus entry, the restore-target capture, the scope stack and the exit restore on every open and close — plus the ordinary drain → re-layout → rectangle-store chain behind two new state writes. The enumeration has a build-time half too: three host artifacts re-embed the IR by three different mechanisms |
+| 3 | **yes**, in its documentation form | Three host READMEs restate the gallery's behaviour instead of citing the `.ui` (fact 5). One restatement becomes false with this change and one is already false. Closed under the #2 enumeration |
+| 4 | **yes**, in its authored form | Every handler this task adds to the shipped `.ui` must have a test that **fires it**. An authored handler accepted by both gates that silently never fires is the failure class this phase exists to prevent — trap #4 with `.ui` in place of Rust |
+| 5 | **yes** | Consumes CF-T8-5 and ends CF-T6-1's bound; creates at least three of its own (the unclamped index, `focus-group` with no shipped consumer, and the shipped `.ui` now being under fixture test) |
+| 6 | **armed** | GUI capture and three host builds are where a "green on retry" would be tempting. Fact 3 is already one instance, handled by root cause rather than retry |
+| 7 | **yes** | The deliverable **is** a rendered GUI slice. Screenshot + analysis + a positive control, and the control must discriminate *item identity* — the one claim a single frame of an open lightbox could not support |
+
+#### Review lane
+
+**Full independent review**, as [preamble.md](./preamble.md) predicts —
+and the T9 retrospective's corrective applies, so the **ground** is
+recorded and not only the lane. The preamble's ground is "GUI-render
+evidence, across three hosts"; that half holds. What does **not** hold is
+any runtime-structural or schema/IR trigger: this task writes no Rust
+outside `tests/`. The operative grounds are therefore (a) GUI-render
+evidence and (b) the first shipped consumer of three separately-landed
+surfaces — `modal-scope` + `dismiss` (T6 / T7), `key-down` (T8) and the
+per-item `clicked` (T9) — composing for the first time. Trap #4's
+branch/test check composes in rather than replacing it.
+
+#### Boundaries this task does not cross
+
+1. **No runtime, compiler or IR code.** Rust changes are confined to
+   `wasamo-runtime/tests/`.
+2. **No `focus-group` in the shipped `.ui`** — M5 owns the group's
+   canonical spelling (above).
+3. **No caption photo name and no selected-thumbnail highlight** — index
+   reads and equality selection are M4-Phase 3
+   ([framing.md](../requirements/framing.md) §範囲の縫い目).
+4. **No click-outside dismissal** — M4-Phase 9's source
+   (DD-M4-P2-005 §Dismissal).
+5. **No focusability attribute on the thumbnail** — M4-Phase 5, which is
+   also what would make the thumbnail the restore target.
+6. **No normative text is written.** §4.19 and §13 are re-verified at
+   **T13**; a divergence found here is recorded for that pass.
+7. **No GUI control T12 owns is claimed as closed here.** T10 takes the
+   frame its own deliverable needs (item identity) and records which of
+   T12's four remain.
+
+#### Implementation shape (subagent brief, recorded)
+
+Authored by a Sonnet subagent in two stages, with the lead measuring
+every verifiable claim independently:
+
+- **Stage 1** — `examples/gallery/gallery.ui`: `state selected_index`,
+  the per-item `clicked`, the lightbox annotation plus `dismiss` and the
+  two `key-down` handlers, `clicked` on the `<` / `>` Buttons, the
+  caption bound to `selected_index`, and the README corrections fact 5
+  names.
+- **Stage 2** — `wasamo-runtime/tests/gallery_slice_integration.rs`: the
+  fixtures, driven against the **shipped** `examples/gallery/gallery.ui`
+  through `wasamoc` → IR → loader → real window messages, reading results
+  back as rendered `Text` content and focus paths.
