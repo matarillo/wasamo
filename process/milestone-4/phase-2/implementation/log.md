@@ -4948,9 +4948,12 @@ subtrees with fresh bindings. Under
 [workflow.md](../../../procedures/workflow.md) that is the "explanation
 narrows" case, which takes a dated annotation rather than a supersede,
 and neither is written from a task close gate: it is recorded here and
-carried to **T13** beside the other normative re-verification items, with
-the owner deciding whether the sentence is annotated or left as an
-imprecision with no shipped consequence.
+carried to **T13** beside the other normative re-verification items.
+
+**Owner disposition (2026-08-08): a dated annotation on DD-M4-P2-001,
+not a supersede.** T13 writes it and cites F5 as the measurement. The
+shipped behaviour is unchanged either way, so nothing in this task's
+code moves.
 
 #### #5 — carry-forward
 

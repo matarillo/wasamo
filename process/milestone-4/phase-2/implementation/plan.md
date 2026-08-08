@@ -935,8 +935,9 @@ The four controls from the [framing](../requirements/framing.md)
     regeneration runs" is false — a collection write regenerates inside
     `Signal::set`, during the handler's own statement, which T9's F5
     measures directly. The decision's *conclusion* (no cycle) holds, so
-    this is the "explanation narrows" case: owner-owned, dated annotation
-    or left as an imprecision with no shipped consequence;
+    this is the "explanation narrows" case. **Owner-settled 2026-08-08:
+    a dated annotation on DD-M4-P2-001, not a supersede.** T13 writes it,
+    citing F5 as the measurement;
   - the recognised key table in §4.19 matches the checker's table, and
     §4.19 records that an unconsumed key reaches the default window
     procedure;
