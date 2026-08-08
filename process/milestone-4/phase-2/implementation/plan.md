@@ -938,6 +938,16 @@ The four controls from the [framing](../requirements/framing.md)
 | A — click routing and item identity | clicking thumbnail N and thumbnail M give different lightbox content | clicking N twice gives the same content |
 | B — traversal order | Tab ×1 / ×2 / ×3 and Shift+Tab reach the expected stops in reverse | two frames with no input agree within the measured text-pixel jitter (F-33: up to 13/channel), with the tolerance and comparison recorded — not asserted as bit-identical |
 | C — containment and occlusion | with the lightbox open, a background click does nothing and Tab cycles inside | with it closed, the same coordinate fires **and the same Tab reaches the background** (the DD-004 agreement leg — containment distinguished from an empty background) |
+| D — Esc | Esc closes the lightbox | an unrelated key does not |
+
+**All four are taken in one sitting** — one `cargo build --release
+--workspace`, one launch, one window geometry, one measured scale —
+by [capture-t12-controls.ps1](./evidence/capture-t12-controls.ps1),
+with the frames and their reading in
+[evidence/t12-frames/](./evidence/t12-frames/). The order is forced
+rather than chosen: B first, because its baseline needs *nothing
+focused* and only a fresh launch supplies that; C last, because it
+leaves a different tab checked.
 
 - **Control C also discharges T4's CF-T4-5** (owner-settled 2026-08-07,
   [log.md](./log.md) §Owner disposition of CF-T4-5). T2 resolved
@@ -949,22 +959,26 @@ The four controls from the [framing](../requirements/framing.md)
   take is taken **here**, once, in exactly the shape control C already
   has. Recorded on this row so the obligation is visible where it is
   executed.
-| D — Esc | Esc closes the lightbox | an unrelated key does not |
-
-- **Control D's "unrelated key" leg should use a *recognised* key with no
+- **Control D's "unrelated key" leg uses a *recognised* key with no
   handler** (T8 close gate re-audit). Before T8 an unrelated key had no
   authored path to fire on at all, so the leg could not have
   discriminated; now it can, and the state-level equivalent is pinned by
-  `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`.
+  `the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot`. The
+  key is `Home`: one of `wasamo_ir::RECOGNISED_KEY_NAMES`' 22 entries,
+  authored nowhere in the gallery, and absent from §4.19's
+  keys-the-runtime-keeps table. `Enter` was avoided deliberately —
+  whether Button keyboard activation should exist is CF-T8-1, open for
+  T13, and a leg standing on an open question is not a leg.
 
-- **Control A is already taken, at T10, in the shape this row describes**
-  ([evidence/t10-frames/](./evidence/t10-frames/)): caption differs by
-  thumbnail (79 px), agrees for the same thumbnail twice (0 px), and the
-  `[photo]` box agrees (0 px) so the difference is localised. Taken at
-  scale 1.25, which also discharges the ≠ 100% row below for control A.
-  What T12 owes on this row is a decision, not a repeat: either cite T10's
-  frames or re-take them beside the other three so the set is captured at
-  one sitting.
+- **Control A was re-taken rather than cited, and the ground is not
+  staleness.** T10 took it first
+  ([evidence/t10-frames/](./evidence/t10-frames/)) and the runtime has
+  not moved on any path it exercises since — the whole diff is T11's
+  `WM_POINTER*` arms, which no mouse or key path passes through — so
+  citing was available. Re-taking buys the one thing citing cannot: the
+  four controls share a window, so they are mutually comparable and one
+  `-Compare` run reads the whole artifact. T10's set stands beside this
+  one as an independent earlier sitting, and the two agree.
 - **Control C's blocker is the lightbox's own `Grid`, not the scrim**
   (T10 close gate, measured through `__resolve_topmost_for_test`). The
   `Grid` is declared after the scrim and is also stretch/stretch, so it
@@ -972,6 +986,40 @@ The four controls from the [framing](../requirements/framing.md)
   scope subtree, so containment holds either way and the control is
   unchanged — but the row's *description* should not say "the scrim
   blocks it", because that is not what the runtime does.
+- **Control C's containment leg needed a sensor, and the sensor changed
+  how the leg is judged.** "The toolbar did not change while the scope
+  was entered" is a no-change claim about a region seen *through* the
+  scrim, and a no-change claim is free if the instrument cannot see the
+  region. Measured: the scrim (`fill: #101820cc`, alpha 0.8) leaves
+  `px_differing_at_all` untouched — 2608 px either way for the same
+  state change — and divides `max_channel` from **157 to 31**, a 5.06×
+  attenuation against the 5 its own alpha predicts. That is below the
+  60-summed visible-change bar every other leg uses, so the two
+  lightbox-open toolbar-band legs are judged on `px_differing_at_all`
+  against a floor measured from their own frame pairs. **This is a
+  tightening** — the agreement bar becomes "no pixel differs by any
+  amount" — and it must not be "corrected" back.
+- **"The same coordinate fires" cannot be read off the button that was
+  clicked.** A click on a Button moves focus to it (§4.19 Focus), so the
+  clicked tab ends up checked *and* focused, which is a third colour
+  again. The leg therefore lives on the **previously** checked tab,
+  which is never clicked and never focused in the sequence, so only the
+  handler's `tab_all_selected = false` can change its face; the
+  look-alike it has to exclude ("focus landed there instead") is
+  excluded against control B's own measurement of what a checked and
+  focused tab looks like.
+- **Every verdict is shown able to go red.** A comparison over a wrong
+  region or with an over-generous tolerance passes silently and looks
+  like a measurement, which is the T11 retrospective's lesson (c) in a
+  new place. The script's `-SelfCheck` feeds all 23 verdicts a
+  deliberately wrong pairing drawn from the committed frames and
+  requires each to fail. It is what the other two passes are worth
+  nothing without.
+- **The measured within-set jitter in this sitting was 0**, and every
+  agreement leg is byte-identical by SHA-256 rather than merely inside a
+  band. Recorded as a measurement of this host and this sitting, not as
+  a property to rely on: the control-B row's tolerance rule stands, and
+  F-33's 13/channel was available and not needed.
 
 - Capture is preceded by `cargo build --release --workspace`, takes
   **multiple frames on each side**, uses the **client** rectangle, and
@@ -989,7 +1037,11 @@ The four controls from the [framing](../requirements/framing.md)
   a wrong pointer conversion is invisible at 100%
   ([preamble.md §What "green" is worth](./preamble.md)), so a capture
   set taken only at 100% cannot distinguish the migrated input path
-  from a broken one. Every capture states its scale either way.
+  from a broken one. Every capture states its scale either way. The
+  development desktop is a single 120-DPI monitor, so **all four**
+  controls are at 1.25 and the row needs no second sitting — read from
+  the window under capture, because `GetDpiForWindow(GetDesktopWindow())`
+  answers 96 on the same machine.
 - Any tool that reads window geometry or cursor position declares
   Per-Monitor-Aware V2 first (Phase 1 F-48).
 - **Control B is Tab-driven, so its capture acquires foreground
@@ -1004,9 +1056,20 @@ The four controls from the [framing](../requirements/framing.md)
   [capture-t5-focus.ps1](./evidence/capture-t5-focus.ps1) is the working
   shape.
 - **The owner smoke guide is written out here** (framing §オーナー目視)
-  and verified against the target commit before it is used.
+  and verified against the target commit before it is used:
+  [evidence/owner-smoke/protocol.md](./evidence/owner-smoke/protocol.md),
+  in Japanese because the owner runs it (the Phase 1 T11 shape). Each of
+  its ten steps is checked performable at the target commit against
+  either a frame in this task's own set or a named `gallery_slice_integration.rs`
+  fixture, and the mapping is the artifact
+  ([log.md](./log.md) §T12 close gate). It prescribes what to do and
+  what to look at; what the owner concludes is the owner's.
 
-- [ ] T12
+- [x] the capture script, all four controls in one run, and the frames
+- [x] `-Compare`: every difference and agreement leg
+- [x] `-SelfCheck`: all 23 verdicts shown able to go red
+- [x] the owner smoke protocol, verified against the target commit
+- [x] T12
 
 ## T13 — Close gate
 
