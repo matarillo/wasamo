@@ -923,13 +923,18 @@ The four controls from the [framing](../requirements/framing.md)
     read in handler position" are listed as rejected shapes three
     paragraphs above the subsection stating they are admitted. False
     statements rather than gaps, so they are where this pass starts;
-  - **no section says a handler cannot write a scalar `string` state**
-    (T9 close gate CF-T9-2). There is no `set_string` in the runtime for
-    any right-hand side, and handler-body assignments are not
-    type-checked at all, so `root.s = "x"` is accepted at both gates and
-    logs at invocation. §4.19's per-item example writes an `i32` and so
-    never meets it. Either the limit is stated or it is recorded as
-    unspecified;
+  - **§8.9 marks the string expression forms binding-only, and three
+    layers do not enforce it** (T9 close gate CF-T9-2, sharpened at the
+    owner disposition). §8.9's mapping table marks `StrLit` /
+    `Interpolation` / `StrPropRead` binding-only and its `(assign …)` row
+    admits `i32`, `bool` and collections only — yet `check` accepts
+    `s = "abc"`, the compiler emits `(assign s "abc")`, and the loader
+    passes it; only the evaluator rejects, at invocation. **The runtime
+    matches the spec; the compiler does not.** Owner-settled 2026-08-08:
+    the *capability* lands at M4-Phase 5 ([milestone plan](../../plan.md)
+    revision 1) and the *diagnostic* is an M4-Phase 3 pre-doc intake, so
+    T13 **records the divergence** rather than resolving it — and records
+    it as an unenforced normative statement, not as a gap in the text;
   - **DD-M4-P2-001's reason for residual 1 not firing does not match the
     runtime** (T9 close gate). "The handler has already returned when
     regeneration runs" is false — a collection write regenerates inside
