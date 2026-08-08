@@ -22,6 +22,7 @@ mid-phase confusion (see *Observations* below).
 | Headless runtime with live Compositor | Runtime can initialize `wasamo_init`, DispatcherQueue, Compositor, TextRenderer / DirectWrite, build live `WidgetNode`s, and expose runtime property state without showing a window | Windows session with the required runtime compositor capability. GitHub Actions `windows-latest` has run this successfully; an SSH dev box may return `0x80070005` and should be classified as runtime-compositor-unavailable rather than GUI-capable. |
 | Assistant-visible capture (screenshot) | Assistant launches the host, captures the rendered window to an image, and analyses the pixels (did the screen render non-blank? is the intended sub-screen present?) — a pre-owner automated baseline, no human input | **Visible Windows desktop session required** (same as GUI/interactive). Capture must be **per-monitor-DPI-aware** and use `Graphics.CopyFromScreen` over the window's `GetWindowRect`; `PrintWindow` reads back blank for the DirectComposition client area. Does not replace owner human-visible smoke. |
 | GUI / interactive | Window opens; hover, click, key input, animation behave correctly | **Visible Windows desktop session required.** Local physical machine, or RDP/VNC into a dev box. Plain SSH is **not sufficient** because it provides no interactive desktop session for the spawned window. |
+| Synthesized touch / pointer injection | A real OS touch contact reaches the window as `WM_POINTER*`, and handling those messages suppresses the mouse messages the system would otherwise synthesize for that contact | **Visible Windows desktop session required**, and additionally the target window must be **visible, foreground and unobstructed**: the contact is injected into the *desktop* at a screen point and delivered to whatever window is there. Not satisfiable by the headless-runtime environment, so this is **evidence-script tier, not a `cargo test` gate** — see Observation 6. |
 
 ## Observations
 
@@ -332,6 +333,69 @@ cdb -z <dump.dmp> -c ".reload /f; .ecxr; kn; lm; q"
 The captured dump and the full analysis note live in `private/`
 (git-ignored), consistent with how binary verification artifacts
 (screenshots) are kept out of the repo.
+
+### Observation 6 — Synthesized touch injection is desktop-scoped, so it is evidence-script tier rather than a `cargo test` gate
+
+M4-Phase 2 T11 measured this while discharging the milestone's touch
+obligation. No touch hardware is available, so the evidence is synthesized
+injection; the question the task had to answer first was **where such a
+test can run**.
+
+Both Win32 injection paths work on this project's development desktop:
+`InitializeTouchInjection` + `InjectTouchInput`, and
+`CreateSyntheticPointerDevice(PT_TOUCH, …)` +
+`InjectSyntheticPointerInput`. A stationary contact is delivered as
+`WM_POINTERENTER`, `WM_POINTERDOWN`, `WM_POINTERUP`, `WM_POINTERLEAVE`,
+with **screen** coordinates in `lParam` — where the mouse messages carry
+client coordinates.
+
+**The environment requirement is stronger than "a live Compositor", and
+differently shaped than the capture requirement.** Injection is addressed
+to the *desktop*, not to a window: the contact goes to whatever window
+sits at the screen point. A test binary that injected would therefore
+depend on its own window being visible, foreground and unobstructed — a
+precondition it shares with every other window on the desktop and cannot
+own. Any injecting tool asserts `WindowFromPoint` against its own `HWND`
+immediately before injecting and fails loudly rather than continuing.
+
+**The claim therefore splits in two, and the halves belong in different
+tiers.**
+
+- *"The window procedure converts, resolves and dispatches a `WM_POINTER*`
+  message correctly"* is a property of the runtime. Messages posted or
+  sent directly exercise it, so it is an ordinary mock-free integration
+  test in the headless-runtime-with-live-Compositor class, and it is
+  CI-gated like the rest of that suite.
+- *"A real OS contact reaches the app, once, because handling the pointer
+  message suppressed the promotion"* cannot be reached that way at all. A
+  `SendMessageW`-delivered `WM_POINTER*` carries no real pointer id, so
+  `DefWindowProcW` promotes nothing whether or not the runtime claims the
+  message — removing the suppression leaves the whole suite green. Only
+  real injection can distinguish the two, and only on a desktop.
+
+Mechanics worth not rediscovering, each of which fails silently or with a
+bare `ERROR_INVALID_PARAMETER`:
+
+- `POINTER_TOUCH_INFO.pressure` is a **touch** range (0–1024). A pen-scale
+  value is rejected with no diagnostic beyond the error code.
+- Build the contact structure where value semantics do not copy it out
+  from under you. In PowerShell, assignment to a **nested** value-type
+  field mutates a copy, so a contact filled in field-by-field from
+  PowerShell reaches the OS still zeroed — build it in the C# layer.
+- **Park the physical cursor away from the target window before
+  injecting.** A genuine `WM_MOUSEMOVE` from wherever the operator left
+  the mouse is indistinguishable, to a naive counter, from a promoted one,
+  and turns a correct result into a reported failure. Distinguish by
+  ordering and coordinates as well: a promoted message follows the
+  contact's pointer messages and carries the contact's client point.
+- Report a Win32 last error only when the call actually failed. A stale
+  `GetLastError` printed beside a success reads, in an artifact, like a
+  defect.
+
+**The limit is the same shape as M4-Phase 1's synthesized
+`WM_DPICHANGED`:** injection establishes that this message path works, not
+that a physical digitizer produces the same messages. Nothing here should
+be read as evidence about real touch hardware.
 
 ### Implication for future ADRs
 
