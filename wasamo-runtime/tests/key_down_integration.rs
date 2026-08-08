@@ -54,6 +54,17 @@
 //!   `__arranged_rect_for_test()`) only exists once `emit::flush_layout`
 //!   (Phase 2) has actually run — the same drain a click-triggered
 //!   structural mutation goes through in `modal_scope_integration.rs`.
+//! - [`two_key_down_handlers_on_one_node_are_told_apart_by_their_key`]
+//!   (Fixture 8) — the smallest shape in which `wasamo_ir::signal_key`'s
+//!   *argument* is observable at all. Both sides compose the storage key
+//!   through that one function, so an argument dropped symmetrically stays
+//!   invisible to every fixture with only one `key-down` per node.
+//! - [`a_disabled_root_button_suppresses_its_own_key_down_without_consuming`]
+//!   (Fixture 9) — a disabled Button-family node suppresses its own
+//!   `key-down` and does not consume, with the enabled leg beside it.
+//!   Reachable only as the tree root, through the `traversal_root` start;
+//!   found by independent review after this task's first draft declared
+//!   the case unreachable.
 //!
 //! # `send_key` vs `key_and_drain`
 //!
@@ -84,7 +95,7 @@
 //! `modal_scope_integration.rs` (`send_click` is omitted: no fixture here
 //! needs a synchronous, non-drained click). This file's own addition is
 //! [`read_counter`] (copied in spirit from `event_routing_integration.rs`'s
-//! helper of the same name) and the seven fixtures themselves.
+//! helper of the same name) and the nine fixtures themselves.
 //!
 //! # The client stays small (M4-Phase 1 T8 finding)
 //!
@@ -105,7 +116,9 @@ use std::rc::Rc;
 use wasamo_runtime::{ffi, WidgetNode};
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
-use windows::Win32::UI::Input::KeyboardAndMouse::{VK_ESCAPE, VK_LEFT, VK_RIGHT, VK_TAB};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    VK_ESCAPE, VK_LEFT, VK_RETURN, VK_RIGHT, VK_TAB,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetSystemMetrics, GetWindowRect, PostMessageW, PostQuitMessage, SendMessageW,
     SM_CXMAXTRACK, SM_CXSCREEN, SM_CYMAXTRACK, SM_CYSCREEN, WM_DPICHANGED, WM_KEYDOWN,
@@ -953,6 +966,204 @@ fn the_authored_key_down_walk_consumes_ahead_of_the_host_key_slot() {
                  candidate keys); the recorder above is what actually discriminates"
             );
             assert_eq!(matched_result.0, 0, "the consuming arm returns LRESULT(0)");
+        }
+    });
+}
+
+// ── Fixture 8 — two keys on one node are told apart ────────────────────────
+
+const TWO_KEYS_ONE_NODE_UI: &str = r#"component TwoKeyDownHandlersOnOneNode inherits Window {
+    state lefts: i32 = 0
+    state rights: i32 = 0
+    VStack {
+        spacing: 0
+        padding: 0
+        key-down("ArrowLeft")  => { root.lefts += 1; }
+        key-down("ArrowRight") => { root.rights += 1; }
+        Text { text: "\{root.lefts}" }
+        Text { text: "\{root.rights}" }
+    }
+}"#;
+
+/// Fixture 8: two `key-down` handlers for **different** keys on the same
+/// node. `ArrowLeft` must run the first and only the first.
+///
+/// This is what makes `wasamo_ir::signal_key`'s **argument** observable at
+/// the behaviour level. The loader writes the storage key with that
+/// function and `deliver_key_down` looks it up with the same one, so a
+/// symmetric error — `signal_key` dropping its argument on both sides —
+/// leaves every other fixture in this file green: each has at most one
+/// `key-down` handler per node, and `key-down` alone would still match it.
+/// The lead measured exactly that (close gate W9: neutering `signal_key`
+/// reddened only `wasamo-ir`'s own unit test and nothing else in the
+/// workspace). Two keys on one node is the smallest shape where the
+/// argument has to survive.
+///
+/// Uses [`send_key`]: bound `Text` content is written synchronously.
+#[test]
+fn two_key_down_handlers_on_one_node_are_told_apart_by_their_key() {
+    run_on_owning_runtime_thread_or_skip("key-down: two keys on one node", move || {
+        let ir = lower_ui_to_ir(TWO_KEYS_ONE_NODE_UI);
+        unsafe {
+            let window = load_window(&ir);
+            let hwnd = (*window).hwnd;
+            normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "F8 baseline");
+
+            {
+                let root = (*window).root_widget.as_ref().expect("content root");
+                assert_eq!(read_counter(&root.children[0], "lefts before"), 0);
+                assert_eq!(read_counter(&root.children[1], "rights before"), 0);
+            }
+
+            send_key(hwnd, VK_LEFT.0);
+
+            let (lefts, rights) = {
+                let root = (*window).root_widget.as_ref().unwrap();
+                (
+                    read_counter(&root.children[0], "lefts after ArrowLeft"),
+                    read_counter(&root.children[1], "rights after ArrowLeft"),
+                )
+            };
+
+            ffi::wasamo_window_destroy(window);
+
+            assert_eq!(lefts, 1, "the ArrowLeft handler must have run exactly once");
+            assert_eq!(
+                rights, 0,
+                "the ArrowRight handler on the same node must NOT have run — if it did, the \
+                 storage key dropped its argument and both handlers are stored under `key-down`"
+            );
+        }
+    });
+}
+
+// ── Fixture 9 — a disabled Button suppresses its own key-down ──────────────
+
+const DISABLED_ROOT_BUTTON_UI: &str = r#"component ADisabledRootButtonSuppressesItsOwnKeyDown inherits Window {
+    state gate_enabled: bool = false
+    Button {
+        text: "gate"
+        enabled: gate_enabled
+        key-down("Enter") => { root.gate_enabled = true; }
+    }
+}"#;
+
+const ENABLED_ROOT_BUTTON_UI: &str = r#"component AnEnabledRootButtonRunsItsOwnKeyDown inherits Window {
+    state gate_enabled: bool = true
+    state fired: bool = false
+    Button {
+        text: "gate"
+        enabled: gate_enabled
+        key-down("Enter") => { root.gate_enabled = false; }
+    }
+}"#;
+
+/// Fixture 9: a disabled Button-family node suppresses its own `key-down`
+/// dispatch, the same disposition `docs/dsl_spec.md` §4.8 gives a click,
+/// and — having run nothing — does not consume: the key continues to the
+/// host key slot.
+///
+/// **The reachable shape is narrow and was found by independent review**
+/// (F1). A disabled Button can never be the *focused* widget
+/// (`collect_stops` / `focus_landing` both gate on `enabled`) and, after
+/// this task's Button-family child rejection, can never be a non-start
+/// node on a chain. What remains is `key_down_on_key`'s other start
+/// source: with nothing focused the walk starts at `traversal_root`, which
+/// is the tree root, and `collect_stops` never gates the root node itself.
+/// A component whose root widget *is* a disabled Button is therefore the
+/// one shape that reaches the suppression arm.
+///
+/// - **Leg A (disabled)**: the handler does not run — `enabled` stays
+///   `Some(false)` — and the key reaches the host key slot.
+/// - **Leg B (the same tree, enabled)**: the identical key on the
+///   identical shape *does* run the handler. Without it, leg A would be
+///   satisfied by a tree where `key-down` never reaches a root Button at
+///   all, which is the very reading F1 disproved.
+///
+/// Uses [`send_key`]: `enabled` is written through the binding path
+/// synchronously.
+#[test]
+fn a_disabled_root_button_suppresses_its_own_key_down_without_consuming() {
+    run_on_owning_runtime_thread_or_skip("key-down: disabled root Button", move || {
+        // Leg A — disabled.
+        unsafe {
+            let ir = lower_ui_to_ir(DISABLED_ROOT_BUTTON_UI);
+            let window = load_window(&ir);
+            let hwnd = (*window).hwnd;
+            normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "F9 A baseline");
+
+            assert_eq!(
+                ffi::__focus_path_for_test(window),
+                None,
+                "fixture stopped discriminating: the traversal_root start is what reaches a \
+                 root Button at all"
+            );
+            {
+                let root = (*window).root_widget.as_ref().expect("content root");
+                assert_eq!(root.__kind_name_for_test(), "Button");
+                assert_eq!(
+                    root.__button_enabled_for_test(),
+                    Some(false),
+                    "fixture stopped discriminating: the root Button must actually be disabled"
+                );
+            }
+
+            let seen = install_key_slot_recorder(window);
+            send_key(hwnd, VK_RETURN.0);
+
+            let after = {
+                let root = (*window).root_widget.as_ref().unwrap();
+                root.__button_enabled_for_test()
+            };
+            let recorded = seen.borrow().clone();
+            ffi::wasamo_window_destroy(window);
+
+            assert_eq!(
+                after,
+                Some(false),
+                "a disabled Button must not run its own key-down handler (dsl_spec §4.8: it \
+                 cannot be activated from the keyboard)"
+            );
+            assert_eq!(
+                recorded,
+                vec![VK_RETURN.0],
+                "suppression is not consumption: having run nothing, the node does not end the \
+                 walk, so the key still reaches the host key slot; saw {recorded:?}"
+            );
+        }
+
+        // Leg B — the same shape, enabled.
+        unsafe {
+            let ir = lower_ui_to_ir(ENABLED_ROOT_BUTTON_UI);
+            let window = load_window(&ir);
+            let hwnd = (*window).hwnd;
+            normalise_to_reference_baseline(window, CLIENT_W, CLIENT_H, "F9 B baseline");
+
+            {
+                let root = (*window).root_widget.as_ref().expect("content root");
+                assert_eq!(root.__button_enabled_for_test(), Some(true));
+            }
+
+            let seen = install_key_slot_recorder(window);
+            send_key(hwnd, VK_RETURN.0);
+
+            let after = {
+                let root = (*window).root_widget.as_ref().unwrap();
+                root.__button_enabled_for_test()
+            };
+            let recorded = seen.borrow().clone();
+            ffi::wasamo_window_destroy(window);
+
+            assert_eq!(
+                after,
+                Some(false),
+                "the agreement leg: an ENABLED root Button's own key-down handler does run, so \
+                 leg A measures suppression rather than a key that never arrives"
+            );
+            assert!(
+                recorded.is_empty(),
+                "and a handler that ran consumed the key; saw {recorded:?}"
+            );
         }
     });
 }

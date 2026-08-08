@@ -1773,22 +1773,32 @@ impl WidgetNode {
     /// toward the host key slot and then `DefWindowProcW`
     /// (`docs/architecture.md` §13.2).
     ///
-    /// **No `enabled` suppression arm, deliberately — unlike
-    /// [`ClickDisposition::Suppressed`].** `docs/dsl_spec.md` §4.8's
-    /// disabled contract is written over *clicks* ("suppresses
-    /// click-handler dispatch") and says nothing about `key-down`. The
-    /// case is also unreachable from any authored tree today, so a
-    /// suppression branch here would be a branch no test could ever fire
-    /// (implementation-gates trap #4): a disabled Button is excluded from
-    /// Tab-stop enumeration and click landing
+    /// **A disabled Button-family node suppresses its own `key-down`
+    /// dispatch and does not consume**, the same disposition
+    /// [`ClickDisposition::Suppressed`] gives a click: the walk skips that
+    /// node's handlers and continues to its ancestors.
+    /// `docs/dsl_spec.md` §4.8's disabled contract is written over clicks,
+    /// but its focus clause is written over the keyboard — a disabled
+    /// Button "cannot be reached or activated from the keyboard" — and
+    /// §4.19 makes `clicked` and `key-down` two spellings of the same
+    /// authored surface, so delivering one while suppressing the other
+    /// would be an asymmetry an author could only discover by hitting it.
+    ///
+    /// **This arm is reachable, and the reachable shape is narrow**
+    /// (independent review of M4-Phase 2 T8, F1). A disabled Button is
+    /// excluded from Tab-stop enumeration and from click landing
     /// (`focus_core::FocusTree::collect_stops` / `focus_landing`, both
-    /// gated on `node.enabled`), so it can never become the *focused*
-    /// widget and therefore never `start_path`'s target; and a Button can
-    /// carry no children at all (the M4-Phase 2 T8 loader gate,
-    /// `ir_loader.rs`'s Button-family child rejection), so it can never be
-    /// a *non-start* node on any chain either — a Button only ever appears
-    /// on a `key-down` chain as the chain's own first (start) entry, never
-    /// as an ancestor reached afterwards.
+    /// gated on `node.enabled`), so it can never be the *focused* widget;
+    /// and after T8's Button-family child rejection a Button carries no
+    /// children, so it is never a non-start node on a chain. What remains
+    /// is [`crate::focus::key_down_on_key`]'s **other** start source: with
+    /// nothing focused the walk starts at `traversal_root`, which is the
+    /// tree root itself, and `collect_stops` never gates the root node
+    /// (it is visited with `is_root = true`, which skips the role and
+    /// enabled checks). A component whose root widget *is* a disabled
+    /// Button therefore reaches this arm — the shape
+    /// `a_disabled_root_button_suppresses_its_own_key_down_without_consuming`
+    /// builds.
     pub(crate) fn deliver_key_down(&mut self, start_path: &[usize], key: &str) -> bool {
         let signal = wasamo_ir::signal_key("key-down", Some(key));
 
@@ -1811,6 +1821,15 @@ impl WidgetNode {
             // any handler in this dispatch ran, so it is still live the
             // first time the walk reaches it — the same argument
             // `hit_test_click` makes for its own chain.
+            let node = unsafe { &*widget_ptr };
+            // Checked ahead of the handler lookup, exactly as
+            // `click_disposition_for` checks it ahead of its producer scan:
+            // a disabled Button-family node dispatches nothing even when it
+            // carries a handler, and — having run nothing — does not end
+            // the walk either.
+            if let Some(false) = node.button_data().map(|btn| btn.enabled) {
+                continue;
+            }
             let handlers = unsafe { signal_handlers_for(widget_ptr, &signal) };
             if handlers.inline.is_empty() && !handlers.has_host_listener {
                 continue;

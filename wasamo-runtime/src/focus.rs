@@ -876,6 +876,16 @@ pub(crate) fn key_down_on_key(root: &mut WidgetNode, focus: &mut WindowFocus, vk
     // from, which does not happen — but delivery is still gated on it
     // resolving, rather than assumed (the same discipline
     // `dismiss_on_key` uses for `scope`).
+    //
+    // **This arm returns `false` where `dismiss_on_key`'s returns `true`,
+    // and the asymmetry is the two signals' consumption rules rather than
+    // an oversight** (noted at the independent review, F3). Escape is
+    // consumed by the *existence* of an entered scope — writing no
+    // `dismiss` handler is how a scope declines to close (dsl_spec §4.19)
+    // — so `dismiss_on_key` has already decided consumption before it
+    // resolves a path. A `key-down` is consumed only by a handler that
+    // *runs*, so a walk that cannot start has consumed nothing and the key
+    // must fall through.
     let Some(path) = projection.path(start) else {
         return false;
     };
