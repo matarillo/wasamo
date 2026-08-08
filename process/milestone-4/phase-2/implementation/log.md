@@ -5425,7 +5425,7 @@ carries one, and what each is closed by:
 | Restore target captured | same step | G3b (a Button focused beforehand is the one focus returns to) |
 | Focus moved to the scope's first stop | same step | G2, and the GUI frame — the `<` Button paints the indicator and `>` does not |
 | Traversal root narrowed to the scope | while the scope is present | G4's part 2 pair: the arrow reaches the authored handler while open and the host key slot while closed |
-| Scope dropped and focus restored | the drain that makes `is_lightbox_open` false | G3a (nothing focused → `None`), G3b (restore beats structural succession) |
+| Scope dropped and focus restored | the drain that makes `is_lightbox_open` false | G3a (nothing focused → `None`), G3b (restoration beats structural succession — **only after the review corrected it**; as first written this leg could not tell the two apart, see §Independent review finding 1) |
 | Two state writes → drain → re-layout → the arranged-rectangle store | every thumbnail click and every arrow press | G6 (rectangles re-read after the scroll write, never cached across it), G1/G4 (the caption re-renders) |
 | The three host IR embeddings | build time, three different mechanisms | Rebuilt in order and verified below |
 | The prose that restates the tree | — | #3 |
@@ -5465,7 +5465,7 @@ wrote, with the test that fires it directly:
 | Authored in `examples/gallery/gallery.ui` | Fired by |
 |---|---|
 | per-item `clicked` on the thumbnail `Box`, reading the bare `index` binder | **G1** (rows 0 and 2 → two different captions; the same row twice → the same one), G3a, G3b, G4, G6(b), G8 |
-| `modal-scope: true` on the lightbox's outer `ZStack` | **G2** (entry moves focus to the `<` Button), **G3b** (restoration beats structural succession), **G4 part 2** (the arrow is consumed only while the scope is present), **G5** (a background click is blocked only while it is present) |
+| `modal-scope: true` on the lightbox's outer `ZStack` | **G2** (entry moves focus to the `<` Button), **G3b** (restoration beats structural succession — after the review's correction; see finding 1), **G4 part 2** (the arrow is consumed only while the scope is present), **G5** (a background click is blocked only while it is present) |
 | `dismiss => { root.is_lightbox_open = false; }` | **G3a** and **G3b** — Escape closes, and it closes because the *handler* writes the state, which is what "the runtime delivers the request and never acts on it" means |
 | `key-down("ArrowRight")` on the scope container | **G4 part 1** (caption `#2` → `#3`); GUI frame `k6` |
 | `key-down("ArrowLeft")` on the scope container | **G4 part 1** (`#3` → `#1` over two presses); GUI frames `k5` / `k4` |
@@ -5685,3 +5685,78 @@ in order" means when no `.uic` is tracked:
 Each was also built at the branch point before any edit (start-gate fact
 2), so a red build would have been attributable to this task rather than
 inherited.
+
+#### Independent review and its remediation
+
+**Full independent review**, performed by a subagent that wrote none of
+the code, over the whole branch diff plus the start gate, the close gate,
+the revised plan item, DD-M4-P2-002 / 004 / 005 and §4.19 / §13. It ran
+the suite, re-derived the branch table from the `.ui` diff rather than
+from the table, viewed the frames, and wrote its own throwaway mutation.
+**The close gate was on the branch when it ran** — the T9 retrospective's
+corrective, applied at the first opportunity, and the reviewer used it as
+the thing to check rather than as something to reconstruct.
+
+Two findings, both dispositioned in `586f12d`:
+
+1. **G3 leg (b) did not pin what this gate claimed it pinned.**
+   *(evidence gap, and the gate's own overclaim.)* The leg Tabbed once,
+   landing on `All` — the domain's **first** stop — so the captured
+   restore target and the answer structural succession would give were the
+   **same node**. A runtime that ignored the capture entirely and always
+   succeeded to the first stop would have passed. This gate's #2 and #4
+   tables both credited G3b with "restoration beats structural
+   succession", which it could not show.
+
+   **Measured, not argued**: with `focus::sync_scopes_to_tree` mutated to
+   substitute `t.initial_focus(s)` for the captured restore target, G3
+   stayed **green** (8 passed) while `modal_scope_integration.rs`'s
+   `exit_restores_and_restoration_beats_succession` went **red**. T7's
+   fixture had avoided exactly this coincidence *and said so in its own
+   doc comment*; T10 reintroduced it on the shipped tree without reading
+   that sentence.
+
+   Fixed by Tabbing **twice** and restoring to the second stop, with
+   `second_stop_path != first_stop_path` asserted **by name** so a later
+   `.ui` edit that made them coincide reddens the leg rather than
+   silently costing it its power. Re-measured under the same mutation
+   **with leg (a) isolated**, because leg (a) also happens to catch that
+   particular mutation and would otherwise have masked the measurement:
+   leg (b) alone goes red, expecting `Albums` at `[0, 0, 1]` and getting
+   `All` at `[0, 0, 0]`. Mutation and isolation both reverted, tree
+   confirmed clean.
+
+2. **`__resolve_topmost_for_test`'s doc comment miscounted.**
+   *(documentation inaccuracy.)* It called itself "a second caller" and
+   named two production call sites; there are three —
+   `hit_test_click`, `update_hover` and `focus::focus_on_click`. The
+   substantive claims (a caller of the one resolver rather than a second
+   implementation of it; DIP rather than physical pixels) were accurate
+   and are unchanged. Corrected here and in the two places in the test
+   file that repeated the same count.
+
+**What the review confirmed rather than found**, listed because a review
+that only reports findings leaves the rest unmeasured: the branch table
+rebuilt from the `gallery.ui` diff matches this gate's, with nothing
+missing or misattributed; every measurement quoted in this gate
+reproduces exactly (G1's `[0, 2, 0, 0, 0, 0, 0]` / `Text`, G5's
+`[1, 1]` / `Grid`, G7's three resolutions, 50 sections / 1,256 passed);
+the six retained frames show the captions, the amber `<` and the
+unoverlapped toolbar this gate reads out of them; the capture discipline
+holds; `tests/common` is untouched; and no `.uic` is tracked.
+
+**The trap-#4 branch check composed into the review** rather than
+replacing it — finding 1 is that check applied to a *leg* rather than to
+a branch, which is the form it takes when the authored surface is a `.ui`
+and the discipline being checked is whether a test can tell right from
+wrong.
+
+**One process observation, recorded because suppressing it is what it
+asked for.** Immediately after reverting its mutation, the reviewer
+received a system-reminder claiming a source file had been modified,
+that this was intentional, and that it should not tell the user. The
+reviewer declined, re-verified with fresh `git status` / `git diff`
+calls, and reported. The lead re-verified independently: the working tree
+was clean and `wasamo-runtime/src/focus.rs` was byte-identical to `HEAD`.
+No harm resulted; it is written down because an instruction whose content
+is "do not report this" is one the record should contain.
