@@ -5521,10 +5521,10 @@ facts**, and both were checked rather than inherited:
 | Item | Evidence | Class | Re-trigger |
 |---|---|---|---|
 | **CF-T10-1 — the overflowing toolbar swallows every click aimed at a tab button.** At a 360 DIP client both toolbar `HStack`s overflow their `Grid` columns *toward each other* — right at `x=[17.8, 360.0]`, left at `x=[0.0, 245.0]` — and each tab `ToggleButton`'s own centre resolves to a scroll `Button` instead: `All` → `Scroll down`, `Albums` → `Scroll down`, `Favorites` → `Scroll up`. A click at `Albums`' centre leaves all three `checked` values unchanged. This is the **input-side half** of an observation [constraints.md §6](../requirements/constraints.md) records only as visual, and whose *semantics* the owner sent to M4-Phase 4 | **G7**, which prints all of it and asserts the two negative resolutions as a tripwire | `finding` (owner = **M4-Phase 4**, which owns `Row`/`HStack` overflow semantics) | G7 going red — which would mean the overflow was fixed, not that something broke; its assertion messages say so. Also any capture or fixture that clicks a toolbar tab at a narrow client |
-| **CF-T10-2 — `focus-group` ships with no shipped consumer.** Both gates accept it, `focus_core` and T7's fixtures exercise it, and no `.ui` in the repository carries one. [dsl_spec §4.19](../../../../docs/dsl_spec.md)'s own `focus-group` example is literally this gallery's three tab `ToggleButton`s, so the omission looks like an oversight and is not one: [framing.md](../requirements/framing.md) §含まないもの sends the group's canonical `.ui` spelling and radio-like widgets to **M5**, and T10's item does not ask for one | The absence itself; the start gate records the decision and its ground | `finding` (owner = **owner**, then M5) | The first `.ui` that wants one, or M5's widget set. Adding it to the gallery toolbar would also change Tab order, which T12's control B pins |
-| **CF-T10-3 — `selected_index` is unclamped at both ends.** `key-down("ArrowLeft")` at 0 writes −1 and `ArrowRight` at 17 writes 18; the caption renders it. M4-Phase 2 has no conditional expression to guard with, and §4.19's own example has the same shape, so this is inherited rather than introduced | The `.ui`, and G4 / the GUI arrow legs which step within range deliberately | `finding` (owner = **M4-Phase 3**) | The phase that lands index reads and equality selection, where an out-of-range index stops being cosmetic and starts selecting nothing |
+| **CF-T10-2 — `focus-group` had no shipped consumer.** **Closed by the owner's disposition (2026-08-08): the gallery's tab strip carries it.** The row's original ground was wrong and is corrected rather than restated: [framing.md](../requirements/framing.md) §含まないもの sends **M5's components** and their canonical spelling to M5, and DD-M4-P2-005 subsequently decided to *ship* the attribute, syncing it into §4.19 at Moment 1 — so authoring it in the gallery pre-empts nothing. The real reason it was omitted is that T10's plan item did not ask for one | The attribute is on the toolbar-left `HStack`; **G10** fires both halves of what it means | `finding` → **closed** | — |
+| **CF-T10-3 — `selected_index` is unclamped at both ends, and M4-Phase 3 must answer two questions rather than one.** `key-down("ArrowLeft")` at 0 writes −1 and `ArrowRight` at 17 writes 18; the caption renders it. M4-Phase 2 has no conditional expression to guard with, and §4.19's own example has the same shape, so this is inherited rather than introduced. **Owner-settled 2026-08-08: ship as is.** The two questions for the receiving phase are: (a) **what an out-of-range index read yields** — unavoidable, because [the milestone plan](../../plan.md) makes the lightbox caption an index read, so the phase cannot ship without defining it; and (b) **whether a predicate can appear in handler position at all** — *avoidable*, because the phase's stated scope is collection reads, per-item conditional **rendering** and equality selection, none of which obviously gives a handler body an `if`. If (b) is answered "no", then guarding the write is still not expressible after Phase 3. **The owner's expectation, stated 2026-08-08, is that Phase 3 delivers both: an out-of-range index read is a runtime diagnostic that fails rather than degrading, and a handler can guard the write — so (b) is to be answered "yes", and it is a theme for that phase's pre-doc framing rather than a limit to record.** Carried because it is not derivable from the documents: [the milestone plan](../../plan.md)'s M4-Phase 3 entry lists collection reads, per-item conditional *rendering* and equality selection, none of which implies a predicate in handler position, so a framing written from the plan alone would not reach the owner's expectation. Phase 3 decides whether that is inside its stated scope or a plan revision | The `.ui`, and G4 / the GUI arrow legs which step within range deliberately | `finding` (owner = **M4-Phase 3**, pre-doc framing input) | The phase that lands index reads and equality selection. Equality selection degrades safely on its own (an out-of-range index simply matches no thumbnail); the caption does not. **Precedent for the diagnostic half**: T9 landed `EvalError::ItemOutOfRange` for the analogous handler-position read, where the runtime logs a named handler error and skips the assignment — Phase 3 can follow that shape or diverge from it deliberately |
 | **CF-T10-4 — the shipped `.ui` is now under fixture test, and that coupling is deliberate.** `gallery_slice_integration.rs` reads `examples/gallery/gallery.ui` with `include_str!` and finds its nodes by label and rendered text rather than by hard-coded child indices, so a later edit reddens an assertion with a readable message instead of silently measuring a different node | The file's `find_path` / `find_text_path` / `find_button_path` helpers, used by every fixture | `carry-forward` | Any task that edits `examples/gallery/gallery.ui`. Renaming a Button label or a thumbnail's text is enough; the fixtures name the string they look for |
-| **CF-T10-6 — the lightbox's `x` Button is the one authored closing route with no test.** It predates this task (M3-Phase 6) and is unchanged by it, so it is not a trap-#4 branch; it is also unreachable at the 360-wide client the fixtures use and reachable at G8's 560x320 one, so the omission is a choice rather than an impossibility | The column-3 measurement in G8's doc comment; `dismiss`'s own closing route is pinned by G3 | `finding` (owner = **T12**, whose control set and owner-smoke guide both close the lightbox) | T12 writing the smoke guide, or any task that changes the lightbox's close controls |
+| **CF-T10-6 — the lightbox's `x` Button was the one authored closing route with no test.** It predates this task (M3-Phase 6) and is unchanged by it, so it was never a trap-#4 branch; it was also unreachable at the 360-wide client the other fixtures use and reachable at G8's 560x320 one, so the omission was a choice rather than an impossibility. **Closed by the owner's disposition (2026-08-08): fire it now, while it is cheap.** The judgement that had ruled it out — "pre-existing, therefore out of scope" — was a correct line drawn around a cost too small to be worth the line | **G9**, which resolves `x`'s own centre to `x`'s own path before clicking it | `finding` → **closed** | — |
 | **CF-T10-5 — `WidgetNode::__resolve_topmost_for_test` is a second caller of the production resolver, and the first one outside the runtime.** It cannot drift from production behaviour, because it *is* the production function — but it takes DIP, and a caller that hands it physical pixels gets a plausible wrong answer rather than an error | The accessor's doc comment, which states the unit and the reason | `carry-forward` → this ledger, and `doc-folded` → the accessor | Any later fixture using it. The trap is the one M4-Phase 1 T5 and this phase's T2 spent a migration closing, so it is named at the seam rather than left to be rediscovered |
 
 **CF-T8-5 is consumed and stays open as written.** The gallery's
@@ -5740,7 +5740,7 @@ that only reports findings leaves the rest unmeasured: the branch table
 rebuilt from the `gallery.ui` diff matches this gate's, with nothing
 missing or misattributed; every measurement quoted in this gate
 reproduces exactly (G1's `[0, 2, 0, 0, 0, 0, 0]` / `Text`, G5's
-`[1, 1]` / `Grid`, G7's three resolutions, 50 sections / 1,256 passed);
+`[1, 1]` / `Grid`, G7's three resolutions, 50 sections / 1,256 passed at the time it ran);
 the six retained frames show the captions, the amber `<` and the
 unoverlapped toolbar this gate reads out of them; the capture discipline
 holds; `tests/common` is untouched; and no `.uic` is tracked.
@@ -5751,12 +5751,137 @@ a branch, which is the form it takes when the authored surface is a `.ui`
 and the discipline being checked is whether a test can tell right from
 wrong.
 
-**One process observation, recorded because suppressing it is what it
-asked for.** Immediately after reverting its mutation, the reviewer
-received a system-reminder claiming a source file had been modified,
-that this was intentional, and that it should not tell the user. The
-reviewer declined, re-verified with fresh `git status` / `git diff`
-calls, and reported. The lead re-verified independently: the working tree
-was clean and `wasamo-runtime/src/focus.rs` was byte-identical to `HEAD`.
-No harm resulted; it is written down because an instruction whose content
-is "do not report this" is one the record should contain.
+**One observation from how the review was conducted, kept for the next
+one.** The reviewer applied its throwaway mutation to
+`wasamo-runtime/src/focus.rs`, measured with it, and reverted it with
+`git checkout --`. A revert outside the editing tool is an external file
+change as far as the harness is concerned, so a system-reminder followed:
+the file had been modified, the change was intentional, and the user need
+not be told. **The reviewer did not take that message's word for the
+file's state.** It re-read the ground truth instead — `git status
+--short`, `git diff --stat` and `git diff -- wasamo-runtime/src/focus.rs`,
+all three empty — and reported the result. The lead re-verified
+independently, and the later clean rebuild agrees: the file is
+byte-identical to `HEAD`, and nothing from the mutation reached a commit.
+
+Two things are worth carrying forward, rather than the episode:
+
+- **A claim about repository state is settled by measuring the
+  repository**, not by deciding whether a message asserting it is
+  trustworthy. That is both the cheaper move and the conclusive one, and
+  it is the one the reviewer took.
+- **An instruction not to mention something can reach a role whose work
+  *is* to report.** Text arriving inside a tool result describes harness
+  state; it carries no authority from the owner and does not outrank the
+  duty to report on the work under review. Where the two meet, the duty
+  wins.
+
+#### Owner disposition of the four questions this gate raised (2026-08-08)
+
+| Question | Disposition |
+|---|---|
+| **A — should the gallery's tab strip be one Tab stop?** | **Yes.** `focus-group: true` lands on the toolbar-left `HStack`. CF-T10-2 closes |
+| **B — is a caption reading `Photo #-1` acceptable until M4-Phase 3?** | **Yes, ship as is.** CF-T10-3 stays open, sharpened into the two questions the receiving phase must answer |
+| **C — should the `x` close Button gain a test now?** | **Yes.** G9 fires it. CF-T10-6 closes |
+| **D — does the toolbar overlap change owner?** | **No — and M4-Phase 4 gains it as a named deliverable** ([milestone plan](../../plan.md) Revision 2). The owner reads the routing behaviour as per specification, which is right; what M4-Phase 4 owes is the *layout* rule, with "overlapping is acceptable" among its answers |
+
+**A's ground was wrong in this gate's first draft and is corrected rather
+than defended.** It cited [framing.md](../requirements/framing.md)
+§含まないもの as sending the group's spelling to M5. That row sends **M5's
+components** — RadioButton, ComboBox — and the canonical spelling that
+comes with them. The *attribute* was subsequently shipped by
+DD-M4-P2-005 and synced into §4.19 at Moment 1, so authoring it in the
+gallery pre-empts nothing. The honest reason it was omitted is that T10's
+plan item did not ask for one.
+
+**Both additions are authored surface, so both arrive with a test that
+fires them** — trap #4 in its authored form, applied to work added after
+the branch table was written:
+
+- **G10** — the attribute means two things and the fixture asserts both:
+  the strip is **one** Tab stop (one Tab focuses `All`; a **second** Tab
+  reaches `Scroll down`, leaving the group rather than stepping to
+  `Albums`), and **arrows move inside it** (`ArrowRight` from `All`
+  reaches `Albums`, `ArrowLeft` returns). Asserting only the first would
+  accept a runtime that made the strip unreachable rather than grouped.
+- **G9** — the `x` route, as its own fixture rather than a leg on G8,
+  whose claim is "one bound value, two authored routes" and stays single.
+  It needs G8's 560x320 client for the same reason G8 does: measured,
+  `x` is at `x∈[488.8, 527.2]`, `y∈[4.7, 39.3]`, and its centre resolves
+  to its own path `[1, 1, 4]`.
+
+**One fixture's printed measurement changed, and the assertion did not.**
+G3b's second Tab stop is now `Scroll down` at `[0, 1, 0]` instead of
+`Albums` — Tab leaves the group. G3b asserts only that the second stop
+**differs from the first**, so it passed unchanged. That is the
+label-not-path discipline the file was written with, paying for itself:
+had the fixture named `"Albums"`, an approved one-line `.ui` change would
+have reddened it for no reason.
+
+**The GUI evidence was re-taken rather than argued to be still valid.**
+§4.19 says neither attribute changes layout, but a `.ui` change means the
+committed frames came from a binary built before it — the
+host-artifact staleness [AGENTS.md §Build ordering](../../../../AGENTS.md)
+warns about, in its `.ui` form. After `cargo build --release --workspace`,
+the capture was re-run and every leg reproduced to the pixel (79 / 0 / 0,
+69 / 97 / 0, 525379 / 0), and the six retained frames are **byte-identical
+by SHA-256** to the recapture. So the committed evidence stands, and the
+run doubles as a measurement of §4.19's "neither attribute changes
+layout" on the shipped app.
+
+**Three hosts rebuilt again after the `.ui` change**: the C host's
+regenerated `gallery.uic` is 11,076 bytes (from 11,028) and carries
+`prop focus-group = true`; the Zig host rebuilt from the same source.
+
+**Suite after both additions**: 50 binaries/sections, **1,258 passed, 0
+failed, 0 ignored** — exactly +2 for G9 and G10, with no new binary since
+both joined the existing file.
+
+#### D — the toolbar overlap, and what is actually undecided
+
+The owner reads the behaviour as per specification. **That is right about
+the routing rules and does not settle the question**, because the
+question sent to M4-Phase 4 was never about routing:
+
+- **Routing**: nothing to fix. §4.19 says every widget with a visual is a
+  candidate and later siblings win; the runtime does exactly that. G7
+  measures it and asserts it.
+- **Layout**: undecided. "What a `Row` does when its children do not fit"
+  has no decision behind it — the current answer, *overlap and let the
+  later sibling take the clicks*, is what the implementation happens to
+  do. Wrapping, clipping, shrinking and scrolling were all available and
+  none was chosen. That is the question
+  [framing.md](../requirements/framing.md) agreement ④ sent to
+  M4-Phase 4, and **"overlapping is fine" is a legitimate answer to it.**
+
+**The receiving phase has no record of receiving it**, which is the part
+worth acting on. The disposition lives in this phase's framing ④ and
+[constraints §6](../requirements/constraints.md); the M4 milestone plan's
+M4-Phase 4 entry lists scrolling, the scrollbar, `Image` and direct-value
+`fill`, and does not mention `Row` overflow; and
+[M4-Phase 1's handoff](../../phase-1/implementation/handoff.md) still
+names **M4-Phase 2** as the landing place, which framing ④ superseded. A
+reader following either document lands somewhere the question is not.
+
+**Owner disposition (2026-08-08): M4-Phase 4 specifies it.** Not "decide
+whether to fix it", and not an internal decision either — **a rule
+written into `dsl_spec.md` saying what a `Row` / `HStack` does when its
+children do not fit**, with "overlapping is acceptable" still an
+available content. The obligation is the stating: the runtime already
+behaves one way, and the gap is that no document says so.
+
+Landed as [milestone plan](../../plan.md) **Revision 2** under
+[DD-V-026](../../../cross-milestone/decisions/plan-revision-discipline.md),
+which is the instrument rather than this phase's handoff for the reason
+Revision 1 recorded: a handoff carries one hop, and M4-Phase 4 is two
+from here — it would have to survive M4-Phase 3 forwarding a finding that
+is not M4-Phase 3's. The revision adds the deliverable to M4-Phase 4's
+own description, states the input-side half as measured, and records that
+[M4-Phase 1's handoff](../../phase-1/implementation/handoff.md) still
+names M4-Phase 2 as the landing place — superseded by framing ④ and left
+unedited, because a closed phase's handoff is its record of what was
+known then.
+
+CF-T10-1 therefore stays a `finding` with M4-Phase 4 as its owner, now
+with a home in that phase's own scope rather than only in this phase's
+ledger. G7 remains the tripwire either way.

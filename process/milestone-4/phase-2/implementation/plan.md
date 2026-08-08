@@ -801,6 +801,10 @@ one example host:
     the owner's smoke for a reason that has nothing to do with the phase.
     They use only the M3 Button surface, and the two routes are asserted
     to reach the same bound value.
+  - **The `x` close Button is fired too** (owner-settled 2026-08-08). It
+    predates this task and was therefore outside trap #4, but it is the
+    lightbox's other authored closing route and the only one with no test;
+    the line drawn around it cost more to defend than to cross.
 - **Scrolled hit-testing is exercised**, because the gallery is the
   clip rule's consumer: with `scroll_y` non-zero, a thumbnail inside the
   viewport resolves and opens the lightbox, and a toolbar click above
@@ -824,12 +828,15 @@ one example host:
   only *enabled Button-family* targets and so cannot witness a resolved
   `Box` / `Text` / `Grid` at all. It is what turned this item's own
   scrim claim from a prediction into a measurement.
-- **Two things ship that no consumer exercises, and both are named rather
-  than left to be found**: `focus-group` has no shipped `.ui` carrying it
-  (the group's canonical spelling is M5's, per the framing), and
-  `selected_index` is unclamped at both ends because this phase has no
-  conditional expression to guard with — §4.19's own example has the same
-  shape.
+- **The gallery's tab strip is one Tab stop** (`focus-group: true` on the
+  toolbar-left `HStack`, owner-settled 2026-08-08). This item did not ask
+  for it and the attribute would otherwise have shipped with no `.ui`
+  carrying it, which §4.19's own `focus-group` example — literally these
+  three tab `ToggleButton`s — makes look like an oversight.
+- **`selected_index` is unclamped at both ends** because this phase has no
+  conditional expression to guard with; §4.19's own example has the same
+  shape. Ships as is (owner-settled), carried to M4-Phase 3 with the two
+  questions that phase must answer.
 - **The known toolbar overlap has an input-side half nobody had
   measured**: where the toolbar `HStack`s overflow their `Grid` columns,
   every tab `ToggleButton` becomes unclickable, because a non-clipping
