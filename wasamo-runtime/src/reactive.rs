@@ -746,6 +746,162 @@ impl<'a> EvalContext for ForItemEvalContext<'a> {
     }
 }
 
+/// Read/write, item-aware `EvalContext` for a per-item handler body
+/// running inside a `for` body template (M4-Phase 2 T9, dsl_spec §4.19
+/// "Per-item handlers"). Delegates every plain property read/write to
+/// `HandlerEvalContext` — untracked, exactly like any other handler body,
+/// because handlers run outside the reactive scope — and adds `item` /
+/// `index` binder reads sourced from a `ForItemContext` snapshot, also
+/// untracked (unlike `ForItemEvalContext`'s binding-time `Signal::get()`
+/// reads, which register a reactive dependency: bindings re-run on
+/// change, handlers do not).
+///
+/// **Composed rather than copy-pasted.** `HandlerEvalContext` already
+/// owns every plain-property method this type needs unchanged, so
+/// duplicating its dozen trait methods here would be the parallel-data
+/// drift implementation-gates trap #3 warns about — a fix to one copy's
+/// `set_i32` silently not reaching the other. Only the item-aware methods
+/// are new logic, and they cannot delegate to `ForItemEvalContext` (its
+/// reads are tracked, which is wrong here) or to `HandlerEvalContext` (it
+/// carries no `ForItemContext` at all), so they are written directly
+/// against `get_untracked()` — the one-line difference from
+/// `ForItemEvalContext`'s own `get()` calls, which this type otherwise
+/// mirrors exactly (including `ensure_item_binder`).
+pub(crate) struct ForItemHandlerEvalContext<'a> {
+    inner: HandlerEvalContext<'a>,
+    item: &'a ForItemContext,
+}
+
+impl<'a> ForItemHandlerEvalContext<'a> {
+    pub(crate) fn new(registry: &'a SignalRegistry, item: &'a ForItemContext) -> Self {
+        Self {
+            inner: HandlerEvalContext::new(registry),
+            item,
+        }
+    }
+
+    fn ensure_item_binder(&self, binder: &str, expected: IrType) -> Result<(), EvalError> {
+        if binder != self.item.binder {
+            return Err(EvalError::UnknownProperty(binder.to_string()));
+        }
+        if self.item.elem != expected {
+            return Err(EvalError::TypeMismatch {
+                path: binder.to_string(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl<'a> EvalContext for ForItemHandlerEvalContext<'a> {
+    fn get_i32(&self, path: &str) -> Result<i32, EvalError> {
+        self.inner.get_i32(path)
+    }
+
+    fn get_string(&self, path: &str) -> Result<String, EvalError> {
+        self.inner.get_string(path)
+    }
+
+    fn get_bool(&self, path: &str) -> Result<bool, EvalError> {
+        self.inner.get_bool(path)
+    }
+
+    fn set_i32(&mut self, path: &str, value: i32) -> Result<(), EvalError> {
+        self.inner.set_i32(path, value)
+    }
+
+    fn set_bool(&mut self, path: &str, value: bool) -> Result<(), EvalError> {
+        self.inner.set_bool(path, value)
+    }
+
+    fn collection_element_type(&self, path: &str) -> Result<IrType, EvalError> {
+        self.inner.collection_element_type(path)
+    }
+
+    fn get_i32_list(&self, path: &str) -> Result<Vec<i32>, EvalError> {
+        self.inner.get_i32_list(path)
+    }
+
+    fn set_i32_list(&mut self, path: &str, value: Vec<i32>) -> Result<bool, EvalError> {
+        self.inner.set_i32_list(path, value)
+    }
+
+    fn get_string_list(&self, path: &str) -> Result<Vec<String>, EvalError> {
+        self.inner.get_string_list(path)
+    }
+
+    fn set_string_list(&mut self, path: &str, value: Vec<String>) -> Result<bool, EvalError> {
+        self.inner.set_string_list(path, value)
+    }
+
+    fn get_bool_list(&self, path: &str) -> Result<Vec<bool>, EvalError> {
+        self.inner.get_bool_list(path)
+    }
+
+    fn set_bool_list(&mut self, path: &str, value: Vec<bool>) -> Result<bool, EvalError> {
+        self.inner.set_bool_list(path, value)
+    }
+
+    // `read_i32_tracked` / `read_string_tracked` / `read_bool_tracked` are
+    // not overridden: the trait's default impls forward to `get_i32` /
+    // `get_string` / `get_bool` above, giving the same untracked
+    // behaviour `HandlerEvalContext` itself relies on (its own doc
+    // comment: "Reads are untracked — handlers run outside the reactive
+    // scope").
+
+    fn read_item_i32_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+        self.ensure_item_binder(binder, IrType::I32)?;
+        let signal = self
+            .inner
+            .registry
+            .i32_lists
+            .get(&self.item.collection)
+            .ok_or_else(|| EvalError::UnknownProperty(self.item.collection.clone()))?;
+        Ok(signal.get_untracked().get(self.item.position).copied())
+    }
+
+    fn read_item_string_tracked(&self, binder: &str) -> Result<Option<String>, EvalError> {
+        self.ensure_item_binder(binder, IrType::Str)?;
+        let signal = self
+            .inner
+            .registry
+            .string_lists
+            .get(&self.item.collection)
+            .ok_or_else(|| EvalError::UnknownProperty(self.item.collection.clone()))?;
+        Ok(signal.get_untracked().get(self.item.position).cloned())
+    }
+
+    fn read_item_bool_tracked(&self, binder: &str) -> Result<Option<bool>, EvalError> {
+        self.ensure_item_binder(binder, IrType::Bool)?;
+        let signal = self
+            .inner
+            .registry
+            .bool_lists
+            .get(&self.item.collection)
+            .ok_or_else(|| EvalError::UnknownProperty(self.item.collection.clone()))?;
+        Ok(signal.get_untracked().get(self.item.position).copied())
+    }
+
+    fn read_item_binding_tracked(&self, binder: &str) -> Result<Option<String>, EvalError> {
+        match self.item.elem {
+            IrType::I32 => self
+                .read_item_i32_tracked(binder)
+                .map(|v| v.map(|n| n.to_string())),
+            IrType::Str => self.read_item_string_tracked(binder),
+            IrType::Bool => Err(EvalError::TypeMismatch {
+                path: binder.to_string(),
+            }),
+        }
+    }
+
+    fn read_index_tracked(&self, binder: &str) -> Result<Option<i32>, EvalError> {
+        match self.item.index_binder.as_deref() {
+            Some(index) if index == binder => Ok(Some(self.item.position as i32)),
+            _ => Err(EvalError::UnknownProperty(binder.to_string())),
+        }
+    }
+}
+
 // ── Active SignalRegistry handoff (DD-M2-P6-006) ────────────────────────────
 //
 // The IR loader (`ir_loader::build_widget_tree`) installs the per-component
@@ -1727,6 +1883,293 @@ mod tests {
         );
 
         FOR_ITEM_STRING_WRITES.with(|writes| assert_eq!(&*writes.borrow(), &["20@1"]));
+    }
+
+    // ── ForItemHandlerEvalContext tests (M4-Phase 2 T9) ──────────────────────
+
+    #[test]
+    fn for_item_handler_ctx_reads_item_and_index() {
+        use crate::handler::{evaluate, HandlerExpr};
+
+        let nums = Signal::new(vec![10, 20, 30]);
+        let mut registry = SignalRegistry::new();
+        registry.i32s.insert("root.sel".to_string(), Signal::new(0));
+        registry.i32s.insert("root.pos".to_string(), Signal::new(0));
+        registry.i32_lists.insert("nums".to_string(), nums);
+
+        let item = ForItemContext {
+            collection: "nums".into(),
+            elem: IrType::I32,
+            binder: "n".into(),
+            index_binder: Some("i".into()),
+            position: 1,
+        };
+        let mut ctx = ForItemHandlerEvalContext::new(&registry, &item);
+
+        let read_item = HandlerExpr::Assign {
+            lhs: "root.sel".into(),
+            rhs: Box::new(HandlerExpr::ItemRead { binder: "n".into() }),
+        };
+        assert_eq!(evaluate(&read_item, &mut ctx), Ok(20));
+
+        let read_index = HandlerExpr::Assign {
+            lhs: "root.pos".into(),
+            rhs: Box::new(HandlerExpr::IndexRead { binder: "i".into() }),
+        };
+        assert_eq!(evaluate(&read_index, &mut ctx), Ok(1));
+    }
+
+    /// The property that distinguishes this context from `ForItemEvalContext`
+    /// (which rejects every write with `WriteInBindingContext`): a scalar
+    /// assignment through it mutates the underlying `Signal`, exactly like
+    /// `HandlerEvalContext` — because a per-item handler is a handler, not a
+    /// binding, and `root.n = item;` (dsl_spec §4.19's own example) has to
+    /// actually write `root.n`.
+    #[test]
+    fn for_item_handler_ctx_write_mutates_the_signal() {
+        use crate::handler::{evaluate, HandlerExpr};
+
+        let sig = Signal::new(0i32);
+        let mut registry = SignalRegistry::new();
+        registry.i32s.insert("root.n".to_string(), sig.clone());
+        registry
+            .i32_lists
+            .insert("xs".to_string(), Signal::new(vec![7]));
+
+        let item = ForItemContext {
+            collection: "xs".into(),
+            elem: IrType::I32,
+            binder: "x".into(),
+            index_binder: None,
+            position: 0,
+        };
+        let mut ctx = ForItemHandlerEvalContext::new(&registry, &item);
+
+        let expr = HandlerExpr::Assign {
+            lhs: "root.n".into(),
+            rhs: Box::new(HandlerExpr::ItemRead { binder: "x".into() }),
+        };
+        assert_eq!(evaluate(&expr, &mut ctx), Ok(7));
+        // Read back through the Signal directly, not through the context —
+        // proves the write reached the registry, not just the return value.
+        assert_eq!(sig.get_untracked(), 7);
+    }
+
+    /// Asymmetric consumption of the shared collection (implementation-gates
+    /// trap #3; T8's recorded learning that a single-owner design hides
+    /// *symmetric* errors — M4-Phase 2 log.md §T8 W9). Two contexts built
+    /// from the same collection but different `position`s must read
+    /// *different* item values and *different* index values; a bug that
+    /// ignores `position` (e.g. always reading index 0, or always reporting
+    /// position 0) would still pass a test that reads one position twice, so
+    /// this test never reads the same position from both contexts.
+    #[test]
+    fn for_item_handler_ctx_two_positions_read_different_values() {
+        use crate::handler::EvalContext;
+
+        let labels = Signal::new(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+        let mut registry = SignalRegistry::new();
+        registry.string_lists.insert("labels".to_string(), labels);
+
+        let item_at_0 = ForItemContext {
+            collection: "labels".into(),
+            elem: IrType::Str,
+            binder: "label".into(),
+            index_binder: Some("i".into()),
+            position: 0,
+        };
+        let item_at_2 = ForItemContext {
+            collection: "labels".into(),
+            elem: IrType::Str,
+            binder: "label".into(),
+            index_binder: Some("i".into()),
+            position: 2,
+        };
+        let ctx_at_0 = ForItemHandlerEvalContext::new(&registry, &item_at_0);
+        let ctx_at_2 = ForItemHandlerEvalContext::new(&registry, &item_at_2);
+
+        let item_0 = ctx_at_0.read_item_string_tracked("label").unwrap();
+        let item_2 = ctx_at_2.read_item_string_tracked("label").unwrap();
+        assert_eq!(item_0, Some("a".to_string()));
+        assert_eq!(item_2, Some("c".to_string()));
+        assert_ne!(item_0, item_2, "two positions must not read the same item");
+
+        let index_0 = ctx_at_0.read_index_tracked("i").unwrap();
+        let index_2 = ctx_at_2.read_index_tracked("i").unwrap();
+        assert_eq!(index_0, Some(0));
+        assert_eq!(index_2, Some(2));
+        assert_ne!(
+            index_0, index_2,
+            "two positions must not report the same index"
+        );
+    }
+
+    /// The collection-append path over all three element types
+    /// (M4-Phase 2 T9). A per-item handler that appends to the collection
+    /// its own subtree rides is the shape that reaches
+    /// `evaluate_collection_assignment`, and each element type takes a
+    /// *different* evaluator: `i32` goes through `evaluate`, `string`
+    /// through `evaluate_binding` (bare read) and `evaluate_binding_part`
+    /// (interpolated read), `bool` through `evaluate_bool_assignment_value`.
+    /// Both gates accept all four shapes — measured with `wasamoc check`
+    /// on a probe `.ui` — so a missing arm in any one of them is a
+    /// statement that is authorable, accepted twice, and can only ever log
+    /// at click time.
+    #[test]
+    fn for_item_handler_ctx_collection_append_reads_binders_for_every_element_type() {
+        use crate::handler::{evaluate, HandlerExpr, InterpolationPart};
+
+        let nums = Signal::new(vec![7i32]);
+        let labels = Signal::new(vec!["a".to_string()]);
+        let flags = Signal::new(vec![true]);
+        let mut registry = SignalRegistry::new();
+        registry.i32_lists.insert("nums".to_string(), nums.clone());
+        registry
+            .string_lists
+            .insert("labels".to_string(), labels.clone());
+        registry
+            .bool_lists
+            .insert("flags".to_string(), flags.clone());
+
+        let append = |lhs: &str, elem: IrType, value: HandlerExpr| HandlerExpr::Assign {
+            lhs: lhs.into(),
+            rhs: Box::new(HandlerExpr::ListAppend {
+                path: lhs.into(),
+                elem,
+                value: Box::new(value),
+            }),
+        };
+
+        // i32: `nums = nums.append(n)` — the arm `evaluate` gained.
+        let item = ForItemContext {
+            collection: "nums".into(),
+            elem: IrType::I32,
+            binder: "n".into(),
+            index_binder: Some("i".into()),
+            position: 0,
+        };
+        let mut ctx = ForItemHandlerEvalContext::new(&registry, &item);
+        assert_eq!(
+            evaluate(
+                &append(
+                    "nums",
+                    IrType::I32,
+                    HandlerExpr::ItemRead { binder: "n".into() }
+                ),
+                &mut ctx
+            ),
+            Ok(0)
+        );
+        assert_eq!(nums.get_untracked(), vec![7, 7]);
+
+        // string, bare read: `labels = labels.append(label)`.
+        let item = ForItemContext {
+            collection: "labels".into(),
+            elem: IrType::Str,
+            binder: "label".into(),
+            index_binder: Some("i".into()),
+            position: 0,
+        };
+        let mut ctx = ForItemHandlerEvalContext::new(&registry, &item);
+        evaluate(
+            &append(
+                "labels",
+                IrType::Str,
+                HandlerExpr::ItemRead {
+                    binder: "label".into(),
+                },
+            ),
+            &mut ctx,
+        )
+        .expect("bare item read in a string append");
+        assert_eq!(
+            labels.get_untracked(),
+            vec!["a".to_string(), "a".to_string()]
+        );
+
+        // string, interpolated index read: `labels = labels.append("row \{i}")`.
+        evaluate(
+            &append(
+                "labels",
+                IrType::Str,
+                HandlerExpr::Interpolation(vec![
+                    InterpolationPart::Literal("row ".into()),
+                    InterpolationPart::Expr(HandlerExpr::IndexRead { binder: "i".into() }),
+                ]),
+            ),
+            &mut ctx,
+        )
+        .expect("interpolated index read in a string append");
+        assert_eq!(
+            labels.get_untracked().last().map(String::as_str),
+            Some("row 0")
+        );
+
+        // bool: `flags = flags.append(f)`.
+        let item = ForItemContext {
+            collection: "flags".into(),
+            elem: IrType::Bool,
+            binder: "f".into(),
+            index_binder: None,
+            position: 0,
+        };
+        let mut ctx = ForItemHandlerEvalContext::new(&registry, &item);
+        evaluate(
+            &append(
+                "flags",
+                IrType::Bool,
+                HandlerExpr::ItemRead { binder: "f".into() },
+            ),
+            &mut ctx,
+        )
+        .expect("bare item read in a bool append");
+        assert_eq!(flags.get_untracked(), vec![true, true]);
+    }
+
+    /// The out-of-range boundary on the *string* path, the twin of
+    /// `handler::tests::item_read_past_the_end_yields_item_out_of_range`
+    /// on the integer one: `evaluate_binding` must report
+    /// [`crate::handler::EvalError::ItemOutOfRange`] rather than append an
+    /// empty string or silently succeed.
+    #[test]
+    fn for_item_handler_ctx_string_item_read_past_the_end_is_out_of_range() {
+        use crate::handler::{evaluate, EvalError, HandlerExpr};
+
+        let labels = Signal::new(vec!["a".to_string()]);
+        let mut registry = SignalRegistry::new();
+        registry
+            .string_lists
+            .insert("labels".to_string(), labels.clone());
+
+        let item = ForItemContext {
+            collection: "labels".into(),
+            elem: IrType::Str,
+            binder: "label".into(),
+            index_binder: None,
+            // One past the only valid index (0) — the position this row was
+            // generated at, now stale after the handler's own shrink.
+            position: 1,
+        };
+        let mut ctx = ForItemHandlerEvalContext::new(&registry, &item);
+        let expr = HandlerExpr::Assign {
+            lhs: "labels".into(),
+            rhs: Box::new(HandlerExpr::ListAppend {
+                path: "labels".into(),
+                elem: IrType::Str,
+                value: Box::new(HandlerExpr::ItemRead {
+                    binder: "label".into(),
+                }),
+            }),
+        };
+        assert_eq!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::ItemOutOfRange {
+                binder: "label".into()
+            })
+        );
+        // The append did not happen: an out-of-range read aborts the
+        // statement rather than writing a placeholder.
+        assert_eq!(labels.get_untracked(), vec!["a".to_string()]);
     }
 
     #[test]

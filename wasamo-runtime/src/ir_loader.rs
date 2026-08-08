@@ -3320,6 +3320,15 @@ fn build_node_with_loop_context(
     let modal_scope = extract_bool_prop(&node.props, "modal-scope").unwrap_or(false);
     widget.set_focus_annotation(focus_group, modal_scope);
 
+    // M4-Phase 2 T9: write the generated subtree's loop scope (dsl_spec
+    // §4.19 "Per-item handlers") from the *same* `loop_context` parameter
+    // that feeds this subtree's per-item bindings below — one source for
+    // both, right beside the focus-annotation write above, which is the
+    // same single-writer, kind-independent-site discipline applied to a
+    // second field. `None` outside a `for` body template, matching every
+    // constructor's own initial value.
+    widget.set_loop_scope(loop_context.cloned());
+
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
         let Some((prop_key, prop_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name)
@@ -3801,13 +3810,20 @@ fn mutate_for_loop_subtree(
                             // pre-write baseline (review finding #4). `WidgetNode`
                             // has no `Drop`, so a bare drop skips `widget_destroy`'s
                             // `remove_for_widget`; any child holding a `registry`
-                            // entry would leak. Today's handler-free `for`-body
-                            // children hold none (per-item `EffectHandle`s
-                            // self-dispose on `Drop`), so this branch's disposal is
-                            // a *defensive* symmetry with the staging-failure branch
-                            // and the no-`Drop` ⇒ explicit-disposal invariant — not
-                            // an active leak fix for current bodies, but required
-                            // for any future body shape that registers entries.
+                            // entry would leak. M4-Phase 2 T9 lifted the M3-Phase 7
+                            // handler-inside-`for` rejection, so a `for`-body child
+                            // can now carry inline handlers and have a host
+                            // listener connected to one through
+                            // `wasamo_signal_connect` — that connection is exactly
+                            // a `registry` entry keyed by this child's pointer, and
+                            // it does not self-dispose (inline handler bodies
+                            // themselves are plain `Vec` storage on the node and
+                            // drop with it; per-item `EffectHandle`s also
+                            // self-dispose on `Drop`; the host-listener registry
+                            // entry is the one thing here that does not). This
+                            // branch's disposal is therefore load-bearing for that
+                            // shape, not the defensive-only symmetry with the
+                            // staging-failure branch it was before T9.
                             //   (a) remove + destroy the committed prefix, tail-first;
                             for rollback in (0..inserted).rev() {
                                 if let Ok(removed) =
