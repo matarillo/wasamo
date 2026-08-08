@@ -1606,6 +1606,18 @@ impl WidgetNode {
 
     /// Attach a DSL inline handler for `signal_name` to this widget.
     /// Called by the IR loader (Phase 6) when building the widget tree.
+    ///
+    /// **`signal_name` is the canonical storage spelling, not the bare IR
+    /// signal name** (M4-Phase 2 T8): a signal carrying an argument is
+    /// stored under `wasamo_ir::signal_key`'s composed form —
+    /// `key-down("ArrowLeft")` rather than `key-down` — so that two
+    /// handlers for different keys on the same node are distinguishable by
+    /// name alone. `signal_key` returns the bare name unchanged when there
+    /// is no argument, so `clicked` and `dismiss` are stored exactly as
+    /// before. The loader is the only caller, and every lookup side
+    /// ([`signal_handlers_for`]'s callers) composes its key through the
+    /// same function — nothing else builds this string
+    /// (DD-M4-P2-005).
     pub fn set_inline_handler(&mut self, signal_name: impl Into<String>, expr: HandlerExpr) {
         self.inline_handlers.push((signal_name.into(), expr));
     }
@@ -2915,20 +2927,21 @@ unsafe fn click_disposition_for(widget_ptr: *mut WidgetNode) -> ClickDisposition
 
 /// The handlers found for one named signal at one node, snapshotted before
 /// any of them runs (M4-Phase 2 T7) — the inline-plus-host half of what
-/// [`ClickedHandlers`] carries for `clicked`, generalised so `dismiss`
-/// (`docs/dsl_spec.md` §4.19) can share it rather than growing a second,
-/// parallel handler dispatcher (implementation-gates trap #3: two
-/// handler-running code paths could drift on ordering, or on the
-/// synchronous-rebuild hazard [`run_signal_handlers`]'s doc comment
+/// [`ClickedHandlers`] carries for `clicked`, generalised so `dismiss` and
+/// `key-down("<key>")` (`docs/dsl_spec.md` §4.19) can share it rather than
+/// each growing a parallel handler dispatcher (implementation-gates trap
+/// #3: several handler-running code paths could drift on ordering, or on
+/// the synchronous-rebuild hazard [`run_signal_handlers`]'s doc comment
 /// records).
 ///
 /// **No native-closure flag here**, unlike `ClickedHandlers`: `clicked` is
 /// the only signal with a Rust-native producer (`ButtonData::clicked_fn`),
 /// so `run_clicked_handlers` keeps that step in its own body and hands
-/// only this inline-plus-host half to [`run_signal_handlers`]. `dismiss`
-/// has no native producer at all — every recipient of this type either
-/// has no native step ([`WidgetNode::deliver_dismiss_at`]) or runs it
-/// separately (`run_clicked_handlers`).
+/// only this inline-plus-host half to [`run_signal_handlers`]. Neither
+/// `dismiss` nor `key-down` has a native producer at all — every recipient
+/// of this type either has no native step
+/// ([`WidgetNode::deliver_dismiss_at`], [`WidgetNode::deliver_key_down`])
+/// or runs it separately (`run_clicked_handlers`).
 struct SignalHandlers {
     /// DSL inline handler bodies for this signal name, already cloned out
     /// of `WidgetNode::inline_handlers` — any widget kind can carry these.
@@ -2947,9 +2960,11 @@ struct SignalHandlers {
 /// `widget_ptr` must point to a still-live `WidgetNode`, and this must be
 /// called before any handler has run in this delivery — the same
 /// dispatch-order invariant `click_disposition_for`'s callers already
-/// guarantee (`hit_test_click`'s pre-captured chain) and
-/// [`WidgetNode::deliver_dismiss_at`] guarantees by construction (it
-/// resolves `widget_ptr` itself, immediately before calling this).
+/// guarantee (`hit_test_click`'s pre-captured chain, and
+/// [`WidgetNode::deliver_key_down`]'s, which is that chain's shape applied
+/// to a key) and [`WidgetNode::deliver_dismiss_at`] guarantees by
+/// construction (it resolves `widget_ptr` itself, immediately before
+/// calling this).
 unsafe fn signal_handlers_for(widget_ptr: *mut WidgetNode, signal: &str) -> SignalHandlers {
     // Safety: see the function doc comment.
     let node = unsafe { &*widget_ptr };
