@@ -7250,6 +7250,36 @@ mod tests {
         );
     }
 
+    /// A per-item handler that mutates the collection its own subtree
+    /// rides, over **all three** element types. This combination was
+    /// unreachable before this task: collection mutation only appears in
+    /// handler statements, never in a `bind`, and a handler inside a `for`
+    /// body was rejected outright — so the two preconditions could not
+    /// co-occur.
+    ///
+    /// The runtime gained a binder-read arm for each of the three element
+    /// types (they take three different evaluators), and the independent
+    /// review found the *checker* side pinned end-to-end for `string[]`
+    /// only, with `i32[]` and `bool[]` covered lower down the stack. This
+    /// is the accept-side half at the gate that decides whether the shape
+    /// can be authored at all.
+    #[test]
+    fn for_body_handler_may_append_its_own_binder_for_every_element_type() {
+        let result = check_src(
+            r#"component C inherits W {
+                state nums: i32[] = [1]
+                state labels: string[] = ["a"]
+                state flags: bool[] = [true]
+                VStack {
+                    WrapPanel { for n in nums { Box { clicked => { nums = nums.append(n); } } } }
+                    WrapPanel { for label, i in labels { Box { clicked => { labels = labels.append("row \{i}"); } } } }
+                    WrapPanel { for f in flags { Box { clicked => { flags = flags.append(f); } } } }
+                }
+            }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
     #[test]
     fn undeclared_identifier_inside_for_body_handler_rejected() {
         // Name resolution still fires for a handler inside a `for` body:

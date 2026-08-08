@@ -2126,6 +2126,55 @@ mod tests {
         assert_eq!(flags.get_untracked(), vec![true, true]);
     }
 
+    /// The out-of-range boundary on the *bool* path — the third of the
+    /// three element types, and the one the independent review found
+    /// unpinned. `evaluate_bool_assignment_value`'s `ItemRead` arm has the
+    /// same `ItemOutOfRange` fallback as its integer and string twins, and
+    /// the review measured that replacing it with `unwrap_or(false)` left
+    /// the whole workspace green: the append-path test above only ever
+    /// exercised the `Some` case. A `bool[]` element's stale read would
+    /// have silently become `false`, which is a *plausible* value rather
+    /// than an obviously wrong one — the reason this arm needed the same
+    /// boundary test as the other two rather than inheriting their
+    /// coverage by structural similarity.
+    #[test]
+    fn for_item_handler_ctx_bool_item_read_past_the_end_is_out_of_range() {
+        use crate::handler::{evaluate, EvalError, HandlerExpr};
+
+        let flags = Signal::new(vec![true]);
+        let mut registry = SignalRegistry::new();
+        registry
+            .bool_lists
+            .insert("flags".to_string(), flags.clone());
+
+        let item = ForItemContext {
+            collection: "flags".into(),
+            elem: IrType::Bool,
+            binder: "f".into(),
+            index_binder: None,
+            // One past the only valid index (0).
+            position: 1,
+        };
+        let mut ctx = ForItemHandlerEvalContext::new(&registry, &item);
+        let expr = HandlerExpr::Assign {
+            lhs: "flags".into(),
+            rhs: Box::new(HandlerExpr::ListAppend {
+                path: "flags".into(),
+                elem: IrType::Bool,
+                value: Box::new(HandlerExpr::ItemRead { binder: "f".into() }),
+            }),
+        };
+        assert_eq!(
+            evaluate(&expr, &mut ctx),
+            Err(EvalError::ItemOutOfRange { binder: "f".into() })
+        );
+        assert_eq!(
+            flags.get_untracked(),
+            vec![true],
+            "an out-of-range read must abort the append, not push a defaulted `false`"
+        );
+    }
+
     /// The out-of-range boundary on the *string* path, the twin of
     /// `handler::tests::item_read_past_the_end_yields_item_out_of_range`
     /// on the integer one: `evaluate_binding` must report
