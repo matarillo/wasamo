@@ -7769,3 +7769,11 @@ The phase-end retrospective and handoff are therefore returned from
 but the phase branch named by item 16 still needs a separately authorized
 push and `workflow_dispatch`. No phase-to-`main` merge is authorized or
 performed.
+
+After the separate phase-close corrections through `b12f486`,
+`cargo fmt --all -- --check` and `git diff --check` both return zero and the
+worktree is clean. `git diff --name-only 11f77b6..b12f486` lists only six
+files under `process/`; `git diff feat/m4-phase-2-t13..b23e27e` is empty.
+Thus the replacement cold suite and task-branch CI directly cover the
+phase branch's code tree, while a new phase-branch run is still required for
+the branch-identity gate rather than for an unverified source change.
