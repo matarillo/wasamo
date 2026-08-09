@@ -122,6 +122,72 @@
 # showing `c-fired`'s mean colour at All's bbox is far from `b1`'s own
 # measured checked+focused blend at that same bbox).
 #
+# ── Band policy, noise-floor gate, and self-check coverage (this pass's
+#    revision, independent review finding) ─────────────────────────────
+#
+# Bands used to be `max(within-set-noise * 4, floor)`, where the noise
+# was measured over exactly the tags each jitter leg covers -- so the
+# jitter legs were compared against a band built FROM their own
+# measurement (jitter_t <= noise <= max(4*noise, floor) always: no frame
+# set could ever fail those legs), and the inflated band then leaked
+# into every other leg sharing that region. Every band below is now an
+# INDEPENDENT CONSTANT, not a measurement:
+#   Toolbar = Caption = Photo = Side = AllBbox = ToolbarOpenAny = 40 px
+#     -- under 0.006% of the 982x703 client, and an order of magnitude
+#     below the smallest real change this set measures (79 px, control
+#     A's caption, thumbnail 0 vs 3).
+#   WholeAgree = cw*ch/2000 (<0.05% of the client), WholeDiffer =
+#     cw*ch/20 (a lightbox opening changes over 5%) -- same values as
+#     before, just no longer max'd against noise.
+#
+# The within-set noise this sitting actually measured is not discarded;
+# it becomes a CHECKED quantity instead of a band input. Before any
+# other leg, a per-region gate asserts max_channel<=13 and
+# px_over_threshold==0 across every within-set frame pair in that region
+# (F-33's independently measured per-channel tolerance, worst case
+# 13/channel = 39 summed -- below the 60-summed px_over_threshold bar,
+# so a clean within-set pair must show 0 pixels over it). If a sitting's
+# own noise exceeds this, the run FAILS with that finding instead of
+# quietly widening a band to absorb it -- the legs below cannot be
+# judged against a noise floor that has not itself been shown clean.
+# Control B/A's per-set "two frames with no input agree" legs are judged
+# by these same two fixed numbers, for the same reason -- never against
+# a band derived from themselves.
+#
+# Coverage is enforced by the script, not asserted in prose: `-Compare`
+# registers every verdict it prints under a stable name, in order;
+# `-SelfCheck` registers the name each of its rows exercises (plus two
+# rows for the in-run guards below, which `-Compare` never touches,
+# since only `-Capture` calls them); and `-SelfCheck` replays
+# `-Compare`'s verdict pass over the same loaded frames (pure pixel
+# comparison, no capture) purely to obtain that name list, then FAILS if
+# any `-Compare` name has no matching `-SelfCheck` row. Both counts are
+# printed, so the claim "every verdict is self-checked" is something the
+# run itself can falsify, not something this comment asserts.
+#
+# A self-check row's WRONG pairing is only informative if it forces the
+# assertion to look at the actual sampled pixels: a byte-identical pair
+# (this sitting's own within-set frame0/frame1 pairs ARE byte-identical
+# -- see the noise-floor gate above) proves only that the comparator's
+# inequality is spelled correctly; it cannot catch a mis-specified
+# region -- if the caption region pointed at a blank rectangle, a
+# byte-identical wrong pairing would still self-check green. Each
+# DIFFERENCE row's wrong pairing is therefore classified and printed as
+# one of:
+#   region-scoped -- the two frames genuinely differ elsewhere in the
+#     client, but agree in THIS row's sampled region, so the row proves
+#     the assertion is actually reading that region (a blank or
+#     mis-pointed rectangle would fail this self-check).
+#   degenerate -- the two frames do not differ anywhere (whole-client
+#     DIFFERENCE legs only: any two frames that differ at all differ
+#     over the whole client, so no region-scoped wrong pairing can exist
+#     for one -- this is said in the output, not left looking like an
+#     oversight).
+# AGREEMENT/noise/jitter/monotone/disjoint/exclusion/guard rows are not
+# classified this way: their wrong pairing already has to differ IN the
+# sampled region for the row to mean anything, which is the direct case,
+# not the elsewhere-but-not-here case DIFFERENCE rows need.
+#
 # ── In-run guards ───────────────────────────────────────────────────
 # After every lightbox-opening action, the whole-client diff against the
 # immediately preceding closed frame must exceed cw*ch/20 (the lightbox
@@ -130,7 +196,12 @@
 # actually closed, and closed to the SAME place). A run that silently
 # produced a wrong artifact -- a click that missed, a key that went
 # nowhere -- throws immediately rather than saving a frame set that
-# LOOKS like evidence.
+# LOOKS like evidence. The two predicates (`Test-OpenedGuard`,
+# `Test-ClosedGuard`) are module-scope pure functions so `-SelfCheck` can
+# exercise them too (they used to be declared inside `Do-Capture`, which
+# `-SelfCheck` cannot reach) -- `Do-Capture`'s `Guard-Open`/`Guard-Closed`
+# call them and throw exactly as before, no behaviour change to the
+# capture path.
 #
 # Every coordinate below is derived from examples/gallery/gallery.ui's
 # own numbers (Grid track specs, HStack padding/spacing, WrapPanel
@@ -389,6 +460,25 @@ function Diff-Count($a, $b, $x0, $x1, $y0, $y1) {
   return @{ MaxChannel = $maxC; DiffAny = $diffAny; DiffOver = $diffOver }
 }
 
+# Defect-4 fix (independent review): the in-run guard predicates,
+# extracted to module scope as pure functions over two frame byte-buffers
+# plus the client size, so -SelfCheck can reach and exercise them with
+# wrong inputs -- they used to be declared inside Do-Capture, which
+# -SelfCheck cannot call into. Do-Capture's Guard-Open/Guard-Closed below
+# call these and throw exactly as before; no behaviour change to the
+# capture path.
+function Test-OpenedGuard($Frame, $PrecedingClosed, $Cw, $Ch) {
+  $openLimit = [int]($Cw * $Ch / 20)
+  $m = Diff-Count $Frame $PrecedingClosed 0 $Cw 0 $Ch
+  return ($m.DiffOver -gt $openLimit)
+}
+
+function Test-ClosedGuard($Frame, $PrecedingClosed, $Cw, $Ch) {
+  $closedLimit = [int]($Cw * $Ch / 200)
+  $m = Diff-Count $Frame $PrecedingClosed 0 $Cw 0 $Ch
+  return ($m.DiffOver -lt $closedLimit)
+}
+
 # A region is an ARRAY of rectangles (the lightbox side-control columns
 # are two disjoint rectangles summed; every other region is a one-element
 # array), so every leg routes through this one function regardless of
@@ -487,7 +577,7 @@ function MaxChannelDelta($m1, $m2) {
   return [Math]::Max([Math]::Abs($m1.R - $m2.R), [Math]::Max([Math]::Abs($m1.G - $m2.G), [Math]::Abs($m1.B - $m2.B)))
 }
 
-# ── The three verdict functions every leg (and every self-check) routes
+# ── The verdict functions every leg (and every self-check) routes
 #    through ─────────────────────────────────────────────────────────
 # $Metric selects which of the three quantities GOVERNS THE VERDICT; all
 # three are always printed regardless (T11's rule). "Over" (default,
@@ -524,6 +614,38 @@ function Assert-MeansDiffer([string]$Label, $MeanA, $MeanB, $MinDelta) {
   $pass = $d -gt $MinDelta
   $v = if ($pass) { "PASS" } else { "FAIL" }
   Write-Host ("EXCLUDE    {0,-70} A=(R={1:N1},G={2:N1},B={3:N1}) B=(R={4:N1},G={5:N1},B={6:N1}) max_channel_delta={7:N1} (limit >{8}) -> {9}" -f $Label, $MeanA.R, $MeanA.G, $MeanA.B, $MeanB.R, $MeanB.G, $MeanB.B, $d, $MinDelta, $v)
+  return $pass
+}
+
+# Defect-1 fix (independent review): the noise-floor GATE. Aggregates
+# max_channel and px_over_threshold over a LIST of same-tag frame0/frame1
+# pairs in one region and checks them against F-33's independently
+# measured tolerance (max_channel<=13, px_over_threshold==0) -- a fixed
+# criterion, never a band built from this same measurement. Run once per
+# region, before any other leg; a FAIL here means the legs below cannot
+# be trusted to discriminate signal from this sitting's own noise.
+function Assert-NoiseFloor([string]$Label, $TagPairs, $Region, $Data) {
+  $maxC = 0; $maxOver = 0
+  foreach ($p in $TagPairs) {
+    $m = Measure-Region $Data[$p[0]] $Data[$p[1]] $Region
+    if ($m.MaxChannel -gt $maxC) { $maxC = $m.MaxChannel }
+    if ($m.DiffOver -gt $maxOver) { $maxOver = $m.DiffOver }
+  }
+  $pass = ($maxC -le 13) -and ($maxOver -eq 0)
+  $v = if ($pass) { "PASS" } else { "FAIL" }
+  Write-Host ("NOISE      {0,-70} max within-set max_channel={1,3} (limit <=13) max within-set px_over_threshold={2,7} (limit ==0) -> {3}" -f $Label, $maxC, $maxOver, $v)
+  return $pass
+}
+
+# Defect-1 fix, part (c): the per-set jitter legs ("two frames with no
+# input agree") are judged by these same two fixed F-33 numbers, applied
+# to a SINGLE pair -- never against a band derived from themselves (the
+# circularity the independent review reported).
+function Assert-WithinNoise([string]$Label, $A, $B, $Region) {
+  $m = Measure-Region $A $B $Region
+  $pass = ($m.MaxChannel -le 13) -and ($m.DiffOver -eq 0)
+  $v = if ($pass) { "PASS" } else { "FAIL" }
+  Write-Host ("JITTER     {0,-70} max_channel={1,3} px_differing_at_all={2,7} px_over_threshold={3,7} [verdict: max_channel<=13 and px_over_threshold==0] -> {4}" -f $Label, $m.MaxChannel, $m.DiffAny, $m.DiffOver, $v)
   return $pass
 }
 
@@ -644,7 +766,7 @@ function Do-Capture() {
     function Guard-Open([string]$Tag, $Frame, $PrecedingClosed) {
       $m = Diff-Count $Frame $PrecedingClosed 0 $cr.W 0 $cr.H
       Write-Host ("  guard(open) '$Tag' vs preceding closed: max_channel=$($m.MaxChannel) px_differing_at_all=$($m.DiffAny) px_over_threshold=$($m.DiffOver) (must exceed $openLimit)")
-      if ($m.DiffOver -le $openLimit) {
+      if (-not (Test-OpenedGuard $Frame $PrecedingClosed $cr.W $cr.H)) {
         throw "in-run guard failed: opening the lightbox for '$Tag' only changed $($m.DiffOver) px against the preceding closed frame (limit >$openLimit) -- the lightbox may not have opened"
       }
     }
@@ -652,7 +774,7 @@ function Do-Capture() {
     function Guard-Closed([string]$Tag, $Frame, $PrecedingClosed) {
       $m = Diff-Count $Frame $PrecedingClosed 0 $cr.W 0 $cr.H
       Write-Host ("  guard(closed) '$Tag' vs preceding closed: max_channel=$($m.MaxChannel) px_differing_at_all=$($m.DiffAny) px_over_threshold=$($m.DiffOver) (must be below $closedLimit)")
-      if ($m.DiffOver -ge $closedLimit) {
+      if (-not (Test-ClosedGuard $Frame $PrecedingClosed $cr.W $cr.H)) {
         throw "in-run guard failed: after Escape at '$Tag', $($m.DiffOver) px still differ from the preceding closed frame (limit <$closedLimit) -- the lightbox may not have closed to the same state"
       }
     }
@@ -867,112 +989,139 @@ function Load-Context() {
   $allMinY = [int]$meta['all_mask_min_y']; $allMaxY = [int]$meta['all_mask_max_y']
   $regions.AllBbox = @(@{ X0 = $allMinX; X1 = $allMaxX + 1; Y0 = $allMinY; Y1 = $allMaxY + 1 })
 
-  function Region-Noise($tags, $region, [string]$Metric = "Over") {
-    $mx = 0
-    foreach ($t in $tags) {
-      $m = Measure-Region $data["$t-0"] $data["$t-1"] $region
-      $val = if ($Metric -eq "Any") { $m.DiffAny } else { $m.DiffOver }
-      if ($val -gt $mx) { $mx = $val }
-    }
-    return $mx
-  }
+  # Tag lists feeding the noise-floor gate (defect 1b): every tag whose
+  # own frame0/frame1 pair is a same-input, no-intervening-action capture
+  # in that region. Same composition as this script used before the fix
+  # (when it drove the band multiplier); now it drives a fixed-criterion
+  # CHECK instead -- see Assert-NoiseFloor.
   $toolbarTags = @("b-n", "b1", "b2", "b3", "b4", "b5", "b3b", "brev", "c-openA", "c-openB", "c-fired", "c-closed", "c-tab", "c-tab-closed", "c-final")
   $captionTags = @("a0", "a3", "a0b")
   $photoTags = @("a0", "a3")
   $wholeTags = @("d-home", "d-open", "d-closed", "d-pre", "c-openA-click", "c-openA", "c-blocked", "c-closed", "c-final", "c-fired")
   $sideTags = @("c-tab", "c-openB")
-  # The two toolbar-band comparisons taken while the lightbox is open
-  # (sensor, containment) -- judged on px_differing_at_all; see header.
-  $toolbarOpenTags = @("c-openA", "c-openB", "c-tab")
-  # The replacement identification leg's own region (All's bbox).
   $allBboxTags = @("c-fired", "c-closed")
 
-  $nToolbar = Region-Noise $toolbarTags $regions.Toolbar
-  $nCaption = Region-Noise $captionTags $regions.Caption
-  $nPhoto = Region-Noise $photoTags $regions.Photo
-  $nWhole = Region-Noise $wholeTags $regions.Whole
-  $nSide = Region-Noise $sideTags $regions.Side
-  $nToolbarOpenAny = Region-Noise $toolbarOpenTags $regions.Toolbar "Any"
-  $nAllBbox = Region-Noise $allBboxTags $regions.AllBbox
-
+  # Defect 1(a): every band is now an INDEPENDENT CONSTANT (chosen, not
+  # measured) -- see header "Band policy, noise-floor gate, and
+  # self-check coverage".
   $bands = @{
-    Toolbar         = [Math]::Max($nToolbar * 4, 40)
-    Caption         = [Math]::Max($nCaption * 4, 40)
-    Photo           = [Math]::Max($nPhoto * 4, 40)
-    Side            = [Math]::Max($nSide * 4, 40)
-    WholeAgree      = [Math]::Max($nWhole * 4, [int]($cw * $ch / 2000))
-    WholeDiffer     = [int]($cw * $ch / 20)
-    ToolbarOpenAny  = [Math]::Max($nToolbarOpenAny * 4, 40)
-    AllBbox         = [Math]::Max($nAllBbox * 4, 40)
+    Toolbar        = 40
+    Caption        = 40
+    Photo          = 40
+    Side           = 40
+    AllBbox        = 40
+    ToolbarOpenAny = 40
+    WholeAgree     = [int]($cw * $ch / 2000)
+    WholeDiffer    = [int]($cw * $ch / 20)
   }
 
   return @{
     Meta = $meta; Scale = $scale; Cw = $cw; Ch = $ch
     Data = $data; Bitmaps = $bmps; Regions = $regions
-    NToolbar = $nToolbar; NCaption = $nCaption; NPhoto = $nPhoto; NWhole = $nWhole; NSide = $nSide
-    NToolbarOpenAny = $nToolbarOpenAny; NAllBbox = $nAllBbox
+    ToolbarTags = $toolbarTags; CaptionTags = $captionTags; PhotoTags = $photoTags
+    WholeTags = $wholeTags; SideTags = $sideTags; AllBboxTags = $allBboxTags
     Bands = $bands
   }
 }
 
-# ── Compare mode ────────────────────────────────────────────────────────
-
-function Do-Compare() {
-  $ctx = Load-Context
-  Write-Host "commit=$($ctx.Meta['commit'])"
-  Write-Host "scale=$($ctx.Scale) client=$($ctx.Cw)x$($ctx.Ch) real_keys=$($ctx.Meta['real_keys'])"
-  Write-Host ""
-  Write-Host "noise floors (max px_over_threshold, frame0 vs frame1, per region):"
-  Write-Host "  toolbar=$($ctx.NToolbar) caption=$($ctx.NCaption) photo=$($ctx.NPhoto) side=$($ctx.NSide) whole=$($ctx.NWhole)"
-  Write-Host "  toolbar_open (px_differing_at_all, lightbox-open comparisons only)=$($ctx.NToolbarOpenAny)  all_bbox (px_over_threshold)=$($ctx.NAllBbox)"
-  Write-Host "pass bands: toolbar=$($ctx.Bands.Toolbar) caption=$($ctx.Bands.Caption) photo=$($ctx.Bands.Photo) side=$($ctx.Bands.Side) whole_agree=$($ctx.Bands.WholeAgree) whole_differ=$($ctx.Bands.WholeDiffer) toolbar_open_any=$($ctx.Bands.ToolbarOpenAny) all_bbox=$($ctx.Bands.AllBbox)"
-
+# ── The canonical verdict pass ──────────────────────────────────────────
+# Defect-2 fix (independent review): this is the SINGLE place -Compare's
+# verdicts are computed. -Compare calls it directly; -SelfCheck ALSO
+# calls it (over the same already-loaded frames -- pure pixel comparison,
+# no capture) purely to harvest the ordered list of verdict NAMES it
+# registers, so the "-SelfCheck covers every -Compare verdict" claim is
+# something the run checks against this function's actual behaviour,
+# not a hand-maintained list that can drift from it.
+function Invoke-CompareVerdicts($ctx) {
   $ok = $true
+  $names = New-Object System.Collections.Generic.List[string]
+  function CReg([string]$Name) { $names.Add($Name) }
+
+  # ── Noise-floor gate (defect 1b) -- before every other leg ──────────
+  Write-Host "Noise-floor gate -- F-33's independently measured per-channel tolerance (max_channel<=13, px_over_threshold==0), checked over every within-set frame pair per region, before any leg below can be judged:"
+  $noiseRegions = @(
+    @{ Name = "Toolbar"; Tags = $ctx.ToolbarTags; Region = $ctx.Regions.Toolbar },
+    @{ Name = "Caption"; Tags = $ctx.CaptionTags; Region = $ctx.Regions.Caption },
+    @{ Name = "Photo";   Tags = $ctx.PhotoTags;   Region = $ctx.Regions.Photo },
+    @{ Name = "Side";    Tags = $ctx.SideTags;    Region = $ctx.Regions.Side },
+    @{ Name = "Whole";   Tags = $ctx.WholeTags;   Region = $ctx.Regions.Whole },
+    @{ Name = "AllBbox"; Tags = $ctx.AllBboxTags; Region = $ctx.Regions.AllBbox }
+  )
+  foreach ($nr in $noiseRegions) {
+    $label = "Noise floor -- $($nr.Name) region"
+    $pairs = @($nr.Tags | ForEach-Object { , @("$_-0", "$_-1") })
+    $r = Assert-NoiseFloor $label $pairs $nr.Region $ctx.Data
+    CReg $label
+    $ok = $ok -and $r
+  }
+  if (-not $ok) {
+    Write-Host ""
+    Write-Host "FAIL: this sitting's noise exceeds the independently measured F-33 tolerance in at least one region above -- the legs below cannot be judged."
+    return @{ Ok = $false; Names = $names }
+  }
 
   # ── Control B -- traversal order (toolbar band) ──────────────────────
   Write-Host ""
   Write-Host "Control B -- traversal order (toolbar band)"
-  Write-Host "within-set jitter, reported as the plan's own agreement leg ('two frames with no input agree within the measured jitter', F-33 measured tolerance up to 13/channel):"
+  Write-Host "within-set jitter, judged directly against F-33's tolerance (max_channel<=13, px_over_threshold==0) -- never against a band derived from this same measurement (defect 1's fix):"
   foreach ($t in @("b-n", "b1", "b2", "b3", "b4", "b5", "b3b", "brev")) {
-    $r = Assert-Agrees "B two frames with no input agree within the measured jitter ($t)" $ctx.Data["$t-0"] $ctx.Data["$t-1"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
+    $label = "B two frames with no input agree within the measured jitter ($t)"
+    $r = Assert-WithinNoise $label $ctx.Data["$t-0"] $ctx.Data["$t-1"] $ctx.Regions.Toolbar
+    CReg $label
     $ok = $ok -and $r
   }
 
   $bstats = Get-BStopStats $ctx
   for ($k = 1; $k -le 4; $k++) {
-    $r = Assert-Differs "B stop $k painted" $ctx.Data["b$k-0"] $ctx.Data["b-n-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
+    $label = "B stop $k painted"
+    $r = Assert-Differs $label $ctx.Data["b$k-0"] $ctx.Data["b-n-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
+    CReg $label
     $ok = $ok -and $r
     Write-Host ("  stop $k bbox x[$($bstats.Bboxes[$k].MinX)..$($bstats.Bboxes[$k].MaxX)] centroid_x=$($bstats.Centroids[$k])")
   }
   $monoOk = Check-Monotone @($bstats.Centroids[1], $bstats.Centroids[2], $bstats.Centroids[3], $bstats.Centroids[4])
   Write-Host "B monotone: stop centroids increase left-to-right -> $(if ($monoOk) { 'PASS' } else { 'FAIL' })"
+  CReg "B monotone: stop centroids increase left-to-right"
   $ok = $ok -and $monoOk
   $disjointOk = Check-Disjoint @($bstats.Bboxes[1], $bstats.Bboxes[2], $bstats.Bboxes[3], $bstats.Bboxes[4])
   Write-Host "B disjoint: consecutive stops' painted bboxes do not overlap -> $(if ($disjointOk) { 'PASS' } else { 'FAIL' })"
+  CReg "B disjoint: consecutive stops' painted bboxes do not overlap"
   $ok = $ok -and $disjointOk
 
-  $r = Assert-Agrees "B wrap returns to the first stop" $ctx.Data["b5-0"] $ctx.Data["b1-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; $ok = $ok -and $r
-  $r = Assert-Agrees "B traversal is deterministic" $ctx.Data["b3b-0"] $ctx.Data["b3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; $ok = $ok -and $r
-  $r = Assert-Agrees "B Shift+Tab from stop 3 returns to stop 2" $ctx.Data["brev-0"] $ctx.Data["b2-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; $ok = $ok -and $r
-  $r = Assert-Differs "B Shift+Tab actually moved" $ctx.Data["brev-0"] $ctx.Data["b3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; $ok = $ok -and $r
+  $label = "B wrap returns to the first stop"
+  $r = Assert-Agrees $label $ctx.Data["b5-0"] $ctx.Data["b1-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; CReg $label; $ok = $ok -and $r
+  $label = "B traversal is deterministic"
+  $r = Assert-Agrees $label $ctx.Data["b3b-0"] $ctx.Data["b3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; CReg $label; $ok = $ok -and $r
+  $label = "B Shift+Tab from stop 3 returns to stop 2"
+  $r = Assert-Agrees $label $ctx.Data["brev-0"] $ctx.Data["b2-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; CReg $label; $ok = $ok -and $r
+  $label = "B Shift+Tab actually moved"
+  $r = Assert-Differs $label $ctx.Data["brev-0"] $ctx.Data["b3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; CReg $label; $ok = $ok -and $r
 
   # ── Control A -- click routing and item identity ─────────────────────
   Write-Host ""
   Write-Host "Control A -- click routing and item identity"
   foreach ($t in @("a0", "a3", "a0b")) {
-    $r = Assert-Agrees "A two frames with no input agree within the measured jitter ($t)" $ctx.Data["$t-0"] $ctx.Data["$t-1"] $ctx.Regions.Caption $ctx.Bands.Caption
+    $label = "A two frames with no input agree within the measured jitter ($t)"
+    $r = Assert-WithinNoise $label $ctx.Data["$t-0"] $ctx.Data["$t-1"] $ctx.Regions.Caption
+    CReg $label
     $ok = $ok -and $r
   }
-  $r = Assert-Differs "A caption, thumbnail 0 vs 3" $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Caption $ctx.Bands.Caption; $ok = $ok -and $r
-  $r = Assert-Agrees "A caption, thumbnail 0 twice" $ctx.Data["a0-0"] $ctx.Data["a0b-0"] $ctx.Regions.Caption $ctx.Bands.Caption; $ok = $ok -and $r
-  $r = Assert-Agrees "A photo box, thumbnail 0 vs 3" $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Photo $ctx.Bands.Photo; $ok = $ok -and $r
+  $label = "A caption, thumbnail 0 vs 3"
+  $r = Assert-Differs $label $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Caption $ctx.Bands.Caption; CReg $label; $ok = $ok -and $r
+  $label = "A caption, thumbnail 0 twice"
+  $r = Assert-Agrees $label $ctx.Data["a0-0"] $ctx.Data["a0b-0"] $ctx.Regions.Caption $ctx.Bands.Caption; CReg $label; $ok = $ok -and $r
+  $label = "A photo box, thumbnail 0 vs 3"
+  $r = Assert-Agrees $label $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Photo $ctx.Bands.Photo; CReg $label; $ok = $ok -and $r
 
   # ── Control D -- Esc (whole client) ───────────────────────────────────
   Write-Host ""
   Write-Host "Control D -- Esc (whole client)"
-  $r = Assert-Agrees "D a recognised key with no handler changes nothing" $ctx.Data["d-home-0"] $ctx.Data["d-open-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; $ok = $ok -and $r
-  $r = Assert-Differs "D Escape closed the lightbox" $ctx.Data["d-closed-0"] $ctx.Data["d-open-0"] $ctx.Regions.Whole $ctx.Bands.WholeDiffer; $ok = $ok -and $r
-  $r = Assert-Agrees "D the client returned to its pre-open state" $ctx.Data["d-closed-0"] $ctx.Data["d-pre-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; $ok = $ok -and $r
+  $label = "D a recognised key with no handler changes nothing"
+  $r = Assert-Agrees $label $ctx.Data["d-home-0"] $ctx.Data["d-open-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; CReg $label; $ok = $ok -and $r
+  $label = "D Escape closed the lightbox"
+  $r = Assert-Differs $label $ctx.Data["d-closed-0"] $ctx.Data["d-open-0"] $ctx.Regions.Whole $ctx.Bands.WholeDiffer; CReg $label; $ok = $ok -and $r
+  $label = "D the client returned to its pre-open state"
+  $r = Assert-Agrees $label $ctx.Data["d-closed-0"] $ctx.Data["d-pre-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; CReg $label; $ok = $ok -and $r
 
   # ── Control C -- containment and occlusion ────────────────────────────
   Write-Host ""
@@ -981,7 +1130,9 @@ function Do-Compare() {
   # SENSOR (metric: px_differing_at_all -- see header's "Compare-side
   # revision"; the 60-summed threshold provably cannot see a change
   # attenuated by the scrim's 0.8 alpha).
-  $sensorOk = Assert-Differs "C the toolbar is observable through the scrim (SENSOR)" $ctx.Data["c-openA-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"
+  $label = "C the toolbar is observable through the scrim (SENSOR)"
+  $sensorOk = Assert-Differs $label $ctx.Data["c-openA-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"
+  CReg $label
   if (-not $sensorOk) {
     Write-Host "THE CONTAINMENT LEG IS WITHDRAWN, NOT PASSED: THE SENSOR CANNOT SEE THE TOOLBAR THROUGH THE SCRIM, SO 'NOTHING CHANGED' BELOW WOULD BE UNFALSIFIABLE."
   }
@@ -1007,9 +1158,12 @@ function Do-Compare() {
   $focusSwing = Measure-Region $ctx.Data["b1-0"] $ctx.Data["b-n-0"] $ctx.Regions.AllBbox
   Write-Host "  conservativeness: focus-indicator swing at the same face (b1 vs b-n, All's bbox): max_channel=$($focusSwing.MaxChannel) px_differing_at_all=$($focusSwing.DiffAny) -- a focus indicator on a toolbar stop under the scrim would register here too"
 
-  $r = Assert-Agrees "C a click on the covered toolbar does nothing" $ctx.Data["c-openA-click-0"] $ctx.Data["c-openA-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; $ok = $ok -and $r
-  $r = Assert-Agrees "C and it wrote no state either -- checked in the clear" $ctx.Data["c-blocked-0"] $ctx.Data["c-closed-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; $ok = $ok -and $r
-  $r = Assert-Differs "C the same coordinate fires with the lightbox closed" $ctx.Data["c-fired-0"] $ctx.Data["c-closed-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; $ok = $ok -and $r
+  $label = "C a click on the covered toolbar does nothing"
+  $r = Assert-Agrees $label $ctx.Data["c-openA-click-0"] $ctx.Data["c-openA-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; CReg $label; $ok = $ok -and $r
+  $label = "C and it wrote no state either -- checked in the clear"
+  $r = Assert-Agrees $label $ctx.Data["c-blocked-0"] $ctx.Data["c-closed-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; CReg $label; $ok = $ok -and $r
+  $label = "C the same coordinate fires with the lightbox closed"
+  $r = Assert-Differs $label $ctx.Data["c-fired-0"] $ctx.Data["c-closed-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; CReg $label; $ok = $ok -and $r
 
   # Identification, replaced (owner disposition): lives on All's own
   # bbox rather than Albums's, and on the handler's BEHAVIOUR (loses its
@@ -1018,25 +1172,47 @@ function Do-Compare() {
   $firedMean = Mean-Region $ctx.Data["c-fired-0"] $ctx.Regions.AllBbox
   $b1Mean = Mean-Region $ctx.Data["b1-0"] $ctx.Regions.AllBbox
   Write-Host ("  All's bbox mean RGB: c-closed (checked)=(R={0:N1},G={1:N1},B={2:N1})  c-fired (after Albums click)=(R={3:N1},G={4:N1},B={5:N1})" -f $closedMean.R, $closedMean.G, $closedMean.B, $firedMean.R, $firedMean.G, $firedMean.B)
-  $r = Assert-Differs "C the handler ran -- the previously checked tab lost its checked colour" $ctx.Data["c-fired-0"] $ctx.Data["c-closed-0"] $ctx.Regions.AllBbox $ctx.Bands.AllBbox; $ok = $ok -and $r
-  $r = Assert-MeansDiffer "C look-alike exclusion -- All's new colour is not the checked+focused blend (rules out 'focus landed on All' instead)" $firedMean $b1Mean 40; $ok = $ok -and $r
+  $label = "C the handler ran -- the previously checked tab lost its checked colour"
+  $r = Assert-Differs $label $ctx.Data["c-fired-0"] $ctx.Data["c-closed-0"] $ctx.Regions.AllBbox $ctx.Bands.AllBbox; CReg $label; $ok = $ok -and $r
+  $label = "C look-alike exclusion -- All's new colour is not the checked+focused blend (rules out 'focus landed on All' instead)"
+  $r = Assert-MeansDiffer $label $firedMean $b1Mean 40; CReg $label; $ok = $ok -and $r
 
   # CONTAINMENT (metric: px_differing_at_all -- same reason as the
   # sensor above).
-  $r = Assert-Agrees "C five Tabs inside the scope never reach the toolbar" $ctx.Data["c-tab-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"; $ok = $ok -and $r
-  $r = Assert-Differs "C ...but they did move focus inside it" $ctx.Data["c-tab-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Side $ctx.Bands.Side; $ok = $ok -and $r
-  $r = Assert-Differs "C with the scope gone, one Tab reaches the toolbar" $ctx.Data["c-tab-closed-0"] $ctx.Data["c-final-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; $ok = $ok -and $r
-  $r = Assert-Agrees "C the world returned after open/Tab/close" $ctx.Data["c-final-0"] $ctx.Data["c-fired-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; $ok = $ok -and $r
+  $label = "C five Tabs inside the scope never reach the toolbar"
+  $r = Assert-Agrees $label $ctx.Data["c-tab-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"; CReg $label; $ok = $ok -and $r
+  $label = "C ...but they did move focus inside it"
+  $r = Assert-Differs $label $ctx.Data["c-tab-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Side $ctx.Bands.Side; CReg $label; $ok = $ok -and $r
+  $label = "C with the scope gone, one Tab reaches the toolbar"
+  $r = Assert-Differs $label $ctx.Data["c-tab-closed-0"] $ctx.Data["c-final-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar; CReg $label; $ok = $ok -and $r
+  $label = "C the world returned after open/Tab/close"
+  $r = Assert-Agrees $label $ctx.Data["c-final-0"] $ctx.Data["c-fired-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree; CReg $label; $ok = $ok -and $r
+
+  return @{ Ok = $ok; Names = $names }
+}
+
+# ── Compare mode ────────────────────────────────────────────────────────
+
+function Do-Compare() {
+  $ctx = Load-Context
+  Write-Host "commit=$($ctx.Meta['commit'])"
+  Write-Host "scale=$($ctx.Scale) client=$($ctx.Cw)x$($ctx.Ch) real_keys=$($ctx.Meta['real_keys'])"
+  Write-Host ""
+  Write-Host "pass bands (chosen constants, not measurements -- see header 'Band policy, noise-floor gate, and self-check coverage'):"
+  Write-Host "  toolbar=$($ctx.Bands.Toolbar) caption=$($ctx.Bands.Caption) photo=$($ctx.Bands.Photo) side=$($ctx.Bands.Side) all_bbox=$($ctx.Bands.AllBbox) toolbar_open_any=$($ctx.Bands.ToolbarOpenAny) whole_agree=$($ctx.Bands.WholeAgree) whole_differ=$($ctx.Bands.WholeDiffer)"
+
+  $result = Invoke-CompareVerdicts $ctx
 
   Write-Host ""
-  if ($ok) {
-    Write-Host "PASS: all controls' difference and agreement legs hold."
+  if ($result.Ok) {
+    Write-Host "PASS: all controls' difference and agreement legs hold (including the noise-floor gate)."
   } else {
     Write-Host "FAIL: see the leg(s) marked FAIL above."
   }
+  Write-Host "verdicts registered: $($result.Names.Count)"
 
   foreach ($b in $ctx.Bitmaps) { $b.Dispose() }
-  if (-not $ok) { exit 1 }
+  if (-not $result.Ok) { exit 1 }
 }
 
 # ── SelfCheck mode ──────────────────────────────────────────────────────
@@ -1049,111 +1225,208 @@ function Do-SelfCheck() {
 
   $bstats = Get-BStopStats $ctx
   $rows = New-Object System.Collections.Generic.List[object]
-  function Rec([string]$Name, [string]$Pairing, [bool]$Result) {
+  $selfCheckNames = New-Object System.Collections.Generic.List[string]
+  function Rec([string]$Name, [string]$Pairing, [bool]$Result, [string]$Class = "") {
     $fired = -not $Result
-    $rows.Add([PSCustomObject]@{ Verdict = $Name; WrongPairing = $Pairing; Fired = $fired })
+    $rows.Add([PSCustomObject]@{ Verdict = $Name; WrongPairing = $Pairing; Fired = $fired; Class = $Class })
+    $selfCheckNames.Add($Name)
+  }
+
+  # ── Noise-floor gate rows (defect 1b) ─────────────────────────────
+  # Wrong input: c-closed vs c-openA (lightbox closed vs open) -- verified
+  # to differ substantially in every region below (measured directly on
+  # this run's frames), so the gate must detect it as noise-tolerance
+  # violation, proving the gate is not vacuously always-PASS.
+  foreach ($nr in @("Toolbar", "Caption", "Photo", "Side", "Whole", "AllBbox")) {
+    $label = "Noise floor -- $nr region"
+    $region = $ctx.Regions.$nr
+    $r = Assert-NoiseFloor "[WRONG] $label" @(, @("c-closed-0", "c-openA-0")) $region $ctx.Data
+    Rec $label "c-closed vs c-openA (open vs closed, $nr region)" $r
+  }
+
+  # ── Control B jitter rows (defect 2: previously uncovered) ─────────
+  # Wrong input: each B tag paired against a DIFFERENT B tag known to
+  # differ in the toolbar band (the real "B stop k painted" difference
+  # legs), proving Assert-WithinNoise can detect real jitter/change.
+  $bJitterPartner = @{ "b-n" = "b1"; "b1" = "b-n"; "b2" = "b-n"; "b3" = "b-n"; "b4" = "b-n"; "b5" = "b-n"; "b3b" = "b-n"; "brev" = "b-n" }
+  foreach ($t in @("b-n", "b1", "b2", "b3", "b4", "b5", "b3b", "brev")) {
+    $label = "B two frames with no input agree within the measured jitter ($t)"
+    $partner = $bJitterPartner[$t]
+    $r = Assert-WithinNoise "[WRONG] $label" $ctx.Data["$t-0"] $ctx.Data["$partner-0"] $ctx.Regions.Toolbar
+    Rec $label "$t vs $partner (Toolbar)" $r
   }
 
   # ── Control B ──────────────────────────────────────────────────────
-  $r = Assert-Differs "[WRONG] B stop k painted" $ctx.Data["b-n-0"] $ctx.Data["b-n-1"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
-  Rec "B stop k painted (difference)" "b-n frame0 vs frame1" $r
+  # "B stop k painted" (k=1..4): wrong pairing a0 vs a3 -- VERIFIED
+  # (measured on this run's frames): Toolbar band max_channel=0,
+  # px_over_threshold=0 between a0 and a3 (both lightbox-open with the
+  # same tab checked and the same focus, differing only in the caption)
+  # -- so the row is region-scoped, not degenerate.
+  for ($k = 1; $k -le 4; $k++) {
+    $label = "B stop $k painted"
+    $r = Assert-Differs "[WRONG] $label" $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
+    Rec $label "a0 vs a3 (Toolbar)" $r "region-scoped"
+  }
 
   $revMono = Check-Monotone @($bstats.Centroids[4], $bstats.Centroids[3], $bstats.Centroids[2], $bstats.Centroids[1])
-  Rec "B monotone" "reversed centroid list" $revMono
+  Rec "B monotone: stop centroids increase left-to-right" "reversed centroid list" $revMono
 
   $selfDisjoint = Check-Disjoint @($bstats.Bboxes[1], $bstats.Bboxes[1])
-  Rec "B disjointness" "bbox(b1) against itself" $selfDisjoint
+  Rec "B disjoint: consecutive stops' painted bboxes do not overlap" "bbox(b1) against itself" $selfDisjoint
 
   $r = Assert-Agrees "[WRONG] B wrap returns to the first stop" $ctx.Data["b1-0"] $ctx.Data["b2-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
-  Rec "B wrap agreement" "b1 vs b2" $r
+  Rec "B wrap returns to the first stop" "b1 vs b2" $r
 
   $r = Assert-Agrees "[WRONG] B traversal is deterministic" $ctx.Data["b3-0"] $ctx.Data["b4-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
-  Rec "B determinism agreement" "b3 vs b4" $r
+  Rec "B traversal is deterministic" "b3 vs b4" $r
 
   $r = Assert-Agrees "[WRONG] B Shift+Tab from stop 3 returns to stop 2" $ctx.Data["brev-0"] $ctx.Data["b3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
-  Rec "B reverse agreement" "brev vs b3" $r
+  Rec "B Shift+Tab from stop 3 returns to stop 2" "brev vs b3" $r
 
-  $r = Assert-Differs "[WRONG] B Shift+Tab actually moved" $ctx.Data["brev-0"] $ctx.Data["b2-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
-  Rec "B reverse difference" "brev vs b2" $r
+  # "B Shift+Tab actually moved": wrong pairing a0 vs a3 -- same
+  # verified region-scoped property as "B stop k painted" above.
+  $r = Assert-Differs "[WRONG] B Shift+Tab actually moved" $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
+  Rec "B Shift+Tab actually moved" "a0 vs a3 (Toolbar)" $r "region-scoped"
+
+  # ── Control A jitter rows (defect 2: previously uncovered) ─────────
+  $aJitterPartner = @{ "a0" = "a3"; "a3" = "a0"; "a0b" = "a3" }
+  foreach ($t in @("a0", "a3", "a0b")) {
+    $label = "A two frames with no input agree within the measured jitter ($t)"
+    $partner = $aJitterPartner[$t]
+    $r = Assert-WithinNoise "[WRONG] $label" $ctx.Data["$t-0"] $ctx.Data["$partner-0"] $ctx.Regions.Caption
+    Rec $label "$t vs $partner (Caption)" $r
+  }
 
   # ── Control A ──────────────────────────────────────────────────────
-  $r = Assert-Differs "[WRONG] A caption, thumbnail 0 vs 3" $ctx.Data["a0-0"] $ctx.Data["a0b-0"] $ctx.Regions.Caption $ctx.Bands.Caption
-  Rec "A caption difference" "a0 vs a0b" $r
+  # "A caption difference": wrong pairing b1 vs b2 -- VERIFIED: Caption
+  # region max_channel=0, px_over_threshold=0 (both closed frames,
+  # differing only in the toolbar band) -- region-scoped.
+  $r = Assert-Differs "[WRONG] A caption, thumbnail 0 vs 3" $ctx.Data["b1-0"] $ctx.Data["b2-0"] $ctx.Regions.Caption $ctx.Bands.Caption
+  Rec "A caption, thumbnail 0 vs 3" "b1 vs b2 (Caption)" $r "region-scoped"
 
   $r = Assert-Agrees "[WRONG] A caption, thumbnail 0 twice" $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Caption $ctx.Bands.Caption
-  Rec "A caption agreement" "a0 vs a3" $r
+  Rec "A caption, thumbnail 0 twice" "a0 vs a3" $r
 
   $r = Assert-Agrees "[WRONG] A photo box, thumbnail 0 vs 3" $ctx.Data["c-openA-0"] $ctx.Data["c-closed-0"] $ctx.Regions.Photo $ctx.Bands.Photo
-  Rec "A photo agreement" "c-openA vs c-closed (photo region)" $r
+  Rec "A photo box, thumbnail 0 vs 3" "c-openA vs c-closed (photo region)" $r
 
   # ── Control D ──────────────────────────────────────────────────────
   $r = Assert-Agrees "[WRONG] D a recognised key with no handler changes nothing" $ctx.Data["d-open-0"] $ctx.Data["d-closed-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree
-  Rec "D agreement" "d-open vs d-closed" $r
+  Rec "D a recognised key with no handler changes nothing" "d-open vs d-closed" $r
 
+  # "D Escape closed the lightbox" is a WHOLE-CLIENT DIFFERENCE leg: any
+  # two frames that differ at all differ over the whole client, so no
+  # region-scoped wrong pairing can exist for it -- kept degenerate
+  # (d-open frame0 vs frame1, byte-identical on this sitting), and
+  # printed as such rather than left looking like an oversight.
   $r = Assert-Differs "[WRONG] D Escape closed the lightbox" $ctx.Data["d-open-0"] $ctx.Data["d-open-1"] $ctx.Regions.Whole $ctx.Bands.WholeDiffer
-  Rec "D difference" "d-open frame0 vs frame1" $r
+  Rec "D Escape closed the lightbox" "d-open frame0 vs frame1 (no region-scoped alternative exists for a whole-client leg)" $r "degenerate"
 
   $r = Assert-Agrees "[WRONG] D the client returned to its pre-open state" $ctx.Data["d-pre-0"] $ctx.Data["d-open-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree
-  Rec "D return agreement" "d-pre vs d-open" $r
+  Rec "D the client returned to its pre-open state" "d-pre vs d-open" $r
 
   # ── Control C ──────────────────────────────────────────────────────
-  # Sensor and containment now verdict on px_differing_at_all (metric
-  # "Any") -- see header's "Compare-side revision". Same wrong pairings
-  # as before; the containment row is the one this metric switch fixes
-  # (it read a false PASS under the old px_over_threshold metric,
-  # because that metric could not see the scrimmed signal at all).
-  $r = Assert-Differs "[WRONG] C the toolbar is observable through the scrim" $ctx.Data["c-openA-0"] $ctx.Data["c-openA-1"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"
-  Rec "C sensor" "c-openA frame0 vs frame1" $r
+  # "C sensor": wrong pairing c-openB vs c-tab -- VERIFIED: Toolbar band
+  # max_channel=0, px_differing_at_all=0 (agree in the band; they differ
+  # substantially in the lightbox's own side columns instead, measured
+  # 4369 px over threshold there) -- region-scoped.
+  $r = Assert-Differs "[WRONG] C the toolbar is observable through the scrim (SENSOR)" $ctx.Data["c-openB-0"] $ctx.Data["c-tab-0"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"
+  Rec "C the toolbar is observable through the scrim (SENSOR)" "c-openB vs c-tab (Toolbar, Any)" $r "region-scoped"
 
   $r = Assert-Agrees "[WRONG] C a click on the covered toolbar does nothing" $ctx.Data["c-openA-0"] $ctx.Data["c-closed-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree
-  Rec "C click-does-nothing" "c-openA vs c-closed" $r
+  Rec "C a click on the covered toolbar does nothing" "c-openA vs c-closed" $r
 
-  $r = Assert-Agrees "[WRONG] C and it wrote no state either" $ctx.Data["c-closed-0"] $ctx.Data["c-fired-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree
-  Rec "C wrote-no-state" "c-closed vs c-fired" $r
+  $r = Assert-Agrees "[WRONG] C and it wrote no state either -- checked in the clear" $ctx.Data["c-closed-0"] $ctx.Data["c-fired-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree
+  Rec "C and it wrote no state either -- checked in the clear" "c-closed vs c-fired" $r
 
-  $r = Assert-Differs "[WRONG] C the same coordinate fires with the lightbox closed" $ctx.Data["c-closed-0"] $ctx.Data["c-blocked-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
-  Rec "C fires-when-closed" "c-closed vs c-blocked" $r
+  # "C fires-when-closed": wrong pairing a0 vs a3 -- same verified
+  # region-scoped Toolbar property used above.
+  $r = Assert-Differs "[WRONG] C the same coordinate fires with the lightbox closed" $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
+  Rec "C the same coordinate fires with the lightbox closed" "a0 vs a3 (Toolbar)" $r "region-scoped"
 
-  $r = Assert-Agrees "[WRONG] C five Tabs inside the scope never reach the toolbar" $ctx.Data["c-openA-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"
-  Rec "C containment" "c-openA vs c-openB (band)" $r
+  # "C handler-ran": wrong pairing b2 vs b3 -- VERIFIED: AllBbox region
+  # max_channel=0, px_over_threshold=0 (they differ at the right of the
+  # toolbar -- 10183 px over threshold there -- but agree at All's own
+  # face) -- region-scoped.
+  $r = Assert-Differs "[WRONG] C the handler ran -- the previously checked tab lost its checked colour" $ctx.Data["b2-0"] $ctx.Data["b3-0"] $ctx.Regions.AllBbox $ctx.Bands.AllBbox
+  Rec "C the handler ran -- the previously checked tab lost its checked colour" "b2 vs b3 (AllBbox)" $r "region-scoped"
 
-  $r = Assert-Differs "[WRONG] C ...but they did move focus inside it" $ctx.Data["c-openB-0"] $ctx.Data["c-openB-1"] $ctx.Regions.Side $ctx.Bands.Side
-  Rec "C moved-inside" "c-openB frame0 vs frame1" $r
-
-  $r = Assert-Differs "[WRONG] C with the scope gone, one Tab reaches the toolbar" $ctx.Data["c-final-0"] $ctx.Data["c-final-1"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
-  Rec "C tab-reaches-toolbar" "c-final frame0 vs frame1" $r
-
-  $r = Assert-Agrees "[WRONG] C the world returned after open/Tab/close" $ctx.Data["c-fired-0"] $ctx.Data["c-openA-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree
-  Rec "C world-returned" "c-fired vs c-openA" $r
-
-  # C handler-ran (replacement identification leg): wrong pairing is the
-  # byte-identical c-closed/c-blocked (both truly-closed, All-checked,
-  # nothing written) -- must not register as a colour-loss.
-  $r = Assert-Differs "[WRONG] C the handler ran" $ctx.Data["c-closed-0"] $ctx.Data["c-blocked-0"] $ctx.Regions.AllBbox $ctx.Bands.AllBbox
-  Rec "C handler-ran" "c-closed vs c-blocked" $r
-
-  # C look-alike exclusion: feed it b1's own mean against itself -- the
-  # exclusion must fail to claim a difference when the two means
-  # coincide.
   $b1MeanSC = Mean-Region $ctx.Data["b1-0"] $ctx.Regions.AllBbox
   $r = Assert-MeansDiffer "[WRONG] C look-alike exclusion" $b1MeanSC $b1MeanSC 40
-  Rec "C look-alike exclusion" "b1 mean vs b1 mean (itself)" $r
+  Rec "C look-alike exclusion -- All's new colour is not the checked+focused blend (rules out 'focus landed on All' instead)" "b1 mean vs b1 mean (itself)" $r
+
+  $r = Assert-Agrees "[WRONG] C five Tabs inside the scope never reach the toolbar" $ctx.Data["c-openA-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Toolbar $ctx.Bands.ToolbarOpenAny "Any"
+  Rec "C five Tabs inside the scope never reach the toolbar" "c-openA vs c-openB (Toolbar, Any)" $r
+
+  # "C moved-inside": wrong pairing c-openA vs c-openB -- VERIFIED: Side
+  # region max_channel=0, px_over_threshold=0 (they differ in the
+  # toolbar band instead -- the Albums click between the two captures --
+  # but agree in the side columns) -- region-scoped.
+  $r = Assert-Differs "[WRONG] C ...but they did move focus inside it" $ctx.Data["c-openA-0"] $ctx.Data["c-openB-0"] $ctx.Regions.Side $ctx.Bands.Side
+  Rec "C ...but they did move focus inside it" "c-openA vs c-openB (Side)" $r "region-scoped"
+
+  # "C tab-reaches-toolbar": wrong pairing a0 vs a3 -- same verified
+  # region-scoped Toolbar property used above.
+  $r = Assert-Differs "[WRONG] C with the scope gone, one Tab reaches the toolbar" $ctx.Data["a0-0"] $ctx.Data["a3-0"] $ctx.Regions.Toolbar $ctx.Bands.Toolbar
+  Rec "C with the scope gone, one Tab reaches the toolbar" "a0 vs a3 (Toolbar)" $r "region-scoped"
+
+  $r = Assert-Agrees "[WRONG] C the world returned after open/Tab/close" $ctx.Data["c-fired-0"] $ctx.Data["c-openA-0"] $ctx.Regions.Whole $ctx.Bands.WholeAgree
+  Rec "C the world returned after open/Tab/close" "c-fired vs c-openA" $r
+
+  # ── In-run guard rows (defect 4) -- extra: -Compare never touches
+  #    these (only -Capture calls them), so they are not part of the
+  #    -Compare/-SelfCheck coverage cross-check below, but they still
+  #    have to be exercisable, which they were not before this fix.
+  $openGuardResult = Test-OpenedGuard $ctx.Data["c-closed-0"] $ctx.Data["c-blocked-0"] $ctx.Cw $ctx.Ch
+  Rec "Guard(open): the lightbox actually opened (Test-OpenedGuard)" "c-closed vs c-blocked (both closed)" $openGuardResult
+
+  $closedGuardResult = Test-ClosedGuard $ctx.Data["c-closed-0"] $ctx.Data["c-openA-0"] $ctx.Cw $ctx.Ch
+  Rec "Guard(closed): the lightbox actually closed to the same place (Test-ClosedGuard)" "c-closed vs c-openA (open, not closed)" $closedGuardResult
 
   Write-Host ""
-  Write-Host ("{0,-45} {1,-40} {2}" -f "verdict", "wrong pairing", "fired-as-expected")
+  Write-Host ("{0,-70} {1,-45} {2,-6} {3}" -f "verdict", "wrong pairing", "fired", "class")
   $allFired = $true
+  $regionScopedCount = 0; $degenerateCount = 0
   foreach ($row in $rows) {
     $yn = if ($row.Fired) { "yes" } else { "no" }
     if (-not $row.Fired) { $allFired = $false }
-    Write-Host ("{0,-45} {1,-40} {2}" -f $row.Verdict, $row.WrongPairing, $yn)
+    if ($row.Class -eq "region-scoped") { $regionScopedCount++ }
+    if ($row.Class -eq "degenerate") { $degenerateCount++ }
+    Write-Host ("{0,-70} {1,-45} {2,-6} {3}" -f $row.Verdict, $row.WrongPairing, $yn, $row.Class)
   }
 
   Write-Host ""
-  foreach ($b in $ctx.Bitmaps) { $b.Dispose() }
-  if ($allFired) {
-    Write-Host "PASS: every verdict fired red under its wrong pairing."
+  Write-Host "DIFFERENCE-row wrong-pairing classification (defect 3): $regionScopedCount region-scoped, $degenerateCount degenerate, out of $($regionScopedCount + $degenerateCount) classified rows. (AGREEMENT/jitter/noise/monotone/disjoint/exclusion/guard rows are unclassified -- their wrong pairing already has to differ IN the sampled region, the direct case, not the elsewhere-but-not-here case this distinction is for.)"
+
+  # ── Coverage self-enforcement (defect 2) ────────────────────────────
+  Write-Host ""
+  Write-Host "-- Coverage cross-check: replaying -Compare's verdict pass over the same loaded frames (pure pixel comparison, no capture) to obtain the authoritative list of registered verdict names --"
+  $cmp = Invoke-CompareVerdicts $ctx
+  if (-not $cmp.Ok) {
+    Write-Host ""
+    Write-Host "NOTE: the replayed -Compare pass reported FAIL above -- that is a real-evidence finding, independent of self-check coverage. Run -Compare directly for the full annotated report."
+  }
+
+  $missing = @($cmp.Names | Where-Object { $selfCheckNames -notcontains $_ })
+  $extra = @($selfCheckNames | Where-Object { $cmp.Names -notcontains $_ })
+  Write-Host ""
+  Write-Host "-Compare registers $($cmp.Names.Count) verdicts. -SelfCheck exercises $($rows.Count) rows: $($rows.Count - $extra.Count) matching -Compare registrations, plus $($extra.Count) extra (the in-run guards -Compare never touches)."
+  $coverageOk = ($missing.Count -eq 0)
+  if (-not $coverageOk) {
+    Write-Host "COVERAGE GAP: $($missing.Count) -Compare verdict(s) have no -SelfCheck row:"
+    foreach ($m in $missing) { Write-Host "  - $m" }
   } else {
-    Write-Host "FAIL: at least one verdict passed under a wrong pairing -- see 'no' rows above."
+    Write-Host "Coverage complete: every -Compare-registered verdict has a matching -SelfCheck row."
+  }
+
+  foreach ($b in $ctx.Bitmaps) { $b.Dispose() }
+
+  Write-Host ""
+  if ($allFired -and $coverageOk) {
+    Write-Host "PASS: every verdict fired red under its wrong pairing, and coverage is complete."
+  } else {
+    if (-not $allFired) { Write-Host "FAIL: at least one verdict passed under a wrong pairing -- see 'no' rows above." }
+    if (-not $coverageOk) { Write-Host "FAIL: coverage gap -- see COVERAGE GAP list above." }
     exit 1
   }
 }
