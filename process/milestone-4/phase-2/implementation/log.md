@@ -7727,3 +7727,29 @@ T13a's authorized repair, deterministic regression gate, end-gate audit,
 full independent review and clean local evidence are therefore complete.
 Actual GitHub Actions is not claimed: the branch remains unpushed and the
 owner's separate push authorization is still required.
+
+### T13 phase-branch CI completion (2026-08-09)
+
+After explicit owner authorization, `feat/m4-phase-2-t13` was pushed and
+the `CI` workflow was dispatched against exact phase HEAD
+`11f77b689bc234453d2e9ff2f6a1a540c879320a`. GitHub Actions
+[run 31298945418](https://github.com/matarillo/wasamo/actions/runs/31298945418)
+completed **successfully**; job
+[93208499151](https://github.com/matarillo/wasamo/actions/runs/31298945418/job/93208499151)
+ran for 4m08s.
+
+Every required step was green: release and debug workspace builds,
+workspace tests, MSVC and clang-cl C ABI smoke, CMake smoke, Zig binding
+smoke, the C / Rust / Zig counter consumers, the C / Rust / Zig gallery
+consumers, and `wasamoc check` for both `counter.ui` and `gallery.ui`.
+The run emitted one non-failing annotation: `mlugg/setup-zig@v2` declares
+Node.js 20 while GitHub currently forces it onto Node.js 24. The action and
+all downstream Zig steps passed, so this is recorded as an upstream action
+maintenance observation rather than a phase failure or a reason to change
+CI YAML inside T13.
+
+The dispatched SHA includes every code, test, normative-spec, handoff and
+retrospective change through the local close record `11f77b6`. Only this
+run-id recording and status flips under `process/` follow it. Item 16 is
+therefore satisfied for the current code tree. No merge has been performed;
+phase-to-`main` remains a separate explicit owner gate.
