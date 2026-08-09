@@ -7752,3 +7752,24 @@ the post-merge phase-end batch: audit the phase retrospective against the
 merge commit, obtain separate authorization for the phase-branch push,
 dispatch CI on that branch, record its run id, and only after green flip
 the handoff to `recorded` and the implementation documents to `closing`.
+
+## Phase-end batch after T13 integration (2026-08-09)
+
+T13/T13a were integrated no-ff into `feat/m4-phase-2` as merge commit
+`b42a21288d1bd1f39bdb3ed83da6b58ac19e5932`. The separate post-merge
+phase retrospective was then recorded in `4b1076f`, and the owner
+authorized the phase-branch push and workflow dispatch.
+
+[CI run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054)
+passed on exact pushed phase HEAD
+`4b1076f4d10493f0cae662c736dc54102ffafc67`; job
+[93217506536](https://github.com/matarillo/wasamo/actions/runs/31302529054/job/93217506536)
+completed in 4m43s. Every release/debug build, workspace test, C ABI,
+CMake, Zig, counter/gallery host and DSL-check step was green. The only
+annotation was the non-failing `mlugg/setup-zig@v2` Node.js 20 deprecation
+notice; setup and every downstream Zig step passed.
+
+With phase-branch CI green, the handoff flips `closing` → `recorded` and
+the implementation preamble/task plan flip `active` → `closing`. This
+records phase-end readiness only. Phase→`main` merge and the later main
+push/CI are separate owner gates and are not authorized or performed here.
