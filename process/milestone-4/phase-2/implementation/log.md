@@ -444,7 +444,7 @@ point" hazard is gone. But the accessor's *evidence* role survives the
 prediction: eight of the eleven widget kinds cannot have children, so no
 production click can ever exercise their arm of the predicate, and
 removing the accessor would have deleted T1's per-kind agreement pin for
-those eight rather than replacing it. The alternative considered — 
+those eight rather than replacing it. The alternative considered —
 re-pointing the per-kind test at resolution behaviour — is not available
 for exactly those kinds. The accessor's doc comment now states this role;
 [plan.md](./plan.md) §T2 records the deviation.
