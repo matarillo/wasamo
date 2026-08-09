@@ -1246,10 +1246,32 @@ leaves a different tab checked.
     hit-testing reads a widget's rectangle back off its Visual (§7.5),
     that readback is converted alongside them" was falsified by T2's
     migration;
+  - **no section says that the presentation states compose** (T12 close
+    gate, CF-T12-3). §4.19 fixes that a click moves focus to the nearest
+    focusable widget at or above the target, and §13.3 fixes what the
+    focus indicator is; neither says that a **checked `ToggleButton`
+    which is also focused renders a third appearance**, distinct from
+    checked and from focused. M4 expresses all three as background
+    changes and DD-003 requires focus to be visibly distinct from
+    selected *and* hovered, so the composition is in that rule's
+    territory. T12's frames measure it — `(52,121,214)` checked,
+    `(144,153,150)` checked and focused, `(67,67,67)` neither. The
+    runtime is not in question; T13 decides only whether §13.3 gains the
+    sentence;
   - **no fixture spelling appears in `docs/dsl_spec.md`** (DD-005 /
     framing R2).
+- **T12's frames are available to this pass as rendered evidence**, which
+  earlier tasks' re-verification items did not have: §4.19's traversal
+  order, the `focus-group` single-stop rule, scope containment, focus
+  restoration and `dismiss` each have a committed frame pair in
+  [evidence/t12-frames/](./evidence/t12-frames/) beside their fixture
+  name. A confirmation, not a repair.
 - Phase-end retrospective, verification closure mapping, and
-  [handoff.md](./handoff.md).
+  [handoff.md](./handoff.md) — which carries **CF-T12-5 as an open
+  question**, not as a settled intention: whether a task should be
+  *obliged* to show its positive control's comparisons can fail is
+  decided at the **next phase's pre-doc**, and M4-Phase 2 closes with no
+  rule change (owner-settled 2026-08-09, [log.md](./log.md) §T12).
 
 - [ ] T13
 
