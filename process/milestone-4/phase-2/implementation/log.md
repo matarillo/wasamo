@@ -7428,3 +7428,74 @@ GUI capture. T12's GUI-render evidence already received full independent
 review; this task maps and re-verifies it without replacing or widening its
 claim. If T13 crosses any of those boundaries, the applicable full or
 branch/test-focused lane composes before merge.
+
+### Moment 2 implementation re-verification
+
+This is the item-by-item comparison required by `plan.md` §T13. The
+runtime source and the tests that exercise it were read alongside the
+normative sentence; a green suite is recorded separately at the end gate
+rather than being substituted for this comparison.
+
+| # | Plan check | Landed evidence and disposition |
+|---|---|---|
+| 1 | Disabled occlusion versus child traversal | `hit::resolve_topmost` chooses one target before dispatch and `ClickDisposition::Suppress` prevents a disabled Button from firing without exposing a lower sibling. §4.8 / §4.19 already agreed; no child-traversal wording survived. |
+| 2 | Disabled traversal skip | `focus_core::collect_stops` omits disabled stops; `a_disabled_stop_is_skipped` pins it. Retained in §4.8 / §4.19. |
+| 3 | Disabled Tab wording | The runtime has no Button key activation (`run_clicked_handlers` is reached from pointer click only). Both sections now state the shipped Tab consequence and no longer imply a keyboard-activation feature. CF-T8-1 remains in the candidate pool for the M5 widget-family decision. |
+| 4 | §4.19 `for` example under §4.15 | The example has exactly one body-root widget and uses `for photo, i in photos`; the parser's optional index-binder production accepts it. The gallery and the per-item integration fixture exercise the same form. |
+| 5 | Per-item handler semantics | `ForItemHandlerEvalContext` resolves item/index at invocation; `per_item_handler_integration` covers click identity, same-length reset, surviving position and removal failure. Handler registration is owned and released by the generated subtree. §4.15 / §4.19 match. |
+| 6 | False §4.15 diagnostic rows | Removed the two rows that rejected handlers and handler-position binder reads, and corrected the body bullet that still prohibited handlers anywhere in the template. |
+| 7 | §8.9 string-assignment enforcement | Reconfirmed: §8.9 marks `StrLit`, `StrPropRead` and `Interpolation` binding-only; checker, lowering and loader admit an `(assign …)` string RHS, while evaluator invocation rejects it. **Unenforced normative statement retained**, not rewritten as a supported capability: capability owner M4-Phase 5; diagnostic pre-doc intake M4-Phase 3 (milestone-plan revision 1). |
+| 8 | DD-M4-P2-001 residual-1 reason | Added the owner-approved 2026-08-09 qualification and preamble revision pointer. T9 F5 shows regeneration inside `Signal::set` during the handler statement; the no-cycle conclusion and decision are unchanged, so no supersede. |
+| 9 | Recognised keys and fallthrough | `wasamo_ir::RECOGNISED_KEY_NAMES` contains the exact 22 names printed in §4.19; runtime `key_name_for_vk` is anti-drift tested against it. `WM_KEYDOWN` returns only for traversal/group/dismiss/handled authored key/host slot; otherwise it reaches `DefWindowProcW`. |
+| 10 | `dismiss` admission and kept-key table | Checker and loader both require a sibling `modal-scope: true`; `dismiss_on_key` addresses Escape to the innermost scope. Tab, group arrows and scoped Escape are the only built-ins kept ahead of the authored walk. Text unchanged. |
+| 11 | Focus-indicator write path | `effective_button_color` and `set_focused` repaint node presentation; no focus path creates or positions a Visual. The six `SetOffset` / `SetSize` call sites remain in `sync_visuals`. §13.3 now states the landed split. |
+| 12 | Presence-entry and clip bound | `sync_scopes_to_tree` runs at initial root attachment and structural drain; entry moves focus to the first stop. `resolve_topmost` intersects ancestor clip bounds. §13.1 / §13.4 match. |
+| 13 | Restore versus successor sequence | `sync_scopes_to_tree` uses the restore anchor captured at entry, then falls back to the first surviving post-mutation stop. §13.4 now states those two times rather than claiming every successor is computed before mutation. |
+| 14 | Focus-group arrow axes | `arrow_direction`: Left / Up → previous; Right / Down → next. Added the exact mapping and both-axis rule to §4.19. |
+| 15 | Click outside an entered scope | `focus_landing_outside_an_entered_modal_scope_is_none`: landing is bounded by `traversal_root`, so focus is unchanged. Added the sentence to §4.19's pointer-limit paragraph. |
+| 16 | Authored and textual-IR handler grammar | Synced §3 to `IDENT ("(" STRING_LIT ")")? "=>" block`, added the `IDENT` + `(` disambiguation row, and synced §8.8 to the optional `STRING` argument used by `on key-down("…")`. |
+| 17 | §4.5 signal inventory | Replaced the false clicked-only statement with the three defined signals and their §4.19 admission pointer. |
+| 18 | Button keyboard activation | Owner outcome from T8 retained: do not build it here; revisit one activation contract with the M5 keyboard-operable widget set. The two false normative clauses were narrowed, and the keys-kept table remains unchanged. |
+| 19 | Unknown signal diagnostic | Current checker and loader accept arbitrary bare signal names; no DD requires narrowing that surface. §4.5 now states that other names' semantics and diagnostic requirements are **unspecified**. Re-trigger remains a fourth signal or the first silent-handler bug report. |
+| 20 | Child admission | `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` is the shared four-kind owner read by checker and loader. §4.4 now states that Rectangle / Text / Button / ToggleButton admit no widget children and points container rules to their sections. |
+| 21 | Containers as hit candidates | Every `WidgetNode` visual participates in `resolve_topmost`; T10 G7 measured the overflow consequence. §4.19 now says a non-clipping layout container's painted overflow remains reachable and can occlude a sibling; M4-Phase 4 still owns the overflow-layout policy. |
+| 22 | §4.16 placement example | Confirmed the example uses direct child-carried `slot.row` / `slot.column` on a Button and does not put a widget child inside a childless kind. No T13 repair. |
+| 23 | Touch-promotion precision | `WM_POINTERDOWN` and `WM_POINTERUP` are the promotion-suppression gates; ENTER / UPDATE / LEAVE are claimed but inert. §13.2 now states that measured division. |
+| 24 | Touch focus / presentation / primary contact | `touch_pointer_integration`: a tap focuses like click, non-primary dispatches nothing, and the inert-message test pins no hover/pressed mutation. §13.2 now states all three limits, including no touch-down feedback in M4. |
+| 25 | Pointer screen-to-client conversion | `pointer_message_to_client_dip` performs `ScreenToClient` before DIP division for `WM_POINTER*`; mouse is already client physical. Added both paths to §12.3's enumerated inbound seam. |
+| 26 | Stale Visual readback sentence | Hit rectangles have been retained in DIP since T2. Removed §12.3 row 2's false Visual-readback conversion and pointed to §13.1. |
+| 27 | Checked + focused composition | `effective_button_color` composes `checked` before the focused blend; its colour tests and T12 frames show a third appearance. Added the composition sentence to §13.3. |
+| 28 | Fixture spelling in the public DSL spec | `rg` found no M4-Phase 2 fixture identifier or test-only signal spelling in `docs/dsl_spec.md`; only public DSL / IR forms appear. |
+
+One additional mechanical drift was found while doing the named pass:
+`dsl_spec.md`'s revision table already ended at 1.20 while the header still
+said 1.19. The Moment 2 record is 1.21 and brings the header forward; this
+does not change a language rule.
+
+### Rendered-evidence confirmation mapping
+
+T13 inspected the committed PNGs, not only their fixture names. No new
+capture is needed and trap #7 remains out of scope: this mapping confirms
+the already independently reviewed T12 claim without widening it.
+
+| Runtime property | T12 rendered positive control |
+|---|---|
+| Declaration-order traversal | `b1` → `b2` → `b3` → `b4` paints All → Scroll down → Scroll up → Open lightbox; `b5` wraps and `brev` reverses. The differentiating single-group-stop frame is `b2`, because Albums / Favorites were skipped. |
+| `focus-group` is one Tab stop | Same B sequence: after All, the next painted focus is Scroll down, not another tab. |
+| Scope containment and covering-widget occlusion | `c-openA` ≡ `c-openA-click` / `c-blocked` ≡ `c-closed` in their agreement regions; five Tabs move among lightbox controls in `c-openB` / `c-tab` without painting toolbar focus, while after close `c-tab-closed` reaches the toolbar. |
+| Restoration and dismissal | `d-closed` ≡ `d-pre` shows Escape returned to the pre-open focused state; `d-home` ≡ `d-open` is the recognised-but-unhandled-key agreement leg, excluding a generic redraw or key effect. |
+| Checked/focused composition | `b1` shows checked+focused All distinct from checked-only and neither; `c-fired` shows the clicked Albums state while the previously checked All changes, excluding focus colour as the handler result. |
+
+The owner separately completed the ten-step human-visible smoke on
+2026-08-09 with every step as described, including no discomfort during
+free operation. That evidence remains T12's; T13 does not relabel it as a
+new observation.
+
+### Close-time review-lane re-decision before verification
+
+The lane remains **Normal review**. The realised diff contains one dated
+qualification on an Accepted DD, normative prose / grammar corrections,
+and phase-close records. It contains no runtime, IR/schema migration,
+diagnostic/reject/size branch, or new GUI evidence. Thus no full or narrow
+independent-review trigger was added by T13; T12's existing full review is
+the owner of the rendered-evidence quality claim.
