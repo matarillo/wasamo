@@ -1,7 +1,7 @@
 ---
 phase: M4-Phase 2
 title: Implementation task list
-status: draft
+status: closing
 adr: process/milestone-4/phase-2/decisions/preamble.md
 ---
 
