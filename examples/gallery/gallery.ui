@@ -5,6 +5,7 @@ component Gallery inherits Window {
 
     state scroll_y: i32 = 0
     state is_lightbox_open: bool = false
+    state selected_index: i32 = 0
     state tab_all_selected: bool = true
     state tab_albums_selected: bool = false
     state tab_favorites_selected: bool = false
@@ -28,6 +29,7 @@ component Gallery inherits Window {
                 HStack {
                     spacing: 8px
                     padding: 8px
+                    focus-group: true
 
                     ToggleButton {
                         text: "All"
@@ -104,6 +106,10 @@ component Gallery inherits Window {
                                     Box {
                                         aspect: 1:1
                                         fill: #4f6272
+                                        clicked => {
+                                            root.selected_index = index;
+                                            root.is_lightbox_open = true;
+                                        }
                                         Text { text: "\{label} #\{index}" }
                                     }
                                 }
@@ -118,7 +124,7 @@ component Gallery inherits Window {
                 h-align: start
                 HStack {
                     padding: 4px
-                    Text { text: "18 placeholders - Image and hit-testing are M4" }
+                    Text { text: "18 placeholders - click one to open the lightbox; real images land later in M4" }
                 }
             }
         }
@@ -127,6 +133,10 @@ component Gallery inherits Window {
             ZStack {
                 slot.h-align: stretch
                 slot.v-align: stretch
+                modal-scope: true
+                dismiss                => { root.is_lightbox_open = false; }
+                key-down("ArrowLeft")  => { root.selected_index -= 1; }
+                key-down("ArrowRight") => { root.selected_index += 1; }
 
                 Box {
                     slot.h-align: stretch
@@ -153,8 +163,8 @@ component Gallery inherits Window {
                         row: 3 column: 2
                         VStack {
                             spacing: 4px
-                            Text { text: "IMG 001  2026-04-12" }
-                            Text { text: "Box 4:3 placeholder; Image widget lands in M4" }
+                            Text { text: "Photo #\{root.selected_index}" }
+                            Text { text: "Box 4:3 placeholder; the Image widget and the photo name land later in M4" }
                         }
                     }
 
@@ -165,6 +175,7 @@ component Gallery inherits Window {
                         slot.h-align: center
                         slot.v-align: center
                         text: "<"
+                        clicked => { root.selected_index -= 1; }
                     }
 
                     Button {
@@ -174,6 +185,7 @@ component Gallery inherits Window {
                         slot.h-align: center
                         slot.v-align: center
                         text: ">"
+                        clicked => { root.selected_index += 1; }
                     }
 
                     Button {

@@ -5,7 +5,21 @@ mod box_values;
 // production caller until T4 puts the authoritative value on `WindowState`.
 mod dip_scale;
 mod emit;
+// M4-Phase 2 T5: the production focus record and its projection of a live
+// `WidgetNode` tree onto `focus_core`. Private -- the phase's cross-task
+// obligation is no new ABI function (constraints.md §2), and nothing
+// outside this crate needs a `FocusId`.
+mod focus;
+// M4-Phase 2 DD-M4-P2-003: the Win32-independent focus traversal core,
+// consumed through `crate::focus`'s projection of a live `WidgetNode`
+// tree -- the only projection onto it, driven by `WindowState`'s keyboard
+// and pointer arms. See process/milestone-4/phase-2/decisions/exploration/
+// for the pre-ADR spike this module's logic was adopted from.
+mod focus_core;
 pub mod handler;
+// M4-Phase 2 T2: pure-logic hit resolution (DD-M4-P2-002). No Compositor,
+// no windows types — see hit.rs's module doc.
+mod hit;
 pub mod ir_loader;
 mod layout;
 pub(crate) mod reactive;
@@ -93,11 +107,55 @@ pub mod ffi {
     pub unsafe fn __window_scale_dpi_for_test(window: *mut WasamoWindow) -> u32 {
         (*window).scale.dpi()
     }
+
+    /// The window's retained hover/press target (M4-Phase 2 T4;
+    /// `WindowState::hover`), as the path of child indices from the root
+    /// widget, or `None` when nothing is currently entered.
+    ///
+    /// Exists so a fixture can assert the trap-#3 pairing invariant — the
+    /// retained record and the painted `ButtonState` agree — rather than
+    /// only the painted state that `WidgetNode::__button_state_for_test`
+    /// alone would show.
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`__window_scale_dpi_for_test`]: `window` must be
+    /// non-null, properly aligned, and valid for a shared read of a live
+    /// `WasamoWindow` for the duration of the call, on the runtime's owning
+    /// thread, and not used after `wasamo_window_destroy`.
+    #[doc(hidden)]
+    pub unsafe fn __hover_target_for_test(window: *mut WasamoWindow) -> Option<Vec<usize>> {
+        (*window).hover.target().map(|path| path.to_vec())
+    }
+
+    /// The window's focused widget, as the path of child indices from the
+    /// root widget (M4-Phase 2 T5; `WindowState::focus`), or `None` when
+    /// nothing is focused or no root widget is installed.
+    ///
+    /// **A reader, not a second store.** The window holds exactly one
+    /// record — the focused `FocusId` — and this seam re-projects the live
+    /// tree on every call and maps the id back to a path through it, the
+    /// same reader shape `crate::focus::focused_path` uses in-crate. There
+    /// is no path field anywhere for this seam to read out of step with
+    /// the id it names.
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`__window_scale_dpi_for_test`]: `window` must be
+    /// non-null, properly aligned, and valid for a shared read of a live
+    /// `WasamoWindow` for the duration of the call, on the runtime's owning
+    /// thread, and not used after `wasamo_window_destroy`.
+    #[doc(hidden)]
+    pub unsafe fn __focus_path_for_test(window: *mut WasamoWindow) -> Option<Vec<usize>> {
+        let state = &*window;
+        let root = state.root_widget.as_deref()?;
+        crate::focus::focused_path(root, &state.focus)
+    }
 }
 
 pub use layout::{Alignment, SizeConstraint, WidgetKind};
 pub use text::{TextRenderer, TypographyStyle};
-pub use widget::{ButtonStyle, WidgetNode};
+pub use widget::{ButtonStyle, DipRect, WidgetNode};
 pub use window::WindowState;
 
 use windows::Win32::UI::WindowsAndMessaging::{

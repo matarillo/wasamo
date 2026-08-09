@@ -62,6 +62,25 @@ const STAR_WEIGHT_MAX: i64 = 1024;
 /// attribute-outside-WrapPanel) share one source of truth.
 const WRAPPANEL_INT_ATTRS: &[&str] = &["item-cross-size", "item-spacing", "line-spacing"];
 
+/// Container widget kinds that admit the M4-Phase 2 focus annotations
+/// (`focus-group` / `modal-scope`), per dsl_spec §4.19 "admitted on any
+/// container" (DD-M4-P2-005 A1). `Text`, `Button`, `ToggleButton`, and
+/// `Rectangle` are leaf/content widgets, not containers, and are excluded.
+/// `Cell` is an IR-only Grid wrapper (not a runtime container) and is
+/// excluded too.
+const FOCUS_ANNOTATION_CONTAINERS: &[&str] = &[
+    "VStack",
+    "HStack",
+    "Box",
+    "WrapPanel",
+    "ScrollView",
+    "Grid",
+    "ZStack",
+];
+
+/// The two constant-only boolean focus annotations (dsl_spec §4.19).
+const FOCUS_ANNOTATION_ATTRS: &[&str] = &["focus-group", "modal-scope"];
+
 /// Host-owned attributes admitted at component level in M3-Phase 6.
 /// The catalog is host-general in shape but contains only the Window entry
 /// this phase (DD-M3-P6-008 A2a).
@@ -587,6 +606,109 @@ fn check_wrappanel_attr_outside_wrappanel(
     ));
 }
 
+/// Validate a property bind on `focus-group` or `modal-scope`. Both are
+/// constant-only `bool` per dsl_spec §4.19 (DD-M4-P2-005 A1): the RHS
+/// must be a `BoolLit` literal exactly, not a state-backed ident or any
+/// other expression form. One reject arm covers every non-`BoolLit`
+/// shape (bare ident, int / string / ratio / color / measurement
+/// literal) so the diagnostic can name the attribute; mirrors
+/// `check_wrappanel_const_only_bind`'s constant-only shape.
+fn check_focus_annotation_const_only_bind(
+    prop_name: &str,
+    value: &Expr,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if !matches!(value, Expr::BoolLit { .. }) {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "`{}` is constant-only (dsl_spec §4.19); expected a `true` or `false` literal, \
+                 not a state-backed binding or other expression form",
+                prop_name
+            ),
+        ));
+    }
+}
+
+/// Reject `focus-group` / `modal-scope` appearing on a widget kind that
+/// is not in `FOCUS_ANNOTATION_CONTAINERS` (dsl_spec §4.19 "admitted on
+/// any container"). Diagnostic names the attribute and the offending
+/// widget kind so the author knows the attribute name was recognised but
+/// is misplaced; mirrors `check_wrappanel_attr_outside_wrappanel`'s shape.
+///
+/// Takes the widget kind by value rather than as an `Option` because the
+/// component-level position never reaches here — the
+/// `enclosing_widget.is_none()` early return in `check_members_inner`
+/// routes a bare `focus-group:` to `check_host_property_bind` first — so
+/// a component-level arm would be a diagnostic no test could fire.
+fn check_focus_annotation_admission(
+    prop_name: &str,
+    enclosing_widget: &str,
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    diags.push(error(
+        filename,
+        span,
+        format!(
+            "`{}` is admitted on any container (dsl_spec §4.19) and is not valid on widget `{}`",
+            prop_name, enclosing_widget
+        ),
+    ));
+}
+
+/// Emit a warning when a container carries both `focus-group: true` and
+/// `modal-scope: true` (dsl_spec §4.19). The surface stays *accepted* —
+/// DD-M4-P2-005 chose two separate constant-only attributes precisely so
+/// a container could carry both — but `focus_core::FocusRole`
+/// (`wasamo-runtime/src/widget.rs`) holds one role per node, and
+/// `WidgetNode::focus_role` gives `modal-scope` precedence, so the
+/// `focus-group` half of such a node is inert at runtime. That is worth
+/// flagging even though it is not rejected.
+///
+/// Takes the already-computed `carries_modal_scope` rather than
+/// rescanning for it, so this stays a cheap second pass over `members`
+/// guarded by the same `FOCUS_ANNOTATION_CONTAINERS` test the caller
+/// already applied. Anchored on the `focus-group` bind's own span, not
+/// the enclosing widget's — `check_members_inner` has the member list
+/// but not the widget's span, and the attribute with no effect is the
+/// more useful thing to point at anyway.
+fn check_focus_group_inert_beside_modal_scope_warning(
+    members: &[Member],
+    carries_modal_scope: bool,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if !carries_modal_scope {
+        return;
+    }
+    let focus_group_span = members.iter().find_map(|m| match m {
+        Member::PropertyBind {
+            name,
+            value: Expr::BoolLit { value: true, .. },
+            span,
+        } if name == "focus-group" => Some(span),
+        _ => None,
+    });
+    let Some(span) = focus_group_span else {
+        return;
+    };
+    diags.push(Diagnostic::warning(
+        filename,
+        span.line,
+        span.col,
+        "this container carries both `focus-group: true` and `modal-scope: true`; a container \
+         can behave as one or the other, not both, and a modal scope wins, so `focus-group` \
+         has no effect here. Remove it, or move the group to a child container \
+         (dsl_spec §4.19)."
+            .to_string(),
+    ));
+}
+
 /// Emit a warning when a WrapPanel directly contains one or more
 /// `Box { aspect: <ratio>; … }` children and `item-cross-size` is not
 /// set on the WrapPanel itself (DD-M3-P3-004 Recommendation companion;
@@ -852,6 +974,55 @@ fn check_box_child_count(
             format!(
                 "`Box` admits at most one child widget in M3-Phase 2 (found {}); use `ZStack` (overlay), `VStack` (vertical) or `HStack` (horizontal) for multi-child layouts",
                 child_count
+            ),
+        ));
+    }
+}
+
+/// Reject a layout-childless widget (`wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+/// — `Rectangle`, `Text`, `Button`, `ToggleButton`) carrying any
+/// child-materialising member (owner disposition CF-1, 2026-08-07; widened
+/// from Button/ToggleButton to all four kinds 2026-08-08). `build_layout_tree`
+/// (`wasamo-runtime/src/widget.rs`) maps every kind in that table to a
+/// childless `LayoutNode::rectangle`: an authored child is accepted here
+/// by the generic widget-decl walk, built by the IR loader, but unknown
+/// to layout — it renders nothing in release and aborts a debug build
+/// during `wasamo_load_ui` on the `sync_visuals` child-count assertion.
+///
+/// Mirrors `check_box_child_count`'s completeness: every member that can
+/// materialise a child counts (`WidgetDecl`, `Conditional`, `For`), not
+/// widget declarations only, so `Button { if c { Text {} } }` is caught
+/// even though it authors no bare widget child. Property binds, signal
+/// handlers, and `slot.*` placement binds are unaffected — those are not
+/// `Member::WidgetDecl` / `Conditional` / `For` variants.
+///
+/// Neither the invocation condition (below, in `check_members_inner`) nor
+/// this function names a widget kind: both read
+/// `crate::ir::layout_treats_as_childless` / the offending `widget_kind`
+/// string, so widening or narrowing the rule is a single edit to
+/// `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`.
+fn check_layout_childless_widget_children(
+    widget_kind: &str,
+    members: &[Member],
+    span: &Span,
+    filename: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let child_count = members
+        .iter()
+        .filter(|m| {
+            matches!(
+                m,
+                Member::WidgetDecl { .. } | Member::Conditional { .. } | Member::For { .. }
+            )
+        })
+        .count();
+    if child_count > 0 {
+        diags.push(error(
+            filename,
+            span,
+            format!(
+                "`{widget_kind}` admits no widget children (found {child_count}); layout arranges `{widget_kind}` as a single rectangle, so a child would never be arranged, painted, or hit-tested — wrap it in a container widget instead (dsl_spec §4.4)"
             ),
         ));
     }
@@ -1289,6 +1460,14 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                     // direct child, and a Grid is a widget). A `slot.*` on a
                     // Grid under a non-admitting parent (or at component
                     // level) is still rejected by that same generic walk.
+                } else if FOCUS_ANNOTATION_ATTRS.contains(&name.as_str()) {
+                    // `focus-group` / `modal-scope` on the Grid node itself
+                    // (dsl_spec §4.19) are validated by the generic
+                    // `check_members_inner` dispatch, which runs separately
+                    // on Grid's own children with `enclosing_widget ==
+                    // Some("Grid")`. Consuming them here would produce a
+                    // spurious second "unknown Grid attribute" diagnostic
+                    // (same shape as the `slot.*` skip above).
                 } else {
                     diags.push(error(
                         filename,
@@ -1300,9 +1479,6 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                     ));
                 }
             }
-            Member::SignalHandler { span, .. } => {
-                diags.push(error(filename, span, "`Grid` takes no signal handlers"));
-            }
             Member::Conditional { span, .. } => {
                 diags.push(error(filename, span, "`Grid` children must be wrapped in `Cell`; conditional members may appear inside a Cell content widget, not directly in Grid"));
             }
@@ -1313,7 +1489,14 @@ fn check_grid(members: &[Member], grid_span: &Span, filename: &str, diags: &mut 
                     "`Grid` children must be wrapped in `Cell`; direct `for` members are not valid in Grid",
                 ));
             }
-            Member::StateMember { .. } | Member::PropertyDecl { .. } => {}
+            // Handler admission on a `Grid` is the generic rule that
+            // `check_members_inner` applies to every widget kind
+            // (dsl_spec.md §4.19's admission table: `clicked` on any
+            // widget; `dismiss` only beside `modal-scope: true`). This
+            // `check_grid` pass holds no per-kind signal rule.
+            Member::SignalHandler { .. }
+            | Member::StateMember { .. }
+            | Member::PropertyDecl { .. } => {}
         }
     }
 
@@ -1977,6 +2160,42 @@ fn check_members_inner(
     inside_for_template: bool,
     all_loop_binders: &[String],
 ) {
+    // `dismiss` is admitted only on **a container that carries
+    // `modal-scope: true`** (dsl_spec §4.19) — both halves, not just the
+    // sibling. The kind test is what keeps the rule from being satisfied
+    // by an annotation that is itself rejected: `Text { modal-scope: true
+    // dismiss => … }` gets two diagnostics (the attribute is not admitted
+    // on a leaf widget, and the handler can never be raised), where a
+    // sibling-only predicate would have suppressed the second. At
+    // component level there is no container at all, so the answer is
+    // `false` without scanning.
+    //
+    // Computed once per call so the `Member::SignalHandler` arm below can
+    // check it without rescanning; recomputed fresh at each recursive
+    // call (widget body, `if` body, `for` body) so a handler is checked
+    // against its own immediate siblings, not an ancestor's.
+    let carries_modal_scope = enclosing_widget
+        .is_some_and(|widget| FOCUS_ANNOTATION_CONTAINERS.contains(&widget))
+        && members.iter().any(|m| {
+            matches!(
+                m,
+                Member::PropertyBind {
+                    name,
+                    value: Expr::BoolLit { value: true, .. },
+                    ..
+                } if name == "modal-scope"
+            )
+        });
+
+    // Both halves accepted, but not silently — see the function doc for
+    // why `focus-group` is inert once `modal-scope` is also present.
+    check_focus_group_inert_beside_modal_scope_warning(
+        members,
+        carries_modal_scope,
+        filename,
+        diags,
+    );
+
     for member in members {
         match member {
             Member::StateMember { .. } => {}
@@ -2057,6 +2276,26 @@ fn check_members_inner(
                             filename,
                             diags,
                         );
+                    }
+                } else if FOCUS_ANNOTATION_ATTRS.contains(&name.as_str()) {
+                    // `focus-group` / `modal-scope` (dsl_spec §4.19) are
+                    // admitted on any container kind (DD-M4-P2-005 A1) and
+                    // are constant-only booleans. This dispatch must run
+                    // before the ZStack / ScrollView / ToggleButton
+                    // per-kind gates below, which would otherwise swallow
+                    // the name as an unknown attribute on their own kind.
+                    //
+                    // `enclosing_widget` is `Some` here — the
+                    // component-level early return above already routed a
+                    // bare `focus-group:` to `check_host_property_bind`.
+                    if let Some(widget) = enclosing_widget {
+                        if FOCUS_ANNOTATION_CONTAINERS.contains(&widget) {
+                            check_focus_annotation_const_only_bind(
+                                name, value, span, filename, diags,
+                            );
+                        } else {
+                            check_focus_annotation_admission(name, widget, span, filename, diags);
+                        }
                     }
                 } else if enclosing_widget == Some("ZStack") {
                     check_zstack_unknown_attr(name, span, filename, diags);
@@ -2213,6 +2452,11 @@ fn check_members_inner(
                     if type_name == "Grid" {
                         check_grid(children, span, filename, diags);
                     }
+                    if crate::ir::layout_treats_as_childless(type_name) {
+                        check_layout_childless_widget_children(
+                            type_name, children, span, filename, diags,
+                        );
+                    }
                     check_members_inner(
                         children,
                         Some(type_name),
@@ -2227,12 +2471,67 @@ fn check_members_inner(
                 }
             }
 
-            Member::SignalHandler { body, span, .. } => {
-                if inside_for_template {
+            Member::SignalHandler {
+                signal,
+                arg,
+                body,
+                span,
+            } => {
+                // M4-Phase 2 T9: a handler inside a `for` body template is
+                // admitted (dsl_spec §4.15 "Handlers inside a `for` body
+                // (admitted in M4-Phase 2)"). The M3-Phase 7 rejection that
+                // used to sit here is lifted; `check_block_statement` below
+                // still threads `loop_ctx` into the handler body, so a
+                // binder read resolves the same way it does in a binding.
+                // `dismiss` is admitted only on a container carrying
+                // `modal-scope: true` (dsl_spec §4.19); written anywhere
+                // else it could never be raised, so it is rejected here
+                // rather than silently never firing. Fires at component
+                // level too — a component member list never legitimately
+                // carries `modal-scope`.
+                if signal == "dismiss" && !carries_modal_scope {
                     diags.push(error(
                         filename,
                         span,
-                        "handlers inside a `for` body template are deferred in M3-Phase 7; put mutation handlers outside the `for` body",
+                        "`dismiss` handler can never be raised: a dismissal request is addressed to a modal scope; write `modal-scope: true` on the same container or remove the handler (dsl_spec §4.19)",
+                    ));
+                }
+                // M4-Phase 2 T8: `key-down` argument rules (dsl_spec
+                // §4.19 "Keyboard input"). A `key-down` handler with no
+                // argument can never fire — the same "silently never
+                // fires" class the `dismiss` rule above guards against —
+                // and an argument naming an unrecognised key is rejected
+                // here rather than reaching the runtime unfireable.
+                // `key-down` is the only signal dsl_spec §4.19 defines
+                // with an argument, so any other signal carrying one is
+                // rejected too. Applies on every widget kind — there is
+                // no per-kind signal admission left to gate against
+                // (removed by the previous stage).
+                if signal == "key-down" {
+                    match arg {
+                        None => diags.push(error(
+                            filename,
+                            span,
+                            "`key-down` handler can never be raised: the key must be named in the declaration, e.g. `key-down(\"ArrowLeft\")` (dsl_spec §4.19)",
+                        )),
+                        Some(key) if !crate::ir::is_recognised_key_name(key) => {
+                            diags.push(error(
+                                filename,
+                                span,
+                                format!(
+                                    "`key-down(\"{key}\")` names an unrecognised key; recognised keys are the named non-character keys per dsl_spec §4.19 (`Escape`, the arrow / Home / End / Page keys, `Enter`, `F1`-`F12`)"
+                                ),
+                            ));
+                        }
+                        Some(_) => {}
+                    }
+                } else if arg.is_some() {
+                    diags.push(error(
+                        filename,
+                        span,
+                        format!(
+                            "`{signal}` does not take an argument; only `key-down` does (dsl_spec §4.19)"
+                        ),
                     ));
                 }
                 for stmt in &body.statements {
@@ -2733,7 +3032,7 @@ fn check_expr_type_in_loop_context(
                     filename,
                     span,
                     format!(
-                        "loop binder `{}` may be read only inside its `for` body expression bindings",
+                        "loop binder `{}` may be read only inside its `for` body",
                         name
                     ),
                 ));
@@ -3306,15 +3605,17 @@ mod tests {
     }
 
     #[test]
-    fn for_body_rejects_handler_and_nested_for_at_any_depth() {
-        let handler_errs = errors(
-            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Button { clicked => { root.missing = 1; } } } } }",
+    fn for_body_accepts_handler_but_still_rejects_nested_for_at_any_depth() {
+        // M4-Phase 2 T9: a handler inside a `for` body template is now
+        // admitted (dsl_spec §4.15); nested `for` stays rejected (out of
+        // scope per §4.15 "Out of scope").
+        let handler_result = check_src(
+            "component C inherits W { state xs: i32[] = [] state n: i32 = 0 WrapPanel { for x in xs { Button { clicked => { root.n = 1; } } } } }",
         );
         assert!(
-            handler_errs
-                .iter()
-                .any(|e| e.contains("handlers inside a `for` body")),
-            "{handler_errs:?}"
+            !handler_result.has_errors(),
+            "{:?}",
+            handler_result.diagnostics
         );
         let nested_errs = errors(
             "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { VStack { for y in xs { Text {} } } } } }",
@@ -3953,6 +4254,137 @@ mod tests {
         let result = check_src(src);
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
         assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    // --- M4-Phase 2 T8: layout-childless widget child rejection (CF-1,
+    // owner disposition 2026-08-07; widened from Button/ToggleButton to
+    // all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` 2026-08-08) ---
+
+    #[test]
+    fn button_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { Button { Text { text: "ok" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Button` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn togglebutton_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { ToggleButton { Text { text: "ok" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`ToggleButton` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn text_with_widget_child_rejected() {
+        let errs =
+            errors(r#"component C inherits W { Text { text: "ok" Text { text: "nested" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Text` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn rectangle_with_widget_child_rejected() {
+        let errs = errors(r#"component C inherits W { Rectangle { Text { text: "nested" } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`Rectangle` admits no widget children")
+                && errs[0].contains("never be arranged, painted, or hit-tested")
+                && errs[0].contains("container widget")
+                && errs[0].contains("dsl_spec §4.4"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn vstack_with_widget_child_accepted() {
+        // Control: a container kind is untouched by the layout-childless
+        // rule — `VStack`'s `build_layout_tree` arm builds real layout
+        // children (`self.build_layout_child_slots()`), so this must
+        // remain accepted.
+        let result = check_src(r#"component C inherits W { VStack { Text { text: "ok" } } }"#);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn button_with_conditional_member_rejected() {
+        // Measured (T8 start gate): a `Conditional` member's own position
+        // inside a Button is not rejected by `check_if_body` (that pass
+        // only validates the `if`'s own body) nor by any Button-specific
+        // placement rule — before this rule, `Button { if c { Text {} } }`
+        // passed unrejected. Mirrors `check_box_child_count`'s completeness
+        // requirement: a conditional sibling must count toward the
+        // child-materialising total, not just bare `WidgetDecl` members.
+        let errs =
+            errors("component C inherits W { state c: bool = true Button { if c { Text {} } } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Button` admits no widget children")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn button_with_for_member_rejected() {
+        // Measured (T8 start gate): `check_for_member`'s enclosing-widget
+        // match special-cases `None` / `ScrollView` / `Box` / `Grid` /
+        // `Cell` only; `Some("Button")` falls through to its `_ => {}`
+        // arm, so a direct `for` inside a Button was not rejected before
+        // this rule.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] Button { for x in xs { Text {} } } }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`Button` admits no widget children")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn button_with_only_admitted_members_accepted() {
+        // The control that bounds the narrowing: `text:` / `enabled:` /
+        // a `clicked` handler / a `slot.*` bind are not child-materialising
+        // members, so a legitimate Button must not be rejected.
+        let src = r#"component C inherits W {
+            state on: bool = true
+            Grid {
+                columns: 1*
+                rows: 1*
+                Button {
+                    text: "Click"
+                    enabled: on
+                    slot.row: 0
+                    slot.column: 0
+                    clicked => { on = false; }
+                }
+            }
+        }"#;
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
     }
 
     // --- T3: Box accept shapes (dsl_spec §4.9) ---
@@ -6102,5 +6534,761 @@ mod tests {
             "{:?}",
             errs
         );
+    }
+
+    // --- M4-Phase 2 T6 stage 1: focus-group / modal-scope / dismiss ------
+    //
+    // Admission and constant-only rules for the two focus annotations,
+    // plus `dismiss`'s modal-scope-sibling requirement (dsl_spec §4.19,
+    // DD-M4-P2-005 A1). Accept side per admitting kind plus reject side
+    // per rejection branch.
+
+    /// Body template for each of the seven `FOCUS_ANNOTATION_CONTAINERS`
+    /// kinds, with `{ATTR}` standing in for the focus-annotation property
+    /// bind under test. ScrollView carries its required single child;
+    /// Grid carries its required `columns:` / `rows:` track lists.
+    const FOCUS_ANNOTATION_CONTAINER_FIXTURES: &[(&str, &str)] = &[
+        ("VStack", "VStack { {ATTR} }"),
+        ("HStack", "HStack { {ATTR} }"),
+        ("Box", "Box { {ATTR} }"),
+        ("WrapPanel", "WrapPanel { {ATTR} }"),
+        ("ScrollView", "ScrollView { {ATTR} Text { text: \"x\" } }"),
+        ("Grid", "Grid { columns: 1* rows: 1* {ATTR} }"),
+        ("ZStack", "ZStack { {ATTR} }"),
+    ];
+
+    fn assert_focus_annotation_accepted_everywhere(attr_line: &str) {
+        for (kind, body) in FOCUS_ANNOTATION_CONTAINER_FIXTURES {
+            let src = format!(
+                "component C inherits W {{ {} }}",
+                body.replace("{ATTR}", attr_line)
+            );
+            let result = check_src(&src);
+            // `is_empty`, not `!has_errors`: a warning would mean one of
+            // the per-kind gates still reacts to the name.
+            assert!(
+                result.diagnostics.is_empty(),
+                "{} accepting `{}`: {:?}",
+                kind,
+                attr_line,
+                result.diagnostics
+            );
+        }
+    }
+
+    #[test]
+    fn focus_group_true_accepted_on_every_admitting_container() {
+        assert_focus_annotation_accepted_everywhere("focus-group: true");
+    }
+
+    #[test]
+    fn modal_scope_true_accepted_on_every_admitting_container() {
+        assert_focus_annotation_accepted_everywhere("modal-scope: true");
+    }
+
+    #[test]
+    fn focus_group_and_modal_scope_together_on_one_container_accepted_with_warning() {
+        // Both halves stay accepted — DD-M4-P2-005 A1 chose two separate
+        // constant-only attributes precisely so a container could carry
+        // both — but `WidgetNode::focus_role`
+        // (wasamo-runtime/src/widget.rs) holds one `FocusRole` per node
+        // and gives `modal-scope` precedence, so `focus-group` is inert
+        // here. That is not silent: exactly one warning fires, naming the
+        // ineffective `focus-group`.
+        let src = "component C inherits W { VStack { focus-group: true modal-scope: true } }";
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let ws = warnings(src);
+        assert_eq!(ws.len(), 1, "{:?}", ws);
+        // Assert what the message must convey — both attribute names, and
+        // that `focus-group` is the one with no effect — rather than its
+        // exact wording, which is presentation.
+        assert!(
+            ws[0].contains("focus-group")
+                && ws[0].contains("modal-scope")
+                && ws[0].contains("no effect")
+                && ws[0].contains("§4.19"),
+            "{:?}",
+            ws
+        );
+    }
+
+    #[test]
+    fn focus_group_true_modal_scope_false_no_warning() {
+        // `focus-group: true` beside `modal-scope: false` is not the both-
+        // true shape — the group half is not overridden.
+        let src = "component C inherits W { VStack { focus-group: true modal-scope: false } }";
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn focus_group_false_modal_scope_true_no_warning() {
+        // The mirror case: `modal-scope: true` beside `focus-group: false`
+        // is an ordinary, unremarked scope.
+        let src = "component C inherits W { VStack { focus-group: false modal-scope: true } }";
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn focus_group_or_modal_scope_alone_no_warning() {
+        // Either attribute alone is the ordinary single-role case; the
+        // warning requires both present and both `true`.
+        let group_only = "component C inherits W { VStack { focus-group: true } }";
+        assert!(
+            warnings(group_only).is_empty(),
+            "{:?}",
+            warnings(group_only)
+        );
+        let scope_only = "component C inherits W { VStack { modal-scope: true } }";
+        assert!(
+            warnings(scope_only).is_empty(),
+            "{:?}",
+            warnings(scope_only)
+        );
+    }
+
+    #[test]
+    fn focus_group_and_modal_scope_together_inside_if_body_still_one_warning() {
+        // Proves the scan runs at the `Member::Conditional` recursive call
+        // in `check_members_inner`, the same as `carries_modal_scope`
+        // itself (see the `if`-wrapped tests further below). The `if`
+        // body admits exactly one widget child in M3-Phase 6, so an outer
+        // `Box` wraps the `if`.
+        let src = "component C inherits W { state open: bool = true Box { if open { VStack { focus-group: true modal-scope: true } } } }";
+        let result = check_src(src);
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let ws = warnings(src);
+        assert_eq!(ws.len(), 1, "{:?}", ws);
+    }
+
+    #[test]
+    fn focus_group_false_accepted() {
+        // `false` is a valid constant, not just `true` (dsl_spec §4.19 default).
+        let result = check_src("component C inherits W { VStack { focus-group: false } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn modal_scope_false_accepted() {
+        let result = check_src("component C inherits W { VStack { modal-scope: false } }");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_beside_modal_scope_true() {
+        let result = check_src(
+            "component C inherits W { state open: bool = true Box { modal-scope: true dismiss => { open = false; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_on_grid_carrying_modal_scope() {
+        // `dismiss` is admitted here because the Grid carries
+        // `modal-scope: true` (the generic dsl_spec §4.19 rule; `Grid`
+        // holds no per-kind signal rule of its own).
+        let result = check_src(
+            "component C inherits W { state open: bool = true Grid { columns: 1* rows: 1* modal-scope: true dismiss => { open = false; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn focus_group_true_on_zstack_produces_no_diagnostic() {
+        // Positive control: ZStack's own unknown-attribute catch-all
+        // (`check_zstack_unknown_attr`) used to be reachable before the
+        // focus-annotation dispatch and would have swallowed this name.
+        let result = check_src("component C inherits W { ZStack { focus-group: true } }");
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn modal_scope_true_on_scrollview_produces_no_diagnostic() {
+        // Positive control: ScrollView's own attribute catch-all
+        // (`check_scrollview_unknown_attr`) used to be reachable before
+        // the focus-annotation dispatch and would have swallowed this name.
+        let result = check_src(
+            r#"component C inherits W { ScrollView { modal-scope: true Text { text: "x" } } }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn focus_group_state_ident_rejected() {
+        let errs = errors(
+            "component C inherits W { state flag: bool = true VStack { focus-group: flag } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`focus-group` is constant-only") && errs[0].contains("§4.19"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn modal_scope_int_literal_rejected() {
+        // Same constant-only branch, a different non-`BoolLit` input shape.
+        let errs = errors("component C inherits W { VStack { modal-scope: 1 } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`modal-scope` is constant-only") && errs[0].contains("§4.19"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_text_rejected() {
+        let errs = errors("component C inherits W { Text { focus-group: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`focus-group` is admitted on any container")
+                && errs[0].contains("widget `Text`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_button_rejected() {
+        let errs = errors("component C inherits W { Button { focus-group: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`focus-group` is admitted on any container")
+                && errs[0].contains("widget `Button`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_togglebutton_rejected_as_admission_not_unknown_attr() {
+        // Proves dispatch ordering: the focus-annotation admission check
+        // runs before `check_togglebutton_property_name`, so the
+        // diagnostic is the admission one, not "unknown ToggleButton
+        // attribute".
+        let errs = errors("component C inherits W { ToggleButton { focus-group: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`focus-group` is admitted on any container")
+                && errs[0].contains("widget `ToggleButton`"),
+            "{:?}",
+            errs
+        );
+        assert!(
+            !errs[0].contains("unknown ToggleButton attribute"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_rectangle_rejected() {
+        let errs = errors("component C inherits W { Rectangle { focus-group: true } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`focus-group` is admitted on any container")
+                && errs[0].contains("widget `Rectangle`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn focus_group_true_inside_cell_rejected() {
+        // `Cell` is an IR-only Grid wrapper, not a runtime container, and
+        // is excluded from `FOCUS_ANNOTATION_CONTAINERS`. `check_cell`
+        // (called from `check_grid`) independently flags the same name as
+        // an unknown `Cell` attribute, so this fires alongside a second
+        // diagnostic — `.any()` locates the admission one specifically
+        // (same dual-diagnostic shape already established for a WrapPanel
+        // attribute misplaced on a non-admitting widget).
+        let errs = errors(
+            r#"component C inherits W { Grid { columns: 1* rows: 1* Cell { focus-group: true Text {} } } }"#,
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`focus-group` is admitted on any container")
+                    && e.contains("widget `Cell`")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn focus_group_true_at_component_level_rejected_as_unknown_host_attr() {
+        // Component-level `focus-group:` never reaches the focus-
+        // annotation dispatch: the `enclosing_widget.is_none()` early
+        // return routes it to `check_host_property_bind` first, same as
+        // any other unrecognised host attribute.
+        let errs = errors("component C inherits W { focus-group: true ZStack { Text {} } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unknown host attribute `focus-group`"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_without_modal_scope_sibling_rejected() {
+        let errs = errors(
+            "component C inherits W { state open: bool = true Box { dismiss => { open = false; } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised") && errs[0].contains("§4.19"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_beside_modal_scope_false_rejected() {
+        let errs = errors(
+            "component C inherits W { state open: bool = true Box { modal-scope: false dismiss => { open = false; } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_at_component_level_rejected() {
+        let errs = errors(
+            "component C inherits W { state open: bool = true dismiss => { open = false; } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_beside_a_modal_scope_on_a_non_container_is_still_rejected() {
+        // The admission predicate is "a **container** that carries
+        // `modal-scope: true`", both halves. A sibling-only predicate
+        // would let the rejected annotation on a leaf widget suppress
+        // this second diagnostic; both must fire.
+        let errs = errors(
+            "component C inherits W { state open: bool = true Text { modal-scope: true dismiss => { open = false; } } }",
+        );
+        assert_eq!(errs.len(), 2, "{:?}", errs);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`modal-scope` is admitted on any container")),
+            "{:?}",
+            errs
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`dismiss` handler can never be raised")),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_beside_a_component_level_modal_scope_is_still_rejected() {
+        // The other half of the same predicate: a component member list
+        // is not a container, so a (itself-rejected) component-level
+        // `modal-scope: true` cannot admit a component-level `dismiss`.
+        let errs = errors(
+            "component C inherits W { state open: bool = true modal-scope: true dismiss => { open = false; } }",
+        );
+        assert_eq!(errs.len(), 2, "{:?}", errs);
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("unknown host attribute `modal-scope`")),
+            "{:?}",
+            errs
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("`dismiss` handler can never be raised")),
+            "{:?}",
+            errs
+        );
+    }
+
+    // Every test above writes `dismiss` as a flat sibling of
+    // `modal-scope: true` directly in a widget body. §4.19's own worked
+    // example — and the shape the feature exists for (the gallery
+    // lightbox) — wraps the annotated container in an `if`. These four
+    // tests exercise `carries_modal_scope`'s recomputation at the
+    // `Member::Conditional` / `Member::For` recursive calls in
+    // `check_members_inner`, which the flat tests above never reach.
+
+    #[test]
+    fn dismiss_handler_accepted_inside_if_wrapped_modal_scope() {
+        // The `if` body admits exactly one widget child in M3-Phase 6, so
+        // an outer `Box` wraps the `if` and the `if`'s branch body is the
+        // annotated inner container — dsl_spec §4.19's own
+        // `modal-scope` / `dismiss` example shape.
+        let result = check_src(
+            "component C inherits W { state lightbox_open: bool = true Box { if lightbox_open { Box { modal-scope: true dismiss => { lightbox_open = false; } } } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_handler_inside_if_wrapped_container_without_modal_scope_rejected() {
+        // Same shape as the accept test above, minus `modal-scope: true`.
+        // Proves the recursion into the `if` body actually re-scans the
+        // inner `Box`'s own children rather than short-circuiting or
+        // inheriting an outer answer.
+        let errs = errors(
+            "component C inherits W { state lightbox_open: bool = true Box { if lightbox_open { Box { dismiss => { lightbox_open = false; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised") && errs[0].contains("§4.19"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_inside_if_wrapped_container_not_admitted_by_ancestor_modal_scope() {
+        // The discriminating case: the *enclosing* `Box`, outside the
+        // `if`, carries `modal-scope: true`, but the `if`-wrapped inner
+        // `Box` carrying `dismiss` does not. The admission rule is
+        // same-node, not ancestor — this is what a `carries_modal_scope`
+        // that leaked from the outer recursive call into the inner one
+        // (instead of being recomputed against the inner container's own
+        // siblings) would wrongly accept.
+        let errs = errors(
+            "component C inherits W { state lightbox_open: bool = true Box { modal-scope: true if lightbox_open { Box { dismiss => { lightbox_open = false; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised") && errs[0].contains("§4.19"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_inside_for_wrapped_container_without_modal_scope_rejected() {
+        // The `for` counterpart of the `if`-wrapped reject case above.
+        // M4-Phase 2 T9 lifted the M3-Phase 7 "handlers inside a `for`
+        // body template are deferred" gate, so a `dismiss` handler inside
+        // a `for` body now reaches `carries_modal_scope`'s admission rule
+        // on the same terms as everywhere else: rejected here because the
+        // enclosing `Box` does not carry `modal-scope: true`, not because
+        // handlers were deferred inside `for` at all. The `Member::For`
+        // recursive call re-scans its own siblings for `carries_modal_scope`
+        // — the same thing the `if`-wrapped test above proves for
+        // `Member::Conditional`.
+        let errs = errors(
+            "component C inherits W { state open: bool = true state items: i32[] = [] VStack { for it, idx in items { Box { dismiss => { open = false; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn clicked_handler_on_grid_accepted() {
+        // T8: `check_grid` no longer carries a per-kind signal rule, so
+        // `clicked` — admitted on any widget per dsl_spec §4.19 — is
+        // accepted on a Grid, same as on every other widget kind.
+        let result = check_src(
+            "component C inherits W { state count: i32 = 0 Grid { columns: 1* rows: 1* clicked => { count += 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn clicked_handler_on_zstack_accepted() {
+        // Symmetric pin to the Grid case above: `wasamoc check` never had
+        // a per-kind signal rule for ZStack (only the runtime loader
+        // did), so this already passed; pinned explicitly so the
+        // Grid/ZStack admission pair is documented as symmetric.
+        let result = check_src(
+            "component C inherits W { state count: i32 = 0 ZStack { clicked => { count += 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_handler_on_grid_without_modal_scope_rejected_by_generic_rule() {
+        // Proves the generic dsl_spec §4.19 `dismiss` rule now solely
+        // owns Grid admission: the diagnostic is the generic "can never
+        // be raised" message, not the removed Grid-specific "takes no
+        // signal handlers other than `dismiss`" message — a Grid-specific
+        // rejection could not satisfy this assertion.
+        let errs = errors(
+            "component C inherits W { state open: bool = true Grid { columns: 1* rows: 1* dismiss => { open = false; } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` handler can never be raised"),
+            "{:?}",
+            errs
+        );
+        assert!(!errs[0].contains("takes no signal handlers"), "{:?}", errs);
+    }
+
+    // `dismiss` on a Grid carrying `modal-scope: true` is pinned above by
+    // `dismiss_handler_accepted_on_grid_carrying_modal_scope`, which
+    // doubles as this pair's accept-side case.
+
+    // ── M4-Phase 2 T8: `key-down("<key>")` argument rules (dsl_spec §4.19
+    // "Keyboard input", DD-M4-P2-005) ───────────────────────────────────
+
+    #[test]
+    fn key_down_without_argument_rejected() {
+        // A bare `key-down => { }` (no parenthesised key name) parses,
+        // but can never fire — the same "silently never fires" class the
+        // `dismiss` rule guards against.
+        let errs = errors("component C inherits W { Box { key-down => { } } }");
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`key-down` handler can never be raised")
+                && errs[0].contains("must be named")
+                && errs[0].contains("key-down(\"ArrowLeft\")"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_unrecognised_key_name_rejected() {
+        let errs = errors(r#"component C inherits W { Box { key-down("Tab") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("unrecognised key") && errs[0].contains("Tab"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_modifier_combo_rejected_as_unrecognised() {
+        // Modifier combinations (`Ctrl+S`) are not in this surface — they
+        // are simply an unrecognised name, no separate rule needed.
+        let errs = errors(r#"component C inherits W { Box { key-down("Ctrl+S") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("unrecognised key"), "{:?}", errs);
+    }
+
+    #[test]
+    fn argument_on_clicked_rejected() {
+        let errs = errors(r#"component C inherits W { Box { clicked("x") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`clicked` does not take an argument") && errs[0].contains("key-down"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn argument_on_dismiss_rejected() {
+        // `modal-scope: true` sibling present so only the argument rule
+        // fires, not the `dismiss`/`carries_modal_scope` admission rule.
+        let errs =
+            errors(r#"component C inherits W { Box { modal-scope: true dismiss("x") => { } } }"#);
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`dismiss` does not take an argument"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn key_down_accepted_on_box() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Box { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_accepted_on_button() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Button { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_accepted_on_grid() {
+        let result = check_src(
+            "component C inherits W { state selected_index: i32 = 0 Grid { columns: 1* rows: 1* key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_recognised_key_names_spot_check_accepted() {
+        // Representative sample across `RECOGNISED_KEY_NAMES`, not the
+        // full 22 (that exhaustive coverage lives on the
+        // `wasamo_ir::RECOGNISED_KEY_NAMES` table test).
+        for key in ["Escape", "Enter", "F12", "PageDown"] {
+            let src =
+                format!(r#"component C inherits W {{ Box {{ key-down("{key}") => {{ }} }} }}"#);
+            let result = check_src(&src);
+            assert!(!result.has_errors(), "key={key}: {:?}", result.diagnostics);
+        }
+    }
+
+    // ── M4-Phase 2 T9: per-item handlers inside `for` (dsl_spec §4.19
+    // "Per-item handlers", §4.15 "Handlers inside a `for` body (admitted
+    // in M4-Phase 2)", DD-M4-P2-005) ───────────────────────────────────
+
+    #[test]
+    fn for_body_handler_reads_index_binder_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state labels: string[] = ["a", "b"]
+                state n: i32 = 0
+                WrapPanel { for label, i in labels { Box { clicked => { root.n = i; } } } }
+            }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn for_body_handler_reads_item_binder_accepted() {
+        let result = check_src(
+            r#"component C inherits W {
+                state xs: i32[] = [1, 2]
+                state sel: i32 = 0
+                WrapPanel { for n in xs { Box { clicked => { root.sel = n; } } } }
+            }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_with_argument_accepted_inside_for_body() {
+        let result = check_src(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Box { key-down(\"Enter\") => { } } } } }",
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn dismiss_accepted_inside_for_body_with_modal_scope() {
+        // Newly reachable: before this task, `inside_for_template`
+        // rejected every handler in a `for` body unconditionally, so this
+        // shape could never reach `carries_modal_scope`'s admission rule
+        // at all. It does now.
+        let result = check_src(
+            "component C inherits W { state open: bool = true state items: i32[] = [] VStack { for it, idx in items { Box { modal-scope: true dismiss => { open = false; } } } } }",
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn key_down_without_argument_rejected_inside_for_body() {
+        // T8's rule ("a bare `key-down` can never fire") still fires
+        // inside a `for` body — lifting the M3-Phase 7 gate does not
+        // relax any other admission rule.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Box { key-down => { } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("`key-down` handler can never be raised"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn index_binder_read_in_handler_outside_for_body_rejected() {
+        // A handler outside any `for` body reading a binder that is
+        // declared by a `for` elsewhere in the file: still a scope
+        // violation, and the corrected wording (no "expression bindings"
+        // qualifier — a handler body is inside the `for` body too) is
+        // what fires.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] state n: i32 = 0 WrapPanel { for a, i in xs { Box {} } } Button { clicked => { root.n = i; } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("loop binder `i` may be read only inside its `for` body")
+                && !errs[0].contains("expression bindings"),
+            "{:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn handler_reads_a_different_for_loops_binder_rejected() {
+        // Two sibling `for` members with different binders; the second
+        // for-body's handler reads the *first* for's binder. Nested `for`
+        // is rejected, so a node inside a `for` body has at most one loop
+        // scope (dsl_spec §4.15) — a binder belonging to a sibling `for`
+        // is out of scope exactly like one belonging to no `for` at all,
+        // and hits the same diagnostic.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] state ys: i32[] = [] state n: i32 = 0 WrapPanel { for a, i in xs { Box {} } } WrapPanel { for b, j in ys { Box { clicked => { root.n = i; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(
+            errs[0].contains("loop binder `i` may be read only inside its `for` body"),
+            "{:?}",
+            errs
+        );
+    }
+
+    /// A per-item handler that mutates the collection its own subtree
+    /// rides, over **all three** element types. This combination was
+    /// unreachable before this task: collection mutation only appears in
+    /// handler statements, never in a `bind`, and a handler inside a `for`
+    /// body was rejected outright — so the two preconditions could not
+    /// co-occur.
+    ///
+    /// The runtime gained a binder-read arm for each of the three element
+    /// types (they take three different evaluators), and the independent
+    /// review found the *checker* side pinned end-to-end for `string[]`
+    /// only, with `i32[]` and `bool[]` covered lower down the stack. This
+    /// is the accept-side half at the gate that decides whether the shape
+    /// can be authored at all.
+    #[test]
+    fn for_body_handler_may_append_its_own_binder_for_every_element_type() {
+        let result = check_src(
+            r#"component C inherits W {
+                state nums: i32[] = [1]
+                state labels: string[] = ["a"]
+                state flags: bool[] = [true]
+                VStack {
+                    WrapPanel { for n in nums { Box { clicked => { nums = nums.append(n); } } } }
+                    WrapPanel { for label, i in labels { Box { clicked => { labels = labels.append("row \{i}"); } } } }
+                    WrapPanel { for f in flags { Box { clicked => { flags = flags.append(f); } } } }
+                }
+            }"#,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn undeclared_identifier_inside_for_body_handler_rejected() {
+        // Name resolution still fires for a handler inside a `for` body:
+        // lifting the M3-Phase 7 gate did not disable
+        // `check_qualified_name`'s ordinary undefined-state diagnostic.
+        let errs = errors(
+            "component C inherits W { state xs: i32[] = [] WrapPanel { for x in xs { Button { clicked => { root.missing = 1; } } } } }",
+        );
+        assert_eq!(errs.len(), 1, "{:?}", errs);
+        assert!(errs[0].contains("undefined state `missing`"), "{:?}", errs);
     }
 }

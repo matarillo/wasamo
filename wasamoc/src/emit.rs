@@ -231,7 +231,19 @@ fn emit_host_binding(out: &mut String, binding: &IrBinding, indent: usize) {
 
 fn emit_handler(out: &mut String, handler: &IrHandler, indent: usize) {
     let i = ind(indent);
-    out.push_str(&format!("{}on {} {{\n", i, handler.signal));
+    match &handler.arg {
+        // Parenthesised argument form (DD-M4-P2-005), e.g.
+        // `on key-down("ArrowLeft") { ... }`.
+        Some(arg) => out.push_str(&format!(
+            "{}on {}(\"{}\") {{\n",
+            i,
+            handler.signal,
+            escape_string(arg)
+        )),
+        // No-argument case stays byte-identical to the pre-T8 form
+        // (`on clicked { ... }`) so no existing IR fixture changes.
+        None => out.push_str(&format!("{}on {} {{\n", i, handler.signal)),
+    }
     out.push_str(&format!("{}    {}\n", i, emit_expr(&handler.expr)));
     out.push_str(&format!("{}}}\n", i));
 }
@@ -409,6 +421,32 @@ mod tests {
         );
         assert!(out.contains("on clicked {"), "got: {}", out);
         assert!(out.contains("(compound-assign += count 1)"), "got: {}", out);
+    }
+
+    // --- M4-Phase 2 T8: `key-down("<key>")` argument IR text emit
+    // (DD-M4-P2-005) ------------------------------------------------
+
+    #[test]
+    fn key_down_handler_argument_emitted_in_parenthesised_form() {
+        let out = emit_src(
+            "component C inherits W { state selected_index: i32 = 0 Box { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        assert!(
+            out.contains(r#"on key-down("ArrowLeft") {"#),
+            "got: {}",
+            out
+        );
+    }
+
+    #[test]
+    fn no_argument_handler_still_emits_unchanged_form() {
+        // Byte-identical to the pre-T8 no-argument shape — no existing IR
+        // fixture changes.
+        let out = emit_src(
+            "component C inherits W { state count: i32 = 0 VStack { clicked => { root.count += 1; } } }",
+        );
+        assert!(out.contains("on clicked {"), "got: {}", out);
+        assert!(!out.contains("clicked(\""), "got: {}", out);
     }
 
     #[test]
@@ -1052,5 +1090,68 @@ mod tests {
         assert!(out.contains("(index-read i)"), "got: {out}");
         assert!(out.contains("(list-append labels \"b\")"), "got: {out}");
         assert!(out.contains("(list-drop-last labels)"), "got: {out}");
+    }
+
+    // M4-Phase 2 T9: a handler inside a `for` body template is admitted
+    // (dsl_spec §4.19 "Per-item handlers"). Fact 2 (T9 start gate) already
+    // established that `lower_node_with_loop`'s `Member::SignalHandler`
+    // arm threads `loop_ctx` into `lower_block` unconditionally, so this
+    // test measures — it does not newly build — that a binder read inside
+    // `on clicked { ... }` lowers to `ItemRead` / `IndexRead` the same way
+    // a binding does, and round-trips through `emit` as `(item-read x)` /
+    // `(index-read i)`.
+    #[test]
+    fn for_body_handler_lowers_and_emits_item_and_index_reads() {
+        let tokens = tokenize(
+            r#"component C inherits W {
+                state xs: i32[] = [1, 2]
+                state sel: i32 = 0
+                state pos: i32 = 0
+                WrapPanel { for x, i in xs { Box { clicked => { root.sel = x; root.pos = i; } } } }
+            }"#,
+            "<test>",
+        )
+        .unwrap();
+        let ast = parse(&tokens, "<test>").unwrap();
+        let result = check(&ast, "<test>");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        let comp = lower(&ast, &result.namespace);
+
+        let IrMember::ControlFlow(ControlFlowNode::For { body, .. }) = &comp.root.children[0]
+        else {
+            panic!("expected For control-flow, got {:?}", comp.root.children[0]);
+        };
+        let IrMember::Widget(box_node) = &body[0] else {
+            panic!("expected Box body");
+        };
+        let HandlerExpr::Block(exprs) = &box_node.node.handlers[0].expr else {
+            panic!(
+                "expected block handler body, got {:?}",
+                box_node.node.handlers[0].expr
+            );
+        };
+        assert!(
+            matches!(
+                &exprs[0],
+                HandlerExpr::Assign { lhs, rhs }
+                    if lhs == "sel" && matches!(rhs.as_ref(), HandlerExpr::ItemRead { binder } if binder == "x")
+            ),
+            "got: {:?}",
+            exprs[0]
+        );
+        assert!(
+            matches!(
+                &exprs[1],
+                HandlerExpr::Assign { lhs, rhs }
+                    if lhs == "pos" && matches!(rhs.as_ref(), HandlerExpr::IndexRead { binder } if binder == "i")
+            ),
+            "got: {:?}",
+            exprs[1]
+        );
+
+        let out = emit(&comp);
+        assert!(out.contains("on clicked {"), "got: {out}");
+        assert!(out.contains("(item-read x)"), "got: {out}");
+        assert!(out.contains("(index-read i)"), "got: {out}");
     }
 }

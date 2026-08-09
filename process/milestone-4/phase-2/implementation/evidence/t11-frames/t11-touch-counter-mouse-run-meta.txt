@@ -1,0 +1,15 @@
+commit=e0cb862d15aae7e1720fbc3e49414996c479913c
+input=mouse
+run_start=2026-08-09T06:13:31.9950770+09:00
+dpi=120
+scale=1.25
+client_x=159
+client_y=188
+client_w=682
+client_h=453
+button_centre_dip_x=272.4
+button_centre_dip_y=90.4
+button_centre_client_x=340
+button_centre_client_y=113
+cursor_park_screen_x=5
+cursor_park_screen_y=5

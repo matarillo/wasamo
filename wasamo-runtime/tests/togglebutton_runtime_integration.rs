@@ -14,9 +14,8 @@ use wasamo_runtime::ir_loader::{build_widget_tree, parse_ir};
 use wasamo_runtime::WidgetNode;
 
 use windows::core::Interface;
-use windows::Foundation::Numerics::{Vector2, Vector3};
 use windows::UI::Color;
-use windows::UI::Composition::{CompositionColorBrush, Visual};
+use windows::UI::Composition::CompositionColorBrush;
 
 fn lower_ui_to_ir(src: &str) -> String {
     use wasamoc::{check, emit, lexer, lower, parser};
@@ -54,20 +53,6 @@ fn read_widget_color(widget: &WidgetNode) -> Color {
 
 fn rgba(color: Color) -> (u8, u8, u8, u8) {
     (color.A, color.R, color.G, color.B)
-}
-
-fn pin_hit_rect(widget: &WidgetNode) {
-    let visual: Visual = widget.visual.cast().expect("cast SpriteVisual to Visual");
-    visual
-        .SetOffset(Vector3 {
-            X: 0.0,
-            Y: 0.0,
-            Z: 0.0,
-        })
-        .expect("set visual offset");
-    visual
-        .SetSize(Vector2 { X: 120.0, Y: 40.0 })
-        .expect("set visual size");
 }
 
 #[test]
@@ -193,9 +178,22 @@ fn togglebutton_alpha_exclusion_click_leaves_exactly_one_checked() {
 
             assert_eq!(checked_children(&built.root), vec![true, false, false]);
 
-            let albums = built.root.children[1].as_mut();
-            pin_hit_rect(albums);
-            albums.hit_test_click(60.0, 20.0);
+            // M4-Phase 2 T2 (DD-M4-P2-002): `arranged_rect` is absolute DIP
+            // within the window's client area, so a subtree entry no longer
+            // has its own coordinate space to hand-pin (the pre-T2
+            // `pin_hit_rect` workaround). Lay out `built.root` — the
+            // production entry point — and dispatch through it too, since
+            // that is what matches how a real window drives a click; reading
+            // the Albums button's own rectangle only tells us where to click.
+            built
+                .root
+                .run_layout_as_window_root(400.0, 60.0)
+                .expect("run_layout_as_window_root failed");
+            let rect = built.root.children[1]
+                .__arranged_rect_for_test()
+                .expect("a laid-out ToggleButton must have an arranged rectangle");
+            let (click_x, click_y) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            built.root.hit_test_click(click_x, click_y);
 
             assert_eq!(
                 checked_children(&built.root),
@@ -226,8 +224,20 @@ fn disabled_togglebutton_suppresses_click_like_button() {
             assert_eq!(built.root.__button_enabled_for_test(), Some(false));
             assert_eq!(built.root.__togglebutton_checked_for_test(), Some(false));
 
-            pin_hit_rect(&built.root);
-            built.root.hit_test_click(60.0, 20.0);
+            // M4-Phase 2 T2 (DD-M4-P2-002): lay the ToggleButton out as the
+            // window root (it is the component root here) instead of
+            // hand-pinning its Visual, and read the click point back from
+            // the rectangle layout actually produced.
+            built
+                .root
+                .run_layout_as_window_root(120.0, 40.0)
+                .expect("run_layout_as_window_root failed");
+            let rect = built
+                .root
+                .__arranged_rect_for_test()
+                .expect("a laid-out ToggleButton must have an arranged rectangle");
+            let (click_x, click_y) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            built.root.hit_test_click(click_x, click_y);
 
             assert_eq!(
                 built.root.__togglebutton_checked_for_test(),
@@ -259,6 +269,67 @@ fn disabled_checked_togglebutton_shows_disabled_not_checked_color() {
                 rgba(read_widget_color(&built.root)),
                 (0x40, 0x80, 0x80, 0x80),
                 "disabled colour must win over the checked visual cue"
+            );
+        },
+    );
+}
+
+// ── M4-Phase 2 T8: literal `enabled: false` on a plain `Button` (CF-2,
+// owner disposition 2026-08-07) ─────────────────────────────────────────
+//
+// Before this fix, the "Button" IR-loader materialisation arm read only
+// `text` / `style`, and `WidgetNode::button` hard-coded `enabled: true` —
+// so only a *state-bound* `enabled` could disable a plain Button; a
+// literal `enabled: false` was accepted by `wasamoc check` and then
+// silently dropped. These two tests drive the production compiler ->
+// textual IR -> runtime loader -> live `WidgetNode` path the same way
+// the ToggleButton tests above do, reusing `__button_enabled_for_test`
+// (already shared across `WidgetData::Button` / `WidgetData::ToggleButton`).
+
+#[test]
+fn literal_enabled_false_on_plain_button_is_respected() {
+    run_on_owning_runtime_thread_or_skip(
+        "Button literal enabled:false integration test (CF-2)",
+        move || {
+            let built = build_ui(
+                r#"component DisabledButton inherits Window {
+    Button {
+        text: "Disabled"
+        enabled: false
+    }
+}"#,
+            );
+
+            assert_eq!(
+                built.root.__button_enabled_for_test(),
+                Some(false),
+                "a literal `enabled: false` on a plain Button must disable it"
+            );
+        },
+    );
+}
+
+#[test]
+fn button_with_no_enabled_prop_constructs_enabled() {
+    run_on_owning_runtime_thread_or_skip(
+        "Button absent enabled defaults-true integration test (CF-2 positive control)",
+        move || {
+            let built = build_ui(
+                r#"component DefaultButton inherits Window {
+    Button {
+        text: "Click"
+    }
+}"#,
+            );
+
+            // Positive control: the loader must not simply always disable a
+            // Button — absent `enabled` still constructs enabled (`true`),
+            // the same runtime default as `ToggleButton.enabled` (dsl_spec
+            // §4.8), so the fix above cannot pass by always disabling.
+            assert_eq!(
+                built.root.__button_enabled_for_test(),
+                Some(true),
+                "a Button with no `enabled` prop must construct enabled"
             );
         },
     );

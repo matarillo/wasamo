@@ -21,9 +21,8 @@ use wasamo_runtime::ffi;
 use wasamo_runtime::WidgetNode;
 
 use windows::core::Interface;
-use windows::Foundation::Numerics::{Vector2, Vector3};
 use windows::UI::Color;
-use windows::UI::Composition::{CompositionColorBrush, Visual};
+use windows::UI::Composition::CompositionColorBrush;
 
 const PROP_BUTTON_ENABLED: u32 = 5;
 
@@ -123,27 +122,24 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
     }
     let initial_color = read_button_color(&button);
 
-    // `WidgetNode::button` does not size the background visual itself — that
-    // normally happens during the layout pass owned by the host window. The
-    // test bypasses windowing, so manually pin the visual at (0,0)/(100,40)
-    // so `hit_test_click` has a non-empty rect to land inside.
-    let bg_vis: Visual = button
-        .visual
-        .cast()
-        .expect("cast bg SpriteVisual to Visual");
-    bg_vis
-        .SetOffset(Vector3 {
-            X: 0.0,
-            Y: 0.0,
-            Z: 0.0,
-        })
-        .expect("set bg offset");
-    bg_vis
-        .SetSize(Vector2 { X: 100.0, Y: 40.0 })
-        .expect("set bg size");
+    // M4-Phase 2 T2 (DD-M4-P2-002): hit-testing reads `arranged_rect`, the
+    // layout-derived DIP rectangle, and never touches the Visual. A node
+    // that has never been through a layout pass has no `arranged_rect`, so
+    // pinning `SetOffset` / `SetSize` on the Visual directly (the pre-T2
+    // workaround) no longer puts anything inside the click target — it
+    // would leave `hit_test_click` resolving to nothing. Lay the Button out
+    // as the window root instead, and read the click point back from the
+    // rectangle layout actually produced.
+    button
+        .run_layout_as_window_root(100.0, 40.0)
+        .expect("run_layout_as_window_root failed");
+    let rect = button
+        .__arranged_rect_for_test()
+        .expect("a laid-out Button must have an arranged rectangle");
+    let (click_x, click_y) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
 
     let widget_ptr = (&mut *button) as *mut WidgetNode as *mut ffi::WasamoWidget;
-    button.hit_test_click(50.0, 20.0);
+    button.hit_test_click(click_x, click_y);
     assert_eq!(
         click_count.get(),
         1,
@@ -199,9 +195,9 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
         "disabled brush colour must be the documented flat grey"
     );
 
-    // Click suppression: hit-testing the same pixel must NOT invoke the
+    // Click suppression: hit-testing the same point must NOT invoke the
     // callback while disabled.
-    button.hit_test_click(50.0, 20.0);
+    button.hit_test_click(click_x, click_y);
     assert_eq!(
         click_count.get(),
         1,
@@ -230,7 +226,7 @@ fn button_enabled_property_flips_visual_and_suppresses_click() {
     );
 
     // Click dispatch resumes once re-enabled.
-    button.hit_test_click(50.0, 20.0);
+    button.hit_test_click(click_x, click_y);
     assert_eq!(
         click_count.get(),
         2,

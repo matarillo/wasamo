@@ -1,6 +1,6 @@
 # Wasamo Architecture
 
-**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`. M4-Phase 1 implementation-synced (2026-08-04): §12 matches the landed DIP layout space, device-space visual tree and pointer stream, conversion seams, text-surface resolution contract, and scale-change propagation. The `windows` crate feature list (§4.5) and the initialization sequence (§5.2) are also re-synced to the landed runtime. The outer-size contract remains specifically about the outer rectangle: T4 measured an 800 × 600 DIP request as a 1000 × 750 physical outer rectangle at 125%, while the client was 785.6 × 562.4 DIP ([implementation log §T4](../process/milestone-4/phase-1/implementation/log.md#t4--per-window-scale--post-create-window-size-correction)). [DD-M4-P1-006](../process/milestone-4/phase-1/decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md) is Accepted and its `None` / `0.0` mapping matches the landed brush construction.
+**Status:** M1 complete (Phases 0-8); M2 complete (Phases 1-7) — Foundation acceptance A1-A6 discharged; M3-Phase 1, M3-Phase 2, M3-Phase 3, M3-Phase 4, and M3-Phase 5 complete. M3-Phase 6 closed (implementation-synced): ZStack, conditional rendering, and the component host surface are documented to match the landed implementation. M3-Phase 7 closed (implementation-synced): iteration — `ControlFlowNode::For` / `BindingTarget::ForLoopSubtree`, the canonized member-expansion seam, stage-then-commit range mutation, and child-carried ZStack placement (§6.7.10, §6.8.5) are documented to match the landed implementation. M3-Phase 7b closed (implementation-synced): the parent-interpreted placement model — child-slot `SlotData` carrier (§6.7.9, §6.8.6), Grid storage convergence off the parallel `cell_placements` vector (§6.8.4), and the textual-IR `child { placement … }` record (IR-B) — is documented to match the landed implementation (`IrMember::Widget(IrChildSlot)`; runtime `ChildSlot` / `SlotData`). M3-Phase 8 closed (implementation-synced): the `ToggleButton` selected-state runtime representation (§6.7.7) is documented to match the landed implementation, and the DSL spec ([dsl_spec.md](./dsl_spec.md)) is promoted to the M3 `public-draft`. M4-Phase 1 implementation-synced (2026-08-04): §12 matches the landed DIP layout space, device-space visual tree and pointer stream, conversion seams, text-surface resolution contract, and scale-change propagation. The `windows` crate feature list (§4.5) and the initialization sequence (§5.2) are also re-synced to the landed runtime. The outer-size contract remains specifically about the outer rectangle: T4 measured an 800 × 600 DIP request as a 1000 × 750 physical outer rectangle at 125%, while the client was 785.6 × 562.4 DIP ([implementation log §T4](../process/milestone-4/phase-1/implementation/log.md#t4--per-window-scale--post-create-window-size-correction)). [DD-M4-P1-006](../process/milestone-4/phase-1/decisions/dd-m4-p1-006-surface-brush-mapping-is-set-not-inherited.md) is Accepted and its `None` / `0.0` mapping matches the landed brush construction. M4-Phase 2 closed (implementation-synced, 2026-08-09): §13 matches the landed layout-derived hit rectangles, one-target consume-on-handle routing, mouse/touch boundary, per-window focus state, focus groups, modal focus scopes, and dismissal path; the former Open Questions section remains §14 with its anchor preserved.
 
 ---
 
@@ -2109,11 +2109,13 @@ throughout the runtime. There are four kinds:
    pass — at window attach, on every window-resize message, and in the
    reactive dirty-layout drain after a size-affecting property write —
    arrives in device space and is divided by `s` before it reaches layout.
-2. **Pointer coordinates, inbound.** Pointer message coordinates are
-   divided by `s` at the window procedure, so hit-testing and hover
-   state run in DIP like the rest of the runtime. Where hit-testing
-   reads a widget's rectangle back off its Visual (§7.5), that readback
-   is converted alongside them.
+2. **Pointer coordinates, inbound.** Mouse messages already carry client
+   physical coordinates and are divided by `s` at the window procedure.
+   `WM_POINTER*` messages carry screen physical coordinates, so they are
+   first translated with `ScreenToClient` and then divided by `s`.
+   Hit-testing and hover therefore run in DIP like the rest of the
+   runtime; the arranged rectangles they compare against are already
+   retained in DIP (§13.1), with no Visual readback or second conversion.
 3. **Visual geometry, outbound.** Every `Visual.SetOffset` /
    `Visual.SetSize` write multiplies its DIP value by `s`. All such
    writes happen in the single visual-sync traversal of §6.5 — including
@@ -2277,9 +2279,228 @@ state (§6.7), which is reserved for reactive-engine divergence.
 
 ---
 
+<a id="interaction-model"></a>
+
+## 13. Input Routing and the Focus Model (M4-Phase 2)
+
+**Phase status:** M4-Phase 2 closed; implementation-synced. The authored surface is
+[dsl_spec.md §4.19](./dsl_spec.md); this section is the runtime model
+behind it. Design provenance:
+[M4-Phase 2 decisions](../process/milestone-4/phase-2/decisions/preamble.md).
+
+### 13.1 Where hit geometry comes from
+
+Layout retains each node's arranged rectangle **in DIP**, and hit
+testing reads that. It does not read geometry back off the Visual.
+
+This is a change of source, not of space. Until M4-Phase 2 the pointer
+was divided by the window's scale on the way in and each node's Visual
+rectangle was divided again on the way out; the two conversions
+cancelled, and no test could distinguish a correct conversion from a
+missing one (§12). Sourcing the rectangle from layout removes the
+second conversion entirely: the pointer arrives in DIP and the
+rectangles are already in DIP.
+
+Two properties follow and are load-bearing:
+
+- **The rectangle cache has exactly one writer**, in the same sense as
+  the per-node geometry scale (§12). Layout arranges a `LayoutNode` tree
+  that is built per pass and dropped at its end, so the retained
+  rectangle lives on the widget node and is written by the lockstep walk
+  that applies layout results to the visual tree — one walk, two stores:
+  the physical offset and size to the Composition visual, the absolute
+  DIP rectangle to the node. A subtree that has been attached but not
+  laid out has no rectangles and is not hit-testable, which is the
+  intended failure: silent, and better than being hit-testable at a
+  stale rectangle.
+- **Occlusion, clipping and per-item resolution become pure logic.**
+  "Rectangles plus paint order plus clip bounds → target" needs no
+  Compositor, so the rules are fixed by unit test rather than only
+  through the OS.
+
+### 13.2 Target selection and propagation
+
+A pointer message resolves to exactly **one** target: the topmost
+widget whose rectangle contains the point, where topmost is the paint
+order the visual tree already establishes — later children paint over
+earlier ones, so the search walks children in reverse and takes the
+first containing node. Every widget with a visual is a candidate.
+
+The search is **bounded by ancestor clips**, so that it resolves what
+the screen shows rather than what the tree holds. A container whose
+visual carries an `InsetClip` — `ScrollView`, `Grid`, `ZStack` — is
+descended into only where the point lies inside its own rectangle; a
+container without one paints its overflowing children and keeps them
+resolvable. Without the bound, content scrolled outside a viewport
+retains rectangles that sit under unrelated widgets, and a click there
+resolves to something invisible.
+
+The event then walks from that target through its ancestors until a
+handler runs; a handler that runs ends the walk. There is no descending
+phase. Keyboard messages enter the same walk, starting at the focused
+widget or, when nothing is focused, at the innermost focus scope.
+
+**Some keys never enter the walk.** `Tab` and `Shift+Tab` are consumed
+by traversal; arrow keys are consumed by group movement while focus is
+inside a group; `Escape` becomes a dismissal request while a scope is
+present (§13.4). Each is a built-in behaviour consuming at the focused
+widget, which is the ordinary rule rather than an exception — only
+unconsumed keys reach ancestors.
+
+**A key nothing consumes is not swallowed.** When the walk ends with no
+handler having run, the message continues to `DefWindowProc`: the
+runtime claims only the keys it uses, and the window's default keyboard
+behaviour is not the routing model's to suppress.
+
+**Pointer, mouse and touch.** Mouse input stays on the three mouse
+messages; touch is consumed as `WM_POINTER*` rather than through the
+mouse messages the system would otherwise synthesize for it. Claiming
+`WM_POINTERDOWN` or `WM_POINTERUP` suppresses that promotion for the
+contact; `WM_POINTERENTER`, `WM_POINTERUPDATE`, and `WM_POINTERLEAVE`
+are also claimed, but are inert in M4 rather than promotion gates.
+`EnableMouseInPointer`, which would route mouse input onto the pointer
+family too, is deliberately **not** called: it is a process-wide,
+one-way mode, and the runtime is a DLL inside a host process whose own
+windows would inherit it. Both families cross the same DIP boundary
+(§12), which is where they meet.
+
+Only the primary touch contact activates a widget. Its completed contact
+moves focus exactly as a click does and then dispatches `clicked`; touch
+does not write hover or pressed presentation state, so M4 provides no
+touch-down visual feedback.
+
+Hover and pressed are Button presentation state rather than an authored
+signal, and are computed as enter / leave transitions **against the
+resolved target** rather than by a whole-tree walk, so the widget that
+paints pressed is the widget a release would dispatch to.
+
+Key delivery is the **command** path. Text does not travel it: an
+editable widget receives content through the text-store path, and while
+an input-method composition is active the keyboard belongs to the
+composition and no authored handler is invoked. Auto-repeat is
+delivered.
+
+The ancestor chain is captured when the event is dispatched, and the
+reactive drain runs **once, after the walk completes** rather than
+between steps. Both exist for the same reason: a handler's state write
+propagates to quiescence synchronously (§6.7), which can rebuild or
+remove subtrees, and an event must not be delivered into a tree the
+same event has already invalidated.
+
+A handler declared inside a `for` body is registered per generated item
+and released with that item's subtree, on the path that already releases
+the subtree's bindings — the generated subtree owns both, and a second
+lifecycle for handlers would be the parallel-data drift this runtime
+keeps eliminating. Its loop-binder reads resolve **when the handler
+runs**, which is what makes the handler belong to a position rather than
+to an item under the positional, un-keyed iteration identity of §6.7.10:
+after a mutation the subtree at position `n` is reused for whatever item
+is now at `n`, and the handler must read that item rather than the one
+present when it was generated.
+
+### 13.3 Focus state
+
+Focus is per window. A `WindowState` owns one focus record holding the
+focused node and three derived stores: per-group memory of the member
+last focused inside it, per-widget active-item pointers, and the stack
+of modal scopes.
+
+A window opens with **nothing focused**. Focus arrives when the keyboard
+is used, when a click resolves to a widget with a focusable ancestor —
+the click moves focus to the nearest focusable widget at or above the
+resolved target, so a focusable widget with inner structure is reached
+by clicking its content — or when a modal scope materialises (§13.4).
+`Button.enabled = false` removes the widget from the stop list, so a
+disabled control is not reachable by traversal. Button keyboard
+activation is not part of the current widget surface.
+
+The group memory is data parallel to the focused node, and is written by
+the **same primitive** that writes it — the same discipline the
+per-node geometry scale carries (§12), and for the same reason: two
+writers make two truths, and the divergence is invisible until a user
+leaves a group and comes back.
+
+Traversal is tree order. In every layout primitive Wasamo has, tree
+order and arranged order coincide, because every container arranges its
+children in declaration order; a primitive whose arranged order differs
+from its declaration order would reopen this. Traversal also reads the
+tree rather than the screen, so a stop clipped out of view is still a
+stop — scrolling the focused widget into view belongs with the phase
+that owns scrolling.
+
+The focus indicator is node presentation state written through the same
+repaint primitive as hover and pressed, not a Visual or geometry write.
+The six `Visual.SetOffset` / `Visual.SetSize` sites remain confined to
+the visual-sync traversal of §6.5. Until the theming surface arrives the
+indicator shares its only means — a background change — with hover and
+the selected state, so the three must remain visually distinct. Their
+states compose: a checked `ToggleButton` that also holds focus paints a
+third appearance, distinct from checked-only and focused-only.
+
+### 13.4 Modal focus scopes
+
+A scope is an annotated subtree, and **its presence is its entry**.
+Confinement is **not** a special case in the traversal: the walk
+enumerates focus stops from a root, and an entered scope changes which
+root that is. The traversal has no modal branch.
+
+Entry runs on the structural seam that materialises the subtree — the
+drain that makes a conditional true, iteration generating it, or the
+initial build — and does three things: pushes the scope onto the
+per-window stack in materialisation order, captures the currently
+focused node as the restore target, and moves focus to the scope's first
+stop. The capture is there because that target cannot be recovered from
+the tree afterwards; nothing in the structure says what was focused
+before. The focus move is there because key delivery starts at the
+focused widget, so a scope that opened without taking focus would leave
+its own authored key handlers unreachable. It writes runtime focus state
+only and enqueues no further drain work.
+
+Deriving entry from presence is what keeps the concept single. With an
+entry act separate from presence, "present but not entered" is a
+reachable state and the concept splits into two mechanisms —
+confinement from the act, unreachability from the annotation — that can
+each fail alone while ordinary tests stay green. Under presence-entry
+the annotation has exactly one job: deciding which subtrees become
+scopes by appearing.
+
+Exit is removal of the subtree, and restoration takes precedence over
+structural succession. The restore target is captured at scope entry,
+before any later removal, because the tree cannot recover what had focus
+afterwards. If restoration cannot land, structural succession is the
+first surviving stop in the post-mutation traversal domain. This split
+avoids carrying a structural node identity across conditional or
+iteration rebuilding, where the same identity could name a different
+node afterwards.
+
+Pointer input is not confined by the scope. A covering widget inside the
+scope occludes what is behind it by the ordinary rule in §13.2, which is
+why a scrim is an authored widget rather than something the scope
+supplies.
+
+### 13.5 Dismissal
+
+A scope is the recipient of a **dismissal request** — the user asking
+for it to go away. The request is *addressed* to the innermost scope
+rather than walked to from the focused widget, so it holds wherever the
+subtree is realized, and it stops there rather than continuing to outer
+scopes.
+
+`Escape` is the only source that raises one today; a click outside the
+scope and a widget's own close control are later sources that raise the
+same request. Keeping the request separate from the key is what lets
+those arrive without a second contract.
+
+The runtime does not act on the request. It delivers it, and the
+application decides what closing means — which is the same "the core
+never mutates the tree" property that makes the request implicitly
+refusable: an application that writes nothing does not close.
+
+---
+
 <a id="open-questions-1"></a>
 
-## 13. Open Questions (to be resolved in later phases)
+## 14. Open Questions (to be resolved in later phases)
 
 The following are intentionally left open at this draft stage.
 

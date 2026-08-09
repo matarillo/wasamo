@@ -1,7 +1,7 @@
 # Wasamo DSL Specification
 
-**Document version:** 1.17
-**Last updated:** 2026-08-04
+**Document version:** 1.21
+**Last updated:** 2026-08-09
 **Status:** `public-draft` (M3) — this document is the first public
 draft of the Wasamo DSL specification, promoted at M3-Phase 8 close;
 the promotion record and the M3 decision links live in the
@@ -21,6 +21,11 @@ length is defined as DIP (§1 *Units and the layout coordinate system*),
 replacing the previously undefined "pixel extents in the layout
 coordinate system" wording; the grammar, AST, IR, and authored numeric values
 are unchanged, and the landed runtime keeps layout and font-size inputs in DIP.
+M4-Phase 2 closed (implementation-synced): the interaction surface (§4.19) —
+`clicked` on any widget, one-target hit resolution with consume-on-handle
+propagation, per-item handlers inside `for` with invocation-time binder reads,
+the `focus-group` / `modal-scope` container attributes, the `dismiss` request,
+and the `key-down("<key>")` command surface — matches the landed runtime.
 Covers the M2 `.ui` surface, the `state` surface keyword
 retroactively, the M3-Phase 1 `bool` scalar binding additions, the
 M3-Phase 2 Box layout primitive (with `aspect` / `fill` literal
@@ -352,7 +357,10 @@ iteration_member ::= "for" IDENT ("," IDENT)? "in" IDENT
 iteration_body   ::= widget_decl                ; M3-Phase 7: exactly one widget
                                                 ; child per iteration
 
-signal_handler   ::= IDENT "=>" block
+signal_handler   ::= IDENT ("(" STRING_LIT ")")? "=>" block
+                    ; the optional argument is admitted only by signals
+                    ; whose contract defines it; M4-Phase 2 defines it for
+                    ; key-down("<key>") (§4.19)
 
 block            ::= "{" statement* "}"
 
@@ -420,6 +428,7 @@ Within `member`, a 2-token lookahead resolves the alternative:
 | `IDENT`     | `:`          | `property_bind`      |
 | `IDENT`     | `{`          | `widget_decl`        |
 | `IDENT`     | `=>`         | `signal_handler`     |
+| `IDENT`     | `(`          | `signal_handler`     |
 
 `if` (M3-Phase 6) and `for` (M3-Phase 7) are keywords, not `IDENT`s, so
 the `member` dispatch resolves a leading `if` / `for` on the first
@@ -548,6 +557,12 @@ parent-interpreted `slot.*` placement model — a Grid child may be
 authored as a `Cell` wrapper *or* with direct `slot.*` keys (§4.16).
 See §4.12.
 
+`Rectangle`, `Text`, `Button`, and `ToggleButton` admit **no widget
+children**. The checker and runtime loader both reject such a child;
+their authored content is carried by their own properties. The remaining
+registry entries are containers whose child-count and placement rules are
+defined in their respective sections.
+
 `if` is **not** a widget registry entry either. It is a **structural
 control-flow construct** (the first member of Wasamo's structural
 rendering model), not a widget — it materialises no widget of its own;
@@ -569,7 +584,10 @@ Attaches a handler to a named signal. The body is parsed for **structural correc
 (balanced braces, valid statement syntax). No type-checking or name resolution is performed
 inside `{ }` in M1.
 
-The only recognized signal name in M1 is `clicked`.
+The signals defined by this specification are `clicked`, `dismiss`, and
+`key-down("<key>")`; their admission rules are in §4.19. `clicked` is
+admitted on **any** widget, not only on the Button family. Semantics and
+diagnostic requirements for any other signal name are unspecified.
 
 ### 4.6 Expressions
 
@@ -604,10 +622,11 @@ positions at once, not condition-only). See §4.14.
 an identifier in a property-binding or interpolation expression
 position may resolve to a **loop-local binder** declared by the
 enclosing iteration header — the first names in the DSL that do not
-resolve to a component `state`. Binder reads are admitted **only** in
-those expression positions within the body's widget subtree; they are
-not admitted in handler position, in `if` conditions (whose identifiers
-remain state-only), or outside the body. See §4.15.
+resolve to a component `state`. Binder reads are admitted in those
+expression positions within the body's widget subtree, and — since
+M4-Phase 2 — in **handler position** inside the same body (§4.19). They
+are not admitted in `if` conditions (whose identifiers remain
+state-only) or outside the body. See §4.15.
 
 **Collection-valued expressions (M3-Phase 7).** The expression grammar
 gains its first collection-valued forms — the pure `append` /
@@ -708,15 +727,19 @@ dispatched through a per-type binding writer at the runtime loader.
 - The layout slot is **preserved** — the button still measures and
   arranges identically to its enabled form; there is no
   `display: none` semantics.
-- Child hit-test traversal is preserved.
+- The button remains a **hit-test target**: it occludes whatever is
+  beneath it, and a click on it does not reach a lower sibling (§4.19).
+  Having dispatched nothing, it also does not stop propagation, so the
+  event continues to its ancestors.
+- It is **not a focus stop**: traversal skips it, so Tab cannot reach it
+  (§4.19). Button keyboard activation is not part of the current widget
+  surface.
 
-**Explicitly deferred to later milestones.** Keyboard focusability and
-tab-order semantics when disabled, AccessKit / `aria-disabled`
-accessibility tree state, hover and focus visual variations, and key
-activation suppression. M4 (input/focus) and M5 (accessibility) own
-the full interaction-state contract for disabled controls; the Phase 1
-contract above is structured to be additive under that widening, not
-superseded by it.
+**Explicitly deferred to later milestones.** AccessKit / `aria-disabled`
+accessibility tree state, and hover and focus visual variations for the
+disabled state. M5 (accessibility, theming) owns those; the contract
+above is structured to be additive under that widening, not superseded
+by it.
 
 ### 4.9 Box layout primitive (M3-Phase 2)
 
@@ -2403,8 +2426,9 @@ nothing else — the same body discipline as the `if` body (§4.14):
   body;
 - **no** second child;
 - **no** bare control-flow member as the immediate body;
-- **no** `signal_handler` anywhere inside the body template (see
-  *Handlers inside a `for` body* below);
+- a `signal_handler` may appear inside the body template under the
+  admission and binder-read rules in *Handlers inside a `for` body*
+  below;
 - **no** `for` member at **any depth** inside a `for` body template
   (see *Nested control flow* below).
 
@@ -2434,14 +2458,15 @@ readable so generated subtrees can differ per item.
 - **Types.** The element binder has the collection's element type
   (`i32` / `string` / `bool`); the index binder is **`i32`, read-only,
   zero-based**.
-- **Read positions.** A binder is readable **only in property-binding
-  and interpolation expression positions** within the `for` body's
-  widget subtree (`text: thumb`, `text: "Photo \{thumb}"`). It is
-  **not** readable in handler position, in an `if` condition (condition
-  identifiers resolve to `bool` state only), in property *literal*
-  positions, or anywhere outside the body. This is the first — and
-  only — codified exception to the rule that every dynamic reference in
-  a binding resolves to a component `state`.
+- **Read positions.** A binder is readable in **property-binding and
+  interpolation expression positions** within the `for` body's widget
+  subtree (`text: thumb`, `text: "Photo \{thumb}"`), and — since
+  M4-Phase 2 — in **handler position** inside the same body (§4.19). It
+  is **not** readable in an `if` condition (condition identifiers
+  resolve to `bool` state only), in property *literal* positions, or
+  anywhere outside the body. This is the first — and only — codified
+  exception to the rule that every dynamic reference in a binding
+  resolves to a component `state`.
 - **Scope.** Flat: binders are visible from the `{` to the matching `}`
   of their `for` body, in the admitted read positions only.
 - **Collisions are errors** at `wasamoc check`: a binder may not share
@@ -2655,8 +2680,6 @@ loader independently re-checks the structural rows
 | Multiple body children | `for t in xs { Box{} Text{} }` | same — wrap in a container |
 | Bare control flow as immediate body | `for t in xs { if c { … } }` | wrap rule, same as §4.14 |
 | Nested `for` at any depth | `for a in xs { VStack { for b in ys { … } } }` | "nested `for` is not yet supported" (nested-template-scope deferral) |
-| Handler inside a `for` body | `for t in xs { Button { clicked => { … } } }` | "handlers inside a `for` body are not yet supported" (per-item interaction deferral) |
-| Binder read in handler position | — | "loop-local binders are not readable in handlers" (same deferral) |
 | Binder read in an `if` condition | `for t in flags { Box { if t { … } } }` | "`if` conditions resolve to `bool` state only" (per-item conditional presence deferral) |
 | Binder read outside its body; undeclared binder | `text: thumb` outside the `for` | name-resolution error |
 | Nested collection type | `state xs: i32[][] = []` | "nested collection types are not supported" |
@@ -2671,18 +2694,20 @@ loader independently re-checks the structural rows
 | Qualified LHS / receiver | `root.xs = root.xs.append(1);` | "collection mutation requires a local state name" |
 | Loop-external collection read | `text: "\{xs}"`; length / element reads outside the loop | "collection reads outside iteration are not yet supported" (recorded deferral) |
 
-#### Handlers inside a `for` body (explicit deferral)
+#### Handlers inside a `for` body (admitted in M4-Phase 2)
 
-A `signal_handler` member anywhere inside a `for` body template is
-rejected this phase. Admitting handlers without binder reads would ship
-per-item widgets whose handlers can only mutate global state — a
-half-surface the spec would have to explain away; admitting binder
-reads in handlers *is* the per-item interaction surface
-(select-this-item / delete-this-item), whose real driver arrives with
-input work. Handler admission, handler-position binder reads,
-registration lifecycle, and their identity interaction are designed
-together at that point. Until then, the mutation Buttons that drive a
-collection live **outside** the `for` body.
+A `signal_handler` member inside a `for` body template was rejected in
+M3-Phase 7, on the reasoning that admitting handlers without binder
+reads would ship per-item widgets whose handlers can only mutate global
+state, and that handler admission, handler-position binder reads,
+registration lifecycle and identity interaction had to be designed
+together.
+
+**They are, in §4.19.** A handler inside a `for` body is admitted, its
+binders are readable in the handler body, its registration is released
+with the generated subtree, and its relation to the positional identity
+baseline above is stated there. The M3-era workaround — keeping the
+mutation Buttons outside the `for` body — is no longer required.
 
 #### Out of scope (Phase 7)
 
@@ -2751,7 +2776,7 @@ ZStack {
 Grid {
     columns: 1* 1*
     rows: 64
-    Button { slot.row: 0  slot.column: 1  Text { text: "ok" } }
+    Button { slot.row: 0  slot.column: 1  text: "ok" }
 }
 ```
 
@@ -3081,6 +3106,347 @@ The inherited kebab-case placement spellings (`slot.h-align` /
 this draft does not promise that placement stays permanently constant or
 permanently non-bindable — a bindable-placement surface, if ever designed,
 is a separate future decision.
+
+---
+
+### 4.19 Interaction: click handling, focus, and modal focus scopes (M4-Phase 2)
+
+**Phase status:** M4-Phase 2 closed; implementation-synced.
+
+M4-Phase 2 makes an authored interface respond. It adds no widget kind
+and no new value type: what it adds is one generalised signal, the
+availability of loop binders where a handler can read them, and two
+container attributes that describe how the keyboard moves.
+
+#### Click handling on any widget
+
+`clicked` (§4.5) is admitted on **every** widget, not only on the
+Button family:
+
+```wasamo
+Box {
+    fill: #2f343b
+    clicked => { root.lightbox_open = true; }
+}
+```
+
+The signal means the same thing everywhere: the user activated this
+widget. Button-family widgets additionally paint hover / pressed states;
+those are Button behaviours (§4.8), not part of the signal's meaning.
+
+**Which widget receives a pointer event.** A pointer event resolves to
+exactly **one** target: the topmost widget whose arranged rectangle
+contains the point, where "topmost" is the paint order a container
+already defines — within a container, later children paint over earlier
+ones. Every widget with a visual is a candidate, whether or not it
+carries a handler.
+
+A layout container is therefore a candidate across its own arranged
+rectangle too. If a non-clipping container overflows its parent, that
+overflow remains painted and reachable and can occlude an overlapping
+sibling; this is an input consequence of the candidate rule, not a
+separate overflow-layout policy.
+
+A widget is reachable only where it is painted. A container that clips
+its content — `ScrollView` (§4.11), `Grid` (§4.12), `ZStack` (§4.13) —
+bounds its whole subtree to its own rectangle for hit-testing as well as
+for painting, so content scrolled out of a viewport receives nothing. A
+container that does not clip paints its overflowing children, and those
+children stay reachable where they are drawn.
+
+Two consequences follow from those rules rather than from any additional
+one:
+
+- **A covering widget occludes what is beneath it.** A full-bleed `Box`
+  declared after its siblings in a `ZStack` receives clicks that fall
+  on it, and the siblings below do not — no attribute marks a widget as
+  a blocker, and none is needed.
+- **A disabled Button still occludes.** It does not dispatch (§4.8),
+  and it does not let the click reach whatever is behind it. Having run
+  no handler, it also does not end propagation: the event continues to
+  its ancestors as it would from any widget without a handler.
+
+**Propagation.** The event fires at the target and then walks its
+ancestors until a handler runs. **A handler that runs consumes the
+event**: propagation ends there, and no ancestor sees it. There is no
+descending phase and no separate verb for stopping propagation.
+
+Keyboard events start at the focused widget — or, when nothing is
+focused, at the innermost modal focus scope — and walk the same
+way.
+
+**Handlers and state.** A handler's state writes are applied and
+propagated to quiescence **once, after propagation completes**, not
+between steps. The ancestor chain is fixed when the event is
+dispatched, so a widget removed by a handler's own state write does not
+receive the event afterwards.
+
+#### Per-item handlers
+
+A `signal_handler` is admitted inside a `for` body (§4.15), and the
+body's binders are readable in the handler:
+
+```wasamo
+for photo, i in photos {
+    Box {
+        clicked => {
+            root.selected_index = i;
+            root.lightbox_open = true;
+        }
+    }
+}
+```
+
+- The binders are spelled exactly as in binding position — no
+  qualification, no separate namespace.
+- A binder read **resolves when the handler runs**, not when the
+  subtree was generated. With the positional, un-keyed identity
+  baseline of §4.15, a handler therefore belongs to a *position*: after
+  a collection mutation, the handler at position `n` reads whatever
+  item is now at position `n`.
+- A handler's registration is released with the generated subtree, on
+  the same path that releases that subtree's bindings.
+
+#### Focus
+
+At most one widget per window holds focus. Button-family widgets are
+focusable; other widget kinds are not, and the set is widened by later
+milestones rather than by an authored attribute in M4. A Button with
+`enabled: false` is **not** focusable — it is skipped by traversal and
+cannot be reached by Tab. Button keyboard activation is not part of the
+current widget surface.
+
+- **Nothing is focused when a window opens.** No widget shows a focus
+  indicator until the keyboard is used or a click places focus.
+- **Tab / Shift+Tab** move focus in declaration order, wrapping at both
+  ends; the first Tab lands on the first stop.
+- **A click** moves focus to the nearest focusable widget at or above
+  the widget it resolved to, and leaves focus unchanged when there is
+  none — clicking background never clears focus.
+- Losing and regaining the window's activation does not change which
+  widget is focused.
+
+A focus stop that is scrolled out of view is still a stop: traversal
+reads the tree, and clipping does not change it.
+
+#### `focus-group`
+
+```wasamo
+HStack {
+    focus-group: true
+    ToggleButton { text: "All" }
+    ToggleButton { text: "Albums" }
+    ToggleButton { text: "Favorites" }
+}
+```
+
+A container marked `focus-group: true` is **one Tab stop**. Tab enters
+the group and leaves it; it does not step between the members. Arrow
+keys move focus **within** the group, wrapping at its ends.
+`ArrowLeft` and `ArrowUp` move to the previous member;
+`ArrowRight` and `ArrowDown` move to the next. Both axes are accepted.
+
+A group remembers the member last focused inside it: leaving the group
+and returning lands on that member, not on the first. Entering a group
+that has not been focused before lands on its first member.
+
+#### `modal-scope`
+
+```wasamo
+if lightbox_open {
+    Box {
+        modal-scope: true
+        fill: #101820cc
+        // ... lightbox content
+    }
+}
+```
+
+A container marked `modal-scope: true` confines the keyboard. While the
+scope is present, Tab cycles only within its subtree, and no widget
+outside it can be reached by the keyboard. Scopes nest; the innermost
+one is in force.
+
+**Being there is being open.** The attribute does not switch a scope on;
+the subtree's **presence** does. A scope is entered as it appears — when
+the `if` that produces it becomes true, or when the window is first
+built — and left when it is removed. There is no separate act to
+perform and nothing to keep in step with the tree: the way to close a
+scope is to stop rendering it, which is what the `dismiss` handler below
+does.
+
+Entering does two things beyond confining traversal:
+
+- **It remembers the focused widget**, so focus can return there. That
+  is the one fact the tree cannot supply afterwards — nothing in the
+  structure records what was focused before.
+- **It moves focus to the scope's first stop**, so the keyboard is
+  inside the scope from the moment it opens and the scope's own key
+  handlers are live without the user pressing Tab first. A scope with no
+  focusable widget leaves focus unset, and keys start at the scope
+  itself.
+
+When the scope leaves, focus **returns to the remembered widget**, in
+preference to whatever the structure would otherwise succeed to.
+
+What is remembered is what was focused, which is not always the widget
+that opened the scope. A click on a plain `Box` does not move focus
+(§Focus), so a lightbox opened by clicking a `Box` thumbnail restores to
+whatever the keyboard was on beforehand — possibly nothing. Restoring to
+the clicked widget requires that widget to be focusable, which arrives
+with the focusability attribute a later milestone adds.
+
+The attribute's job is to say **which** subtrees behave this way: a
+container without it is an ordinary container no matter what it
+contains, and only an annotated subtree becomes a scope by appearing.
+
+#### `dismiss` — the request to close
+
+A scope receives a **dismissal request** when the user asks for it to go
+away, and the author decides what closing means:
+
+```wasamo
+if lightbox_open {
+    Box {
+        modal-scope: true
+        dismiss => { root.lightbox_open = false; }
+        // ...
+    }
+}
+```
+
+The request is **addressed to the innermost scope** and stops there; it
+does not continue to outer scopes, so a dialog that ignores it does not
+close the menu underneath. Writing no handler means the scope does not
+close by dismissal — that is how a confirmation the user must answer is
+expressed. Nothing is vetoed or prevented: the runtime never mutates the
+tree, so not writing the state is not closing.
+
+`dismiss` is admitted **only on a container that carries
+`modal-scope: true`**. Written anywhere else it could never be raised,
+so it is rejected at `wasamoc check` rather than silently never firing.
+
+**Esc is a source of the request, not the request itself.** It is the
+only source in this surface; a click outside the scope and a widget-set
+dialog's close control are later sources that raise the same `dismiss`.
+An author binds the intent rather than the key.
+
+#### Keyboard input
+
+`key-down` reacts to a physical key press. The key is named in the
+declaration:
+
+```wasamo
+Box {
+    modal-scope: true
+    dismiss                => { root.lightbox_open = false; }
+    key-down("ArrowLeft")  => { root.selected_index -= 1; }
+    key-down("ArrowRight") => { root.selected_index += 1; }
+}
+```
+
+It is admitted on any widget and delivered by the propagation walk
+above, starting at the focused widget: the first matching handler runs
+and consumes the key.
+
+**This is a command surface, not a text-input surface.** Text reaches a
+widget through the editable-text path, never through `key-down`, and
+**while an input method composition is active the keyboard belongs to
+the composition** — no `key-down` handler fires. **Auto-repeat is
+delivered**, so a held key repeats the handler.
+
+The recognised key names are the **named non-character keys**:
+`"Escape"`, `"ArrowLeft"`, `"ArrowRight"`, `"ArrowUp"`, `"ArrowDown"`,
+`"Home"`, `"End"`, `"PageUp"`, `"PageDown"`, `"Enter"`, and `"F1"` …
+`"F12"`. An unrecognised name is rejected at `wasamoc check` rather
+than silently never firing. Character keys and modifier combinations
+(`"Ctrl+S"`) are **not** in this surface.
+
+#### Which keys the runtime keeps
+
+Some keys are consumed by the focus machinery before any handler sees
+them:
+
+| Key | Recipient |
+|---|---|
+| `Tab` / `Shift+Tab` | Always the runtime — traversal cannot be overridden |
+| Arrow keys, while focus is inside a `focus-group` | The runtime (movement within the group) |
+| Arrow keys, otherwise | The propagation walk |
+| `Escape`, while a modal scope is present | Becomes a dismissal request on the innermost one |
+| `Escape`, otherwise | The propagation walk |
+
+The rule underneath is the ordinary one: a built-in behaviour consumes
+at the focused widget, and only unconsumed keys walk to ancestors.
+
+A key that reaches the end of the walk without a handler running is
+**not** consumed by the runtime: it continues to the window's default
+handling, so system keyboard behaviour is unaffected by widgets that do
+not use it.
+
+**What a scope does not do.** It confines the **keyboard** only. It
+does not block pointer input: a click on content behind an open scope
+is stopped by a covering widget inside the scope (the occlusion rule
+above), not by the scope itself. A scope with no covering child traps
+Tab and passes clicks through. Such a click cannot move focus outside
+the entered scope: focus landing is bounded by the scope's traversal
+root, so focus remains unchanged.
+
+A scope also does not decide *what closing is* — see `dismiss` below.
+
+**Accessibility.** A screen reader sees only the innermost scope's
+subtree; background content is hidden by focus scope rather than by any
+layering or per-widget attribute. The reading surface itself arrives
+with the accessibility work in a later phase.
+
+#### Attribute admission
+
+| Attribute | Type | Default | Admitted on |
+|---|---|---|---|
+| `focus-group` | `bool` | `false` | any container |
+| `modal-scope` | `bool` | `false` | any container |
+
+Both are **constant-only**: the value must be a `true` / `false`
+literal, and a binding-expression RHS is rejected — the same rule
+`Box.fill` and the `WrapPanel` attributes carry (§4.9, §4.10). A modal
+subtree is turned on and off by the `if` that produces it, not by
+binding the attribute.
+
+The signals this section adds are admitted as follows:
+
+| Signal | Admitted on |
+|---|---|
+| `clicked` | any widget |
+| `key-down("<key>")` | any widget |
+| `dismiss` | a container carrying `modal-scope: true` |
+
+Neither attribute changes layout: an annotated container measures and
+arranges exactly as an unannotated one.
+
+#### Not in this surface
+
+Raw pointer events (`pointer-down` and siblings), hover and pressed as
+authored signals (they remain Button presentation, §4.8), a `key-up`
+signal, character keys and modifier combinations, a handler that
+receives *every* key and decides in its body which key it was, a
+structured key value, a declarative keyboard-shortcut table, a
+dismissal-policy attribute distinguishing which gestures close a scope,
+an attribute making a non-Button widget focusable, click-through
+(opting a widget out of hit-testing), a minimum hit-target size,
+scrolling a focused widget into view, and pointer capture for drag are
+all outside M4-Phase 2. None is reserved by this section, and each
+would arrive additively.
+
+Two of those carry a question rather than only work. Character keys need
+a choice between the **logical key** a layout produces and the
+**physical position** pressed — the named non-character keys above avoid
+it because for them the two coincide. A dismissal-policy attribute
+becomes meaningful only once a scope has more than one dismissal
+source.
+
+The runtime-side model — how hit rectangles are obtained, where focus
+state lives, how the scope stack is maintained — is normative in
+[architecture.md](./architecture.md). Design provenance:
+[M4-Phase 2 decisions](../process/milestone-4/phase-2/decisions/preamble.md).
 
 ---
 
@@ -3747,10 +4113,12 @@ A `handler` attaches a `HandlerExpr` body to a named signal on the enclosing
 widget.
 
 ```
-handler ::= "on" IDENT "{" expr "}"
+handler ::= "on" IDENT ("(" STRING ")")? "{" expr "}"
 ```
 
-`IDENT` is the signal name (e.g. `clicked`).
+`IDENT` is the signal name (e.g. `clicked`). The optional string
+argument is the signal argument; M4-Phase 2 defines it for
+`key-down("<key>")`.
 
 The body is one `expr`.  Multiple top-level statements are encoded as a
 `(block ...)` expression (§8.9).
@@ -4031,3 +4399,7 @@ anchor — distinct from the per-edit revision-history table below.
 | 1.15    | 2026-07-06 | M3-Phase 8 implementation sync (Moment 2): flipped the top Status block and the §4.17 phase-status marker to closed / implementation-synced, promoted the document to `public-draft`, and added the public-draft change-history anchor (promotion record + M3 decision links + T8 external-reader smoke result). No body-prose semantic change (divergence corrections were folded in 1.13 / 1.14); no new `IrType` / `IrLiteral` / `PropertyValue` or token; `abi_spec.md` untouched. |
 | 1.16    | 2026-07-28 | M4-Phase 1 design draft (Moment 1): added §1 *Units and the layout coordinate system* — every authored length and font size is DIP (`1 DIP = 1/96 inch`), an authored layout is identical at every display scale factor, and a DIP is a physical length rather than a device pixel. The previously undefined "pixel extents in the layout coordinate system" wording is **replaced** at each dimension-bearing site (§4.10 WrapPanel `item-cross-size` / `item-spacing` / `line-spacing`, §4.11 ScrollView `offset-y`, §4.12 Grid fixed track sizes), which now reference the definition instead of restating it; §2.2 notes that the `px` unit suffix names DIP, and §4.9's rounding note is restated in DIP terms. No grammar, token, AST, `IrType`, `IrLiteral`, or `PropertyValue` change — the unit is a semantic statement about existing literals, so `wasamoc` and the IR are untouched. At 100% every existing `.ui` file is unchanged in behaviour. The runtime-side coordinate-space model (the two spaces, the conversion seams, the text-surface resolution contract, scale invariance) is normative in [architecture.md §12](./architecture.md#coordinate-spaces); the ABI argument unit is in [abi_spec.md](./abi_spec.md) §4.2. Pending implementation re-sync at M4-Phase 1 close. |
 | 1.17    | 2026-08-04 | M4-Phase 1 implementation sync (Moment 2): flipped the phase status to implementation-synced after re-verifying the authored-length and font-size DIP statements against the landed runtime. No grammar, token, AST, `IrType`, `IrLiteral`, `PropertyValue`, or authored-value change; runtime coordinate projection and raster resolution remain normative in [architecture.md §12](./architecture.md#coordinate-spaces), and the outer-window ABI unit remains normative in [abi_spec.md §4.2](./abi_spec.md). |
+| 1.18    | 2026-08-05 | M4-Phase 2 design draft (Moment 1): added §4.19 *Interaction* — `clicked` admitted on any widget (§4.5 updated from "the only recognized signal name in M1"); a pointer event resolves to exactly one target, the topmost containing widget, from which occlusion of lower siblings and of content behind a disabled Button follow as consequences rather than as separate rules; propagation is target-then-ancestors with **consume on handle** and no descending phase; a handler's state writes drain once after propagation completes. Per-item handlers are admitted inside `for` bodies with binder reads in handler position — **reversing the M3-Phase 7 deferral** in §4.15, whose "handlers inside a `for` body" subsection now points here, and updating the binder read-position statements in §4.6 and §4.15; a binder resolves at invocation time, so under the positional identity baseline a handler belongs to a slot rather than to an item, and its registration is released with the generated subtree. Added the constant-only `focus-group` and `modal-scope` boolean container attributes (same non-bindable rule as `Box.fill` / the `WrapPanel` attributes), Tab / arrow / group-memory semantics, scope entry / restoration / Esc delivery, and the statement that a scope confines the keyboard only — pointer confinement comes from the occlusion rule plus an authored covering widget. Screen-reader modality is stated as attaching to the focus scope, binding on the later accessibility phase. No new token, grammar production for expressions, `IrType`, `IrLiteral`, or `PropertyValue`; `abi_spec.md` untouched (no new ABI entry point). Pending implementation re-sync at M4-Phase 2 close. |
+| 1.19    | 2026-08-05 | M4-Phase 2 design sync, keyboard half: §4.19 gains the **`dismiss`** request — addressed to the innermost entered scope, not bubbled, with the author deciding what closing means and Esc named as one *source* rather than as the concept, so a later click-away or widget-set close control reuses the same signal — and the **`key-down("<key>")`** command surface, whose key is named in the declaration because the recognised set is validated at `check`. `key-down` is the physical-key-press half and is stated as **not** a text-input path: an active input-method composition owns the keyboard, and auto-repeat is delivered. The recognised names are **non-character keys only** (`"Escape"`, the arrows, `"Home"` / `"End"`, `"PageUp"` / `"PageDown"`, `"Enter"`, `"F1"`…`"F12"`), which keeps the logical-key versus physical-position question closed; character keys and modifier combinations such as `"Ctrl+S"` are outside the surface. Added the table of keys the runtime keeps (`Tab` always; arrows while focus is inside a `focus-group`; `Escape` while a scope is entered). §Not in this surface now also lists `key-up`, a catch-all key handler, a structured key value, a shortcut table, and a dismissal-policy attribute, with the two that carry an open question named. No new token, `IrType`, `IrLiteral`, or `PropertyValue`; `key-down`'s argument is the one new grammar production. `abi_spec.md` untouched. |
+| 1.20    | 2026-08-06 | M4-Phase 2 design sync, revision: §4.19 states that a modal scope is entered by **being present** — the subtree's appearance pushes it, remembers the widget that had focus, and moves focus to the scope's first stop, so a scope opened by a conditional is confined and its key handlers live without a separate act; closing is deleting. Restoration is stated against what was actually focused, since a click on a non-focusable widget leaves focus where it was. Hit resolution is **bounded by ancestor clips**, so content clipped out of a `ScrollView` / `Grid` / `ZStack` receives nothing while a non-clipping container's overflow stays reachable. Focus gains its opening state (nothing focused; the first Tab lands on the first stop), the rule that a click focuses the nearest focusable widget **at or above** the resolved target, and the statement that `enabled: false` removes a focus stop — which discharges the tab-order half §4.8 deferred to M4 and brings §4.8's disabled contract into agreement with §4.19's occlusion rule (a disabled Button occludes, dispatches nothing, and does not stop propagation). `dismiss` is admitted **only** on a container carrying `modal-scope: true`, with a signal-admission table beside the attribute table. A key no handler consumes now reaches the window's default handling rather than being swallowed. §Not in this surface adds hover / pressed as authored signals and scrolling a focused widget into view. Corrected the per-item handler example to §4.15's `for <binder>, <index-binder> in <collection>` form. No new token, `IrType`, `IrLiteral`, or `PropertyValue`; `abi_spec.md` untouched. Pending implementation re-sync at M4-Phase 2 close. |
+| 1.21    | 2026-08-09 | M4-Phase 2 implementation sync (Moment 2): flipped the phase markers to closed / implementation-synced and corrected the normative text against the landed runtime. Added the optional string argument to the authored and textual-IR handler grammars; removed the stale §4.15 handler-rejection rows; documented the four childless widget kinds; narrowed the Button keyboard wording to the shipped Tab behaviour; fixed group arrow direction, outside-scope click focus, and container hit candidacy; and re-synced architecture §12.3 / §13 to the landed mouse/touch conversion, touch activation, focus repaint/composition, and scope restoration/succession paths. Unknown signal names remain unspecified; string assignment remains a normative compiler-enforcement divergence assigned to later M4 phases. No ABI change; `abi_spec.md` untouched. |

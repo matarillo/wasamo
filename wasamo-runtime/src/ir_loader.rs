@@ -239,6 +239,24 @@ fn validate(comp: &IrComponent) -> Result<(), IrLoadError> {
     // invariants — these gates exist for IR not produced by wasamoc
     // (e.g. via `wasamo_load_ui` directly).
     validate_phase2_node_invariants(&comp.root)?;
+    // M4-Phase 2 T6 defense-in-depth gate (dsl_spec §4.19, DD-M4-P2-005
+    // A1). `wasamoc check` (T6 stage 1) rejects the same `focus-group` /
+    // `modal-scope` / `dismiss` shapes at compile time; this is the
+    // runtime half for memory IR that reaches the loader via
+    // `wasamo_load_ui` without traversing `wasamoc`. Runs early — before
+    // the per-kind gates below (ZStack, ToggleButton) — so a
+    // focus-annotation violation surfaces its own admission diagnostic
+    // rather than being swallowed by a per-kind "unknown attribute"
+    // catch-all.
+    validate_focus_annotation_invariants(&comp.root)?;
+    // M4-Phase 2 T8 defense-in-depth gate (dsl_spec §4.19, DD-M4-P2-005).
+    // `wasamoc check` (T8) rejects the same `key-down` argument shapes
+    // at compile time; this is the runtime half for memory IR that
+    // reaches the loader via `wasamo_load_ui` without traversing
+    // `wasamoc`. See `validate_key_down_invariants`'s doc comment for
+    // why this is a sibling pass rather than folded into
+    // `validate_focus_annotation_invariants` above.
+    validate_key_down_invariants(&comp.root)?;
     // M3-Phase 3 T6 defense-in-depth gate (DD-M3-P3-006 runtime half).
     // `wasamoc check` (T1) rejects negative literals on WrapPanel's three
     // attribute names at compile time; this is the last-line-of-defence
@@ -770,12 +788,11 @@ fn validate_phase7_iteration_invariants(
     node: &IrNode,
     inside_for_template: bool,
 ) -> Result<(), IrLoadError> {
-    if inside_for_template && !node.handlers.is_empty() {
-        return Err(IrLoadError::Validate(
-            "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
-        ));
-    }
-
+    // M4-Phase 2 T9: a handler inside a `for` body template is admitted
+    // (dsl_spec §4.15 "Handlers inside a `for` body (admitted in
+    // M4-Phase 2)"). The M3-Phase 7 rejection that used to sit here is
+    // lifted; `inside_for_template` still gates the nested-`for` rejection
+    // below and is passed through unchanged.
     let current = parent_kind_for(node);
     for member in &node.children {
         match member {
@@ -912,6 +929,27 @@ fn validate_phase2_node_invariants(node: &IrNode) -> Result<(), IrLoadError> {
         return Err(IrLoadError::Validate(format!(
             "`Box` node accepts at most one child, got {} (use `VStack` / `HStack` / `ZStack` for multi-child layouts)",
             child_member_count
+        )));
+    }
+    // M4-Phase 2 T8 (CF-1, owner disposition 2026-08-07; widened from
+    // Button/ToggleButton to all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`
+    // 2026-08-08): a layout-childless node (`Rectangle` / `Text` /
+    // `Button` / `ToggleButton`) carrying any child member is rejected
+    // here too. `wasamoc check`'s `check_layout_childless_widget_children`
+    // rejects the same shape at compile time (defense in depth); this is
+    // the runtime gate for memory IR that reaches `wasamo_load_ui` without
+    // traversing `wasamoc`. Unlike Box's "at most one", every child member
+    // (widget, conditional, or `for`) is unknown to `build_layout_tree`
+    // (widget.rs), which maps every kind in the table to a childless
+    // `LayoutNode::rectangle` — so the admitted count here is zero, not
+    // one. Neither this condition nor the message below names a widget
+    // kind: both read `wasamo_ir::layout_treats_as_childless` / the
+    // offending `node.widget_type`, so widening or narrowing the rule is a
+    // single edit to `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`.
+    if wasamo_ir::layout_treats_as_childless(&node.widget_type) && child_member_count > 0 {
+        return Err(IrLoadError::Validate(format!(
+            "`{}` node accepts no children, got {} (layout arranges it as a single rectangle, so a child would never be arranged, painted, or hit-tested — wrap it in a container widget instead; dsl_spec §4.4)",
+            node.widget_type, child_member_count
         )));
     }
     // Ratio / Color literal placement (DD-M3-P2-002 / DD-M3-P2-003,
@@ -1154,10 +1192,31 @@ fn validate_phase6_zstack_node_invariants(
         // Let stale child-placement props on a nested ZStack fall through to
         // the global legacy-placement diagnostic below instead of reporting a
         // generic ZStack attribute error.
-        let zstack_widget_prop = node
-            .props
-            .iter()
-            .find(|prop| !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name)));
+        //
+        // M4-Phase 2 T6 relaxation (dsl_spec §4.19, DD-M4-P2-005 A1):
+        // `wasamoc check` now accepts `focus-group` / `modal-scope` on a
+        // ZStack — it is one of the seven `FOCUS_ANNOTATION_CONTAINERS`
+        // — and a `dismiss` handler beside `modal-scope: true`. Without
+        // this widening the loader would refuse to load a `.ui` the
+        // compiler already accepted. `validate_focus_annotation_invariants`
+        // has already run (see `validate`'s ordering) and rejected a
+        // malformed shape of either attribute or of `dismiss`, so by the
+        // time this gate sees them they are known-good. Every other
+        // Phase-6 attribute stays rejected. The bindings rule is
+        // untouched: both focus annotations are constant-only and never
+        // travel the binding path.
+        //
+        // M4-Phase 2 T8: signal-handler admission on a ZStack is not
+        // gated here at all — it is the generic name-keyed rule in
+        // `validate_focus_annotation_invariants` (`dismiss` needs a
+        // `modal-scope: true` sibling on the same node; every other
+        // signal name, e.g. `clicked`, is admitted unconditionally), the
+        // same rule every other widget kind is subject to. This gate has
+        // no per-kind handler rule of its own.
+        let zstack_widget_prop = node.props.iter().find(|prop| {
+            !(parent == ParentKind::ZStack && is_child_placement_prop(&prop.name))
+                && !matches!(prop.name.as_str(), "focus-group" | "modal-scope")
+        });
         if let Some(prop) = zstack_widget_prop {
             return Err(IrLoadError::Validate(format!(
                 "`ZStack` accepts no Phase-6 attributes; found `{}`",
@@ -1167,11 +1226,6 @@ fn validate_phase6_zstack_node_invariants(
         if !node.bindings.is_empty() {
             return Err(IrLoadError::Validate(
                 "`ZStack` accepts no Phase-6 bindings".into(),
-            ));
-        }
-        if !node.handlers.is_empty() {
-            return Err(IrLoadError::Validate(
-                "`ZStack` accepts no Phase-6 handlers".into(),
             ));
         }
     }
@@ -1232,6 +1286,194 @@ fn validate_slot_data_parent(parent: ParentKind, slot: &IrChildSlot) -> Result<(
                 .into(),
         )),
         (_, None) => Ok(()),
+    }
+}
+
+// ── M4-Phase 2 T6: focus-group / modal-scope / dismiss ────────────────
+
+/// Container widget kinds that admit the M4-Phase 2 focus annotations
+/// (`focus-group` / `modal-scope`), per `docs/dsl_spec.md` §4.19
+/// "admitted on any container" (DD-M4-P2-005 A1). Mirrors
+/// `wasamoc::check::FOCUS_ANNOTATION_CONTAINERS` one-for-one — kept as a
+/// separate const because the two live in different crates, not because
+/// the list differs. `Text`, `Button`, `ToggleButton`, and `Rectangle`
+/// are leaf/content widgets, not containers, and are excluded; `Cell` is
+/// an IR-only Grid wrapper, not a runtime container, and is excluded
+/// too. Both `focus-group` and `modal-scope` read from this one const in
+/// `validate_focus_annotation_invariants`, so the seven-name list has a
+/// single source of truth rather than appearing once per attribute.
+const FOCUS_ANNOTATION_CONTAINERS: &[&str] = &[
+    "VStack",
+    "HStack",
+    "Box",
+    "WrapPanel",
+    "ScrollView",
+    "Grid",
+    "ZStack",
+];
+
+/// M4-Phase 2 T6 defense-in-depth gate (dsl_spec §4.19, DD-M4-P2-005
+/// A1) — the runtime half of the `wasamoc check` gate for `focus-group`
+/// / `modal-scope` / `dismiss`. `wasamoc check` (T6 stage 1) rejects the
+/// same four shapes at compile time
+/// (`check_focus_annotation_admission`,
+/// `check_focus_annotation_const_only_bind`, the constant-only binding
+/// rule, and the `dismiss`/`carries_modal_scope` predicate); this gate
+/// exists for memory IR that reaches the runtime loader through
+/// `wasamo_load_ui` without traversing `wasamoc`, the same reason every
+/// earlier `validate_phaseN_*` gate in this file exists.
+fn validate_focus_annotation_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    for prop in &node.props {
+        if !matches!(prop.name.as_str(), "focus-group" | "modal-scope") {
+            continue;
+        }
+        if !FOCUS_ANNOTATION_CONTAINERS.contains(&node.widget_type.as_str()) {
+            return Err(IrLoadError::Validate(format!(
+                "`{}` is admitted on any container (dsl_spec §4.19) and is not valid on widget `{}`",
+                prop.name, node.widget_type
+            )));
+        }
+        // Constant-only (dsl_spec §4.19, the `Box.fill` / `WrapPanel`
+        // precedent): the runtime half of `check_focus_annotation_const_only_bind`.
+        // A non-`Bool` literal reaching here means the IR was not
+        // produced by `wasamoc`.
+        if !matches!(prop.value, IrLiteral::Bool(_)) {
+            return Err(IrLoadError::Validate(format!(
+                "`{}` is constant-only (dsl_spec §4.19); expected a `true` or `false` literal",
+                prop.name
+            )));
+        }
+    }
+    // Constant-only also means "never travels the binding path" — a
+    // `bind focus-group = …` / `bind modal-scope = …` is rejected
+    // outright, independent of widget kind (mirrors `wasamoc check`'s
+    // rejection of a bare state-ident RHS, but a runtime `IrBinding` of
+    // either name is rejected unconditionally rather than re-parsing the
+    // expression shape).
+    if let Some(binding) = node
+        .bindings
+        .iter()
+        .find(|b| matches!(b.prop_name.as_str(), "focus-group" | "modal-scope"))
+    {
+        return Err(IrLoadError::Validate(format!(
+            "`{}` is constant-only (dsl_spec §4.19) and cannot be bound",
+            binding.prop_name
+        )));
+    }
+    // `dismiss` is admitted only on a node that itself carries
+    // `prop modal-scope = true`. An absent prop, a `false` value, and a
+    // non-container widget (which cannot carry a `true` value past the
+    // admission check above) all collapse to the same "no true
+    // `modal-scope` sibling" test — there is no separate container check
+    // here because the admission rule above has already ruled out a
+    // non-container ever reaching this point with `modal-scope: true`.
+    if node.handlers.iter().any(|h| h.signal == "dismiss") {
+        let carries_modal_scope_true = node
+            .props
+            .iter()
+            .any(|p| p.name == "modal-scope" && matches!(p.value, IrLiteral::Bool(true)));
+        if !carries_modal_scope_true {
+            return Err(IrLoadError::Validate(
+                "`dismiss` handler can never be raised: a dismissal request is addressed to a modal scope; write `modal-scope: true` on the same container or remove the handler (dsl_spec §4.19)".into(),
+            ));
+        }
+    }
+    for member in &node.children {
+        validate_focus_annotation_member_invariants(member)?;
+    }
+    Ok(())
+}
+
+fn validate_focus_annotation_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(slot) => validate_focus_annotation_invariants(&slot.node),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_focus_annotation_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_focus_annotation_member_invariants(body_member)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+// ── M4-Phase 2 T8: `key-down("<key>")` handler argument ────────────────
+
+/// M4-Phase 2 T8 defense-in-depth gate (dsl_spec §4.19 "Keyboard input",
+/// DD-M4-P2-005) — the runtime half of the `wasamoc check` gate for
+/// `key-down`'s parenthesised argument. `wasamoc check` rejects the same
+/// three shapes at compile time (in the `Member::SignalHandler` arm of
+/// `check_members_inner`); this gate exists for memory IR that reaches
+/// the runtime loader through `wasamo_load_ui` without traversing
+/// `wasamoc`, the same reason every earlier `validate_phaseN_*` gate in
+/// this file exists.
+///
+/// Kept as its own pass rather than folded into
+/// `validate_focus_annotation_invariants`: the two features are
+/// unrelated beyond sharing dsl_spec §4.19. `key-down` is admitted on
+/// **every** widget kind (no container gate, unlike `focus-group` /
+/// `modal-scope`), so this pass needs neither `FOCUS_ANNOTATION_CONTAINERS`
+/// nor an `enclosing_widget`-shaped parameter — folding it in would have
+/// made that function's own doc comment ("the gate for focus-group /
+/// modal-scope / dismiss") inaccurate for no shared logic.
+fn validate_key_down_invariants(node: &IrNode) -> Result<(), IrLoadError> {
+    for handler in &node.handlers {
+        if handler.signal == "key-down" {
+            match &handler.arg {
+                // A bare `key-down` (no argument) can never fire — the
+                // same "silently never fires" class `dismiss` guards
+                // against above.
+                None => {
+                    return Err(IrLoadError::Validate(
+                        "`key-down` handler can never be raised: the key must be named in the declaration, e.g. `key-down(\"ArrowLeft\")` (dsl_spec §4.19)".into(),
+                    ));
+                }
+                Some(key) if !wasamo_ir::is_recognised_key_name(key) => {
+                    return Err(IrLoadError::Validate(format!(
+                        "`key-down(\"{key}\")` names an unrecognised key; recognised keys are the named non-character keys per dsl_spec §4.19 (`Escape`, the arrow / Home / End / Page keys, `Enter`, `F1`-`F12`)"
+                    )));
+                }
+                Some(_) => {}
+            }
+        } else if handler.arg.is_some() {
+            // `key-down` is the only signal dsl_spec §4.19 defines with
+            // an argument.
+            return Err(IrLoadError::Validate(format!(
+                "`{}` does not take an argument; only `key-down` does (dsl_spec §4.19)",
+                handler.signal
+            )));
+        }
+    }
+    for member in &node.children {
+        validate_key_down_member_invariants(member)?;
+    }
+    Ok(())
+}
+
+fn validate_key_down_member_invariants(member: &IrMember) -> Result<(), IrLoadError> {
+    match member {
+        IrMember::Widget(slot) => validate_key_down_invariants(&slot.node),
+        IrMember::ControlFlow(ControlFlowNode::If { branches }) => {
+            for branch in branches {
+                for body_member in &branch.body {
+                    validate_key_down_member_invariants(body_member)?;
+                }
+            }
+            Ok(())
+        }
+        IrMember::ControlFlow(ControlFlowNode::For { body, .. }) => {
+            for body_member in body {
+                validate_key_down_member_invariants(body_member)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -1474,12 +1716,14 @@ fn validate_node_references_in_scope(
         })?;
     }
     for handler in &node.handlers {
-        if inside_for_template {
-            return Err(IrLoadError::Validate(
-                "handlers inside a `for` body template are deferred in M3-Phase 7".into(),
-            ));
-        }
-        validate_expr_references(&handler.expr, declared, None, &|name| {
+        // M4-Phase 2 T9: a handler inside a `for` body template is
+        // admitted (dsl_spec §4.15 "Handlers inside a `for` body (admitted
+        // in M4-Phase 2)"). The M3-Phase 7 rejection that used to sit here
+        // is lifted; `loop_scope` is threaded through so a binder read in
+        // a handler body resolves through the same in-scope /
+        // wrong-binder / no-scope arms `validate_expr_references` already
+        // has for bindings.
+        validate_expr_references(&handler.expr, declared, loop_scope, &|name| {
             format!(
                 "handler `on {}` references undeclared name `{}`",
                 handler.signal, name
@@ -1633,7 +1877,7 @@ fn validate_expr_references(
                     validate_expr_references(rhs, declared, loop_scope, err_msg)
                 }
                 Some(IrStateType::Collection(_)) => {
-                    validate_collection_assignment_rhs(lhs, rhs, declared, err_msg)
+                    validate_collection_assignment_rhs(lhs, rhs, declared, loop_scope, err_msg)
                 }
                 None => Err(IrLoadError::Validate(err_msg(lhs))),
             }
@@ -1734,10 +1978,18 @@ fn validate_collection_read_path(
     }
 }
 
+/// `loop_scope` is `Some` when this assignment sits in a handler body
+/// inside a `for` body template (M4-Phase 2 T9) — a per-item handler that
+/// mutates the collection its own subtree rides is the shape that reaches
+/// it, and its appended element may be a binder read. It is threaded
+/// rather than passed as `None` because `wasamoc check` resolves the same
+/// binder through `expr_static_type_in_context`'s loop context; dropping
+/// it here would make the loader reject IR the checker emits.
 fn validate_collection_assignment_rhs(
     lhs: &str,
     rhs: &HandlerExpr,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     let elem = match declared.get(lhs) {
@@ -1750,7 +2002,7 @@ fn validate_collection_assignment_rhs(
             elem: rhs_elem,
             value,
         } if path == lhs && rhs_elem == elem => {
-            validate_collection_element_expr(lhs, elem, value, declared, err_msg)?;
+            validate_collection_element_expr(lhs, elem, value, declared, loop_scope, err_msg)?;
             Ok(())
         }
         HandlerExpr::ListDropLast {
@@ -1779,6 +2031,7 @@ fn validate_collection_element_expr(
     elem: &IrType,
     value: &HandlerExpr,
     declared: &std::collections::HashMap<&str, IrStateType>,
+    loop_scope: Option<LoopReadScope<'_>>,
     err_msg: &dyn Fn(&str) -> String,
 ) -> Result<(), IrLoadError> {
     match (elem, value) {
@@ -1801,10 +2054,10 @@ fn validate_collection_element_expr(
             | HandlerExpr::BoolPropRead { path },
         ) => validate_scalar_value_read(lhs, elem, path, declared, err_msg),
         (IrType::Str, HandlerExpr::Interpolation(_)) => {
-            validate_expr_references(value, declared, None, err_msg)
+            validate_expr_references(value, declared, loop_scope, err_msg)
         }
         (_, HandlerExpr::ItemRead { .. } | HandlerExpr::IndexRead { .. }) => {
-            validate_expr_references(value, declared, None, err_msg)
+            validate_expr_references(value, declared, loop_scope, err_msg)
         }
         _ => Err(IrLoadError::Validate(format!(
             "collection assignment `{lhs}` appends a value that does not match element type `{}`",
@@ -2701,10 +2954,29 @@ impl<'a> Parser<'a> {
     fn parse_handler(&mut self) -> Result<IrHandler, IrLoadError> {
         self.expect_keyword("on")?;
         let signal = self.expect_ident()?;
+        // Optional parenthesised string argument (DD-M4-P2-005), e.g.
+        // `on key-down("ArrowLeft") { ... }`. The IR text grammar's
+        // canonical machine format always writes a plain string literal
+        // here — no interpolation, mirroring `wasamoc`'s parser.
+        let arg = if matches!(self.peek(), Some(Token::LParen)) {
+            self.advance();
+            let value = match self.advance() {
+                Some(Token::Str(s)) => s.clone(),
+                other => {
+                    return Err(IrLoadError::Parse(format!(
+                        "expected string literal in handler argument, got {other:?}"
+                    )));
+                }
+            };
+            self.expect(&Token::RParen)?;
+            Some(value)
+        } else {
+            None
+        };
         self.expect(&Token::LBrace)?;
         let expr = self.parse_expr()?;
         self.expect(&Token::RBrace)?;
-        Ok(IrHandler { signal, expr })
+        Ok(IrHandler { signal, arg, expr })
     }
 
     fn parse_literal(&mut self) -> Result<IrLiteral, IrLoadError> {
@@ -3035,6 +3307,28 @@ fn build_node_with_loop_context(
 ) -> Result<Box<WidgetNode>, IrLoadError> {
     let mut widget = construct_widget(node, compositor, renderer, registry)?;
 
+    // M4-Phase 2 T6: write the authored focus annotation (dsl_spec §4.19,
+    // DD-M4-P2-005 A1) onto the freshly constructed node. One
+    // kind-independent site rather than scattered through
+    // `construct_widget`'s per-kind arms, because the annotation is not
+    // part of any widget kind's own shape — it is read back only by
+    // `WidgetNode::focus_role`. `validate` has already rejected a
+    // non-`Bool` value and a non-container carrier (`FOCUS_ANNOTATION_CONTAINERS`
+    // above), so the extracts are total over the accept set: an absent
+    // prop and an explicit `false` both correctly yield `false`.
+    let focus_group = extract_bool_prop(&node.props, "focus-group").unwrap_or(false);
+    let modal_scope = extract_bool_prop(&node.props, "modal-scope").unwrap_or(false);
+    widget.set_focus_annotation(focus_group, modal_scope);
+
+    // M4-Phase 2 T9: write the generated subtree's loop scope (dsl_spec
+    // §4.19 "Per-item handlers") from the *same* `loop_context` parameter
+    // that feeds this subtree's per-item bindings below — one source for
+    // both, right beside the focus-annotation write above, which is the
+    // same single-writer, kind-independent-site discipline applied to a
+    // second field. `None` outside a `for` body template, matching every
+    // constructor's own initial value.
+    widget.set_loop_scope(loop_context.cloned());
+
     // Bindings: register each `bind` as a reactive Effect targeting the widget property.
     for binding in &node.bindings {
         let Some((prop_key, prop_ty)) = resolve_prop_key(&node.widget_type, &binding.prop_name)
@@ -3087,9 +3381,17 @@ fn build_node_with_loop_context(
         widget.bindings.push(handle);
     }
 
-    // Handlers: attach each `on` body via Phase 3's set_inline_handler path.
+    // Handlers: attach each `on` body via Phase 3's set_inline_handler
+    // path. The storage key is the DD-M4-P2-005 canonical spelling
+    // (`wasamo_ir::signal_key`) — `clicked` for a no-argument handler,
+    // `key-down("ArrowLeft")` for an argument-carrying one — so a later
+    // stage's dispatcher can look handlers up by the same composed key.
+    // Nothing else may compose this string.
     for handler in &node.handlers {
-        widget.set_inline_handler(handler.signal.clone(), handler.expr.clone());
+        widget.set_inline_handler(
+            wasamo_ir::signal_key(&handler.signal, handler.arg.as_deref()),
+            handler.expr.clone(),
+        );
     }
 
     // Children: recurse and attach via the Phase 4 internal mutation API.
@@ -3508,13 +3810,20 @@ fn mutate_for_loop_subtree(
                             // pre-write baseline (review finding #4). `WidgetNode`
                             // has no `Drop`, so a bare drop skips `widget_destroy`'s
                             // `remove_for_widget`; any child holding a `registry`
-                            // entry would leak. Today's handler-free `for`-body
-                            // children hold none (per-item `EffectHandle`s
-                            // self-dispose on `Drop`), so this branch's disposal is
-                            // a *defensive* symmetry with the staging-failure branch
-                            // and the no-`Drop` ⇒ explicit-disposal invariant — not
-                            // an active leak fix for current bodies, but required
-                            // for any future body shape that registers entries.
+                            // entry would leak. M4-Phase 2 T9 lifted the M3-Phase 7
+                            // handler-inside-`for` rejection, so a `for`-body child
+                            // can now carry inline handlers and have a host
+                            // listener connected to one through
+                            // `wasamo_signal_connect` — that connection is exactly
+                            // a `registry` entry keyed by this child's pointer, and
+                            // it does not self-dispose (inline handler bodies
+                            // themselves are plain `Vec` storage on the node and
+                            // drop with it; per-item `EffectHandle`s also
+                            // self-dispose on `Drop`; the host-listener registry
+                            // entry is the one thing here that does not). This
+                            // branch's disposal is therefore load-bearing for that
+                            // shape, not the defensive-only symmetry with the
+                            // staging-failure branch it was before T9.
                             //   (a) remove + destroy the committed prefix, tail-first;
                             for rollback in (0..inserted).rev() {
                                 if let Ok(removed) =
@@ -3685,12 +3994,25 @@ fn construct_widget(
         "Button" => {
             let label = extract_str_prop(&node.props, "text").unwrap_or_default();
             let style = extract_button_style(&node.props, "style");
+            // CF-2 disposition (2026-08-07): read `enabled` exactly the way
+            // the `ToggleButton` arm below does. A literal `enabled: false`
+            // was previously silently dropped here — this arm read only
+            // `text` / `style`, and `WidgetNode::button` hard-coded
+            // `enabled: true` — so only a *state-bound* `enabled` could
+            // disable a plain Button. `has_binding` still defers to the
+            // binding's initial run, same as ToggleButton.
+            let enabled = extract_bool_prop(&node.props, "enabled").unwrap_or(true);
             let initial = if has_binding(&node.bindings, "text") {
                 String::new()
             } else {
                 label
             };
-            WidgetNode::button(compositor, renderer, &initial, style)
+            let initial_enabled = if has_binding(&node.bindings, "enabled") {
+                true
+            } else {
+                enabled
+            };
+            WidgetNode::button_with_enabled(compositor, renderer, &initial, style, initial_enabled)
                 .map_err(|e| IrLoadError::Build(format!("button: {e}")))
         }
         "ToggleButton" => {
@@ -4860,16 +5182,14 @@ mod tests {
     }
 
     #[test]
-    fn for_member_rejects_handler_and_nested_for_inside_template() {
-        let handler = parse_ir(
+    fn for_member_accepts_handler_but_still_rejects_nested_for_inside_template() {
+        // M4-Phase 2 T9: a handler inside a `for` body template is
+        // admitted (dsl_spec §4.15); nested `for` stays rejected (out of
+        // scope per §4.15 "Out of scope").
+        parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state xs: i32[] = []\n\
              node WrapPanel { for x in xs { node Button { on clicked { 1 } } } }\n}",
-        )
-        .unwrap_err();
-        assert!(
-            matches!(handler, IrLoadError::Validate(ref m) if m.contains("handlers inside a `for` body")),
-            "{handler:?}"
         );
 
         let nested = parse_ir(
@@ -5593,6 +5913,7 @@ mod tests {
                         bindings: vec![],
                         handlers: vec![IrHandler {
                             signal: "clicked".into(),
+                            arg: None,
                             expr: HandlerExpr::CompoundAssign {
                                 op: CompoundOp::Add,
                                 lhs: "count".into(),
@@ -5741,7 +6062,10 @@ mod tests {
             ));
         }
         for h in &n.handlers {
-            out.push_str(&format!("{i}    on {} {{\n", h.signal));
+            match &h.arg {
+                Some(arg) => out.push_str(&format!("{i}    on {}(\"{}\") {{\n", h.signal, arg)),
+                None => out.push_str(&format!("{i}    on {} {{\n", h.signal)),
+            }
             out.push_str(&format!("{i}        {}\n", render_expr(&h.expr)));
             out.push_str(&format!("{i}    }}\n"));
         }
@@ -6282,6 +6606,72 @@ mod tests {
         );
         assert_eq!(c.root.children.len(), 1);
         assert_eq!(child_widget(&c.root, 0).widget_type, "Text");
+    }
+
+    // ── M4-Phase 2 T8: layout-childless widget child rejection (CF-1,
+    // owner disposition 2026-08-07; widened from Button/ToggleButton to
+    // all four `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` 2026-08-08)
+    // ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn validate_rejects_button_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { node Text {} }\n\
+             }",
+            "`Button` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_togglebutton_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ToggleButton { node Text {} }\n\
+             }",
+            "`ToggleButton` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_text_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Text { node Text {} }\n\
+             }",
+            "`Text` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn validate_rejects_rectangle_with_widget_child() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Rectangle { node Text {} }\n\
+             }",
+            "`Rectangle` node accepts no children, got 1 (layout arranges it as a single rectangle",
+        );
+    }
+
+    #[test]
+    fn childless_button_is_valid() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Button { prop text = \"hi\" }\n}",
+        );
+        assert!(c.root.children.is_empty());
+    }
+
+    #[test]
+    fn vstack_with_widget_child_is_valid() {
+        // Control: a container kind is untouched by the layout-childless
+        // rule — `VStack` is not in `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS`,
+        // so a widget child must still parse and validate.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { node Text {} }\n}",
+        );
+        assert_eq!(c.root.children.len(), 1);
     }
 
     // ── M3-Phase 3 T6: WrapPanel validate() defense-in-depth ─────────────
@@ -7716,16 +8106,21 @@ mod tests {
     }
 
     #[test]
-    fn zstack_handler_rejected_at_validate() {
-        // The handler-rejection arm of the Phase-6 ZStack gate is distinct
-        // from the binding arm above; pin it so a ZStack carrying an inline
-        // `on` handler surfaces the dedicated diagnostic.
-        assert_validate_err(
+    fn zstack_clicked_handler_validates() {
+        // T8: the Phase-6 ZStack gate no longer carries a per-kind
+        // handler rejection arm (it used to reject every signal name but
+        // `dismiss`, asymmetrically with the checker side, which never
+        // gated ZStack handlers). `clicked` is admitted on any widget
+        // per dsl_spec §4.19, so a ZStack carrying an inline `on clicked`
+        // handler now loads successfully.
+        let c = parse_ok(
             ";wasamo-ir v0\ncomponent C inherits W {\n\
              state ready: bool = true\n\
              node ZStack { on clicked { (assign ready false) } node Text {} }\n}",
-            "`ZStack` accepts no Phase-6 handlers",
         );
+        assert_eq!(c.root.widget_type, "ZStack");
+        assert_eq!(c.root.handlers.len(), 1);
+        assert_eq!(c.root.handlers[0].signal, "clicked");
     }
 
     #[test]
@@ -7772,5 +8167,594 @@ mod tests {
             }
             other => panic!("expected Validate error, got {other:?}"),
         }
+    }
+
+    // ── M4-Phase 2 T6: focus-group / modal-scope / dismiss ──────────────
+    //
+    // The runtime half of `wasamoc check`'s T6 stage 1 gate (dsl_spec
+    // §4.19, DD-M4-P2-005 A1): `validate_focus_annotation_invariants`'s
+    // four rejects, plus the ZStack relaxation (`validate_phase6_zstack_node_invariants`)
+    // and the ToggleButton dispatch-ordering control
+    // (`validate_phase8_togglebutton_node_invariants`).
+
+    /// Body fixture for each of the seven `FOCUS_ANNOTATION_CONTAINERS`
+    /// kinds, with `{ATTR}` standing in for the prop line under test.
+    /// `ScrollView` carries its required single content child; `Grid`
+    /// carries its required `tracks` lines; `Box` stays within its
+    /// at-most-one-child limit.
+    const FOCUS_ANNOTATION_CONTAINER_FIXTURES: &[(&str, &str)] = &[
+        ("VStack", "node VStack { {ATTR} }"),
+        ("HStack", "node HStack { {ATTR} }"),
+        ("Box", "node Box { {ATTR} }"),
+        ("WrapPanel", "node WrapPanel { {ATTR} }"),
+        ("ScrollView", "node ScrollView { {ATTR} node Box {} }"),
+        (
+            "Grid",
+            "node Grid { tracks columns = 1* tracks rows = 1* {ATTR} }",
+        ),
+        ("ZStack", "node ZStack { {ATTR} }"),
+    ];
+
+    fn assert_focus_annotation_accepted_everywhere(attr_line: &str) {
+        for (kind, body) in FOCUS_ANNOTATION_CONTAINER_FIXTURES {
+            let src = format!(
+                ";wasamo-ir v0\ncomponent C inherits W {{ {} }}",
+                body.replace("{ATTR}", attr_line)
+            );
+            let c = parse_ok(&src);
+            validate(&c).unwrap_or_else(|e| {
+                panic!("{kind} accepting `{attr_line}` failed: {e}\nsrc:\n{src}")
+            });
+        }
+    }
+
+    #[test]
+    fn focus_group_true_accepted_on_every_admitting_container() {
+        assert_focus_annotation_accepted_everywhere("prop focus-group = true");
+    }
+
+    #[test]
+    fn modal_scope_true_accepted_on_every_admitting_container() {
+        assert_focus_annotation_accepted_everywhere("prop modal-scope = true");
+    }
+
+    #[test]
+    fn focus_group_false_accepted() {
+        // `false` is a valid constant, not just `true` (dsl_spec §4.19).
+        assert_focus_annotation_accepted_everywhere("prop focus-group = false");
+    }
+
+    #[test]
+    fn modal_scope_false_accepted() {
+        assert_focus_annotation_accepted_everywhere("prop modal-scope = false");
+    }
+
+    #[test]
+    fn focus_group_and_modal_scope_together_on_one_container_accepted() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node VStack { prop focus-group = true prop modal-scope = true }\n}",
+        );
+        validate(&c).expect("a container may carry both annotations at once (DD-M4-P2-005)");
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_beside_modal_scope_true() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Box { prop modal-scope = true on dismiss { (assign open false) } }\n}",
+        );
+        validate(&c).expect("dismiss beside modal-scope: true must validate");
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_on_zstack_carrying_modal_scope() {
+        // T6 regression pin, unaffected by T8's removal of the
+        // ZStack-specific handler gate: `dismiss` is admitted here via
+        // the generic dsl_spec §4.19 rule because the ZStack carries
+        // `modal-scope: true`.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node ZStack { prop modal-scope = true on dismiss { (assign open false) } node Text {} }\n}",
+        );
+        validate(&c).expect("dismiss beside modal-scope: true must validate on ZStack");
+    }
+
+    #[test]
+    fn dismiss_handler_accepted_on_grid_carrying_modal_scope() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               prop modal-scope = true\n\
+               on dismiss { (assign open false) }\n\
+             }\n}",
+        );
+        validate(&c).expect("dismiss beside modal-scope: true must validate on Grid");
+    }
+
+    #[test]
+    fn focus_group_true_on_text_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Text { prop focus-group = true } }",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_button_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Button { prop focus-group = true } }",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_togglebutton_rejected_as_admission_not_unknown_attr() {
+        // Dispatch-ordering control: `validate_focus_annotation_invariants`
+        // runs before `validate_phase8_togglebutton_node_invariants`
+        // (wired in `validate`), so the diagnostic is the admission one,
+        // not "unknown ToggleButton attribute".
+        let err = parse_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node ToggleButton { prop focus-group = true } }",
+        );
+        match err {
+            IrLoadError::Validate(msg) => {
+                assert!(
+                    msg.contains("`focus-group` is admitted on any container"),
+                    "got: {msg}"
+                );
+                assert!(
+                    !msg.contains("unknown ToggleButton attribute"),
+                    "got: {msg}"
+                );
+            }
+            other => panic!("expected Validate error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn focus_group_true_on_rectangle_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Rectangle { prop focus-group = true } }",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_inside_cell_rejected() {
+        // Loader-side equivalent of `check.rs`'s
+        // `focus_group_true_inside_cell_rejected`: `Cell` is an IR-only
+        // Grid wrapper, not a runtime container, and is excluded from
+        // `FOCUS_ANNOTATION_CONTAINERS`. Built as a `Grid` child so
+        // `Cell` is in a legal position and the admission diagnostic is
+        // what fires, not a Cell-outside-Grid one.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               node Cell { prop focus-group = true node Text {} }\n\
+             }\n}",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn modal_scope_true_on_text_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node Text { prop modal-scope = true } }",
+            "`modal-scope` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_non_bool_literal_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { prop focus-group = 1 } }",
+            "`focus-group` is constant-only",
+        );
+    }
+
+    #[test]
+    fn modal_scope_non_bool_literal_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { prop modal-scope = \"yes\" } }",
+            "`modal-scope` is constant-only",
+        );
+    }
+
+    #[test]
+    fn focus_group_binding_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { bind focus-group = true } }",
+            "`focus-group` is constant-only",
+        );
+    }
+
+    #[test]
+    fn modal_scope_binding_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { bind modal-scope = true } }",
+            "`modal-scope` is constant-only",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_without_modal_scope_prop_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Box { on dismiss { (assign open false) } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_beside_modal_scope_false_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Box { prop modal-scope = false on dismiss { (assign open false) } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_on_non_container_rejected() {
+        // A non-container can never carry a `true` `modal-scope` prop
+        // (the admission check above already refuses that combination),
+        // so its `dismiss` handler always fails the same "no true
+        // `modal-scope` sibling" test as the absent/`false` cases above.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node Text { on dismiss { (assign open false) } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    // Every test above puts `dismiss` as a flat sibling of `modal-scope`
+    // directly on a node's own `prop` list. These five exercise the
+    // `ControlFlow::If` / `ControlFlow::For` arms of
+    // `validate_focus_annotation_member_invariants`, which recurse into
+    // an `if` / `for` member's body — the `wasamoc` `check.rs` mirror
+    // group above tests the same shapes at compile time; this is the
+    // runtime half for memory IR that reaches the loader without
+    // traversing `wasamoc`.
+
+    #[test]
+    fn dismiss_handler_accepted_inside_if_wrapped_modal_scope() {
+        // §4.19's own worked shape: the annotated node is the `if`'s
+        // branch body, not a flat sibling of the enclosing widget. Fires
+        // the `ControlFlow::If` recursion arm.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node VStack { if true { node Box { prop modal-scope = true on dismiss { (assign open false) } } } }\n}",
+        );
+        validate(&c).expect("dismiss inside an if-wrapped modal-scope container must validate");
+    }
+
+    #[test]
+    fn dismiss_handler_inside_if_wrapped_container_without_modal_scope_rejected() {
+        // Same shape as the accept test above, minus `prop modal-scope =
+        // true`. Proves the `ControlFlow::If` recursion actually
+        // re-validates the inner node rather than short-circuiting.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node VStack { if true { node Box { on dismiss { (assign open false) } } } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_inside_for_wrapped_container_rejected_through_parse_ir() {
+        // M4-Phase 2 T9 lifted the M3-Phase 7 handler-inside-`for` gate in
+        // `validate_node_references`, so this shape no longer short-
+        // circuits there. It now reaches `validate_focus_annotation_invariants`'s
+        // `ControlFlow::For` recursion arm and its `dismiss` check fires —
+        // the same message the `if`-wrapped counterpart above surfaces,
+        // through the public `parse_ir` entry point rather than only by
+        // calling `validate_focus_annotation_invariants` in isolation.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             state xs: i32[] = []\n\
+             node VStack { for x in xs { node Box { on dismiss { (assign open false) } } } }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_text_inside_for_body_rejected() {
+        // Fires the `ControlFlow::For` recursion arm of
+        // `validate_focus_annotation_invariants`, same as the test above.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node VStack { for x in xs { node Text { prop focus-group = true } } }\n}",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn focus_group_true_on_text_inside_if_body_rejected() {
+        // The `ControlFlow::If` recursion must reach the admission check
+        // too, not only the `dismiss` check, for a node nested inside an
+        // `if` body.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W { node VStack { if true { node Text { prop focus-group = true } } } }",
+            "`focus-group` is admitted on any container",
+        );
+    }
+
+    #[test]
+    fn zstack_spacing_prop_still_rejected_after_relaxation() {
+        // Control proving the ZStack relaxation stayed narrow: an
+        // ordinary Phase-6-rejected attribute is still rejected.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             node ZStack { prop spacing = 4 node Text {} }\n}",
+            "`ZStack` accepts no Phase-6 attributes; found `spacing`",
+        );
+    }
+
+    #[test]
+    fn grid_clicked_handler_validates() {
+        // T8: `Grid` never had a per-kind handler gate in the loader
+        // (only `wasamoc check` did, asymmetrically with ZStack); pin
+        // the accept case explicitly, symmetric with
+        // `zstack_clicked_handler_validates` above.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Grid {\n\
+               tracks columns = 1*\n\
+               tracks rows = 1*\n\
+               on clicked { (assign count 1) }\n\
+             }\n}",
+        );
+        assert_eq!(c.root.widget_type, "Grid");
+        assert_eq!(c.root.handlers.len(), 1);
+        assert_eq!(c.root.handlers[0].signal, "clicked");
+    }
+
+    #[test]
+    fn dismiss_handler_on_zstack_without_modal_scope_prop_rejected() {
+        // T8: proves the generic dsl_spec §4.19 `dismiss` rule
+        // (`validate_focus_annotation_invariants`) still owns ZStack
+        // admission now that the ZStack-specific handler gate is gone —
+        // the diagnostic is the generic "can never be raised" message,
+        // the same one every other widget kind produces (see
+        // `dismiss_handler_without_modal_scope_prop_rejected` above for
+        // the Box case), not a ZStack-specific rejection.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             node ZStack { on dismiss { (assign open false) } node Text {} }\n}",
+            "`dismiss` handler can never be raised",
+        );
+    }
+
+    // ── M4-Phase 2 T8: `key-down("<key>")` argument (dsl_spec §4.19
+    // "Keyboard input", DD-M4-P2-005) ───────────────────────────────────
+    //
+    // Parse half: the optional `( STRING )` after the signal name
+    // (`parse_handler`). Second-gate half: `validate_key_down_invariants`
+    // re-checks the same three shapes `wasamoc check` rejects at compile
+    // time, for memory IR that reaches the loader without traversing
+    // `wasamoc`.
+
+    #[test]
+    fn key_down_handler_parses_with_string_argument() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected_index: i32 = 0\n\
+             node Box { on key-down(\"ArrowLeft\") { (compound-assign -= selected_index 1) } }\n}",
+        );
+        assert_eq!(c.root.handlers.len(), 1);
+        let h = &c.root.handlers[0];
+        assert_eq!(h.signal, "key-down");
+        assert_eq!(h.arg.as_deref(), Some("ArrowLeft"));
+    }
+
+    #[test]
+    fn clicked_handler_still_parses_with_arg_none() {
+        // Regression guard: a plain `on clicked { ... }` (no parenthesised
+        // argument) keeps parsing with `arg == None` after the optional
+        // `( STRING )` production is added.
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Button { on clicked { (compound-assign += count 1) } }\n}",
+        );
+        let h = &c.root.handlers[0];
+        assert_eq!(h.signal, "clicked");
+        assert_eq!(h.arg, None);
+    }
+
+    #[test]
+    fn key_down_without_argument_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected_index: i32 = 0\n\
+             node Box { on key-down { (compound-assign -= selected_index 1) } }\n}",
+            "`key-down` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn key_down_unrecognised_key_name_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state selected_index: i32 = 0\n\
+             node Box { on key-down(\"Tab\") { (compound-assign -= selected_index 1) } }\n}",
+            "unrecognised key",
+        );
+    }
+
+    #[test]
+    fn argument_on_clicked_rejected_at_validate() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state count: i32 = 0\n\
+             node Button { on clicked(\"x\") { (compound-assign += count 1) } }\n}",
+            "`clicked` does not take an argument",
+        );
+    }
+
+    // ── M4-Phase 2 T9: per-item handlers inside `for` (dsl_spec §4.19
+    // "Per-item handlers", §4.15 "Handlers inside a `for` body (admitted
+    // in M4-Phase 2)", DD-M4-P2-005) ───────────────────────────────────
+    //
+    // `validate_node_references_in_scope` now threads `loop_scope`
+    // through the handler loop the same way it already does for
+    // bindings, so `validate_expr_references`'s existing in-scope /
+    // wrong-binder / no-scope arms for `ItemRead` / `IndexRead` apply to
+    // handler bodies without a new arm.
+
+    #[test]
+    fn for_body_handler_index_read_validates() {
+        let c = parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x, i in xs { node Box { on clicked { (assign sel (index-read i)) } } } }\n}",
+        );
+        let for_member = &c.root.children[0];
+        let IrMember::ControlFlow(ControlFlowNode::For { body, .. }) = for_member else {
+            panic!("expected For control-flow, got {for_member:?}");
+        };
+        let IrMember::Widget(box_node) = &body[0] else {
+            panic!("expected Box body");
+        };
+        assert_eq!(box_node.node.handlers[0].signal, "clicked");
+    }
+
+    #[test]
+    fn for_body_handler_item_read_validates() {
+        parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x in xs { node Box { on clicked { (assign sel (item-read x)) } } } }\n}",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_item_read_outside_for_body_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state sel: i32 = 0\n\
+             node Box { on clicked { (assign sel (item-read x)) } }\n}",
+            "may be read only inside its `for` body",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_item_read_wrong_binder_rejected() {
+        // A handler inside a `for` body reading an `item-read` binder
+        // name that is not *this* `for`'s own binder (`label`, not
+        // `wrong`) — the wrong-binder arm, distinct from the no-scope
+        // arm the previous test fires.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for label in xs { node Box { on clicked { (assign sel (item-read wrong)) } } } }\n}",
+            "is not in scope for the current `for` body",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_index_read_with_no_index_binder_rejected() {
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x in xs { node Box { on clicked { (assign sel (index-read i)) } } } }\n}",
+            "loop-local index binder `i` may be read only inside its `for` body",
+        );
+    }
+
+    #[test]
+    fn dismiss_handler_inside_for_body_with_modal_scope_validates() {
+        // Newly reachable: before this task, the handler-inside-`for`
+        // gate in `validate_node_references` rejected every handler
+        // found inside a `for` body unconditionally, so this shape could
+        // never reach `validate_focus_annotation_invariants`'s
+        // `dismiss` admission check at all. It does now, and the
+        // `modal-scope` sibling admits it — the accept counterpart to
+        // `dismiss_handler_inside_for_wrapped_container_rejected_through_parse_ir`
+        // above.
+        parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state open: bool = true\n\
+             state xs: i32[] = []\n\
+             node VStack { for x in xs { node Box { prop modal-scope = true on dismiss { (assign open false) } } } }\n}",
+        );
+    }
+
+    #[test]
+    fn key_down_without_argument_inside_for_body_rejected() {
+        // Newly reachable the same way: `validate_key_down_invariants`
+        // runs after the (now-admitting) handler-inside-`for` gate, so a
+        // bare `key-down` inside a `for` body reaches its own argument
+        // check instead of being pre-empted by the deferred-handlers
+        // rejection.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             node WrapPanel { for x in xs { node Box { on key-down { 1 } } } }\n}",
+            "`key-down` handler can never be raised",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_index_read_wrong_binder_rejected() {
+        // The `IndexRead` twin of `for_body_handler_item_read_wrong_binder_rejected`.
+        // The `for` *does* declare an index binder (`i`), and the handler
+        // reads a different name, so this fires `validate_expr_references`'s
+        // `Some(index) if binder == index` guard's `Some(_)` fall-through —
+        // a distinct arm from the `None` (no index binder declared) one the
+        // test above it fires. Structural similarity to the `ItemRead` arm
+        // is not coverage: the two arms read different fields of
+        // `LoopReadScope` and could diverge independently.
+        assert_validate_err(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = []\n\
+             state sel: i32 = 0\n\
+             node WrapPanel { for x, i in xs { node Box { on clicked { (assign sel (index-read j)) } } } }\n}",
+            "`index-read j` is not in scope for the current `for` body",
+        );
+    }
+
+    #[test]
+    fn for_body_handler_collection_append_reads_its_own_binders() {
+        // A per-item handler that mutates the collection its own subtree
+        // rides, appending the item and an index-interpolated string. Both
+        // reads travel the *collection-assignment* path
+        // (`validate_collection_assignment_rhs` ->
+        // `validate_collection_element_expr`), which is a different route
+        // through the validator than the scalar-assignment path every other
+        // test in this group takes — and it is reachable only now that a
+        // handler is admitted inside a `for` body, because a binding can
+        // never carry a write.
+        //
+        // The IR text is `wasamoc build`'s own output for the equivalent
+        // `.ui`, so this pins the two gates against one input rather than
+        // against each other's transcription.
+        parse_ok(
+            ";wasamo-ir v0\ncomponent C inherits W {\n\
+             state xs: i32[] = [1, 2]\n\
+             state labels: string[] = [\"a\"]\n\
+             node VStack { for n, i in xs { node Box { on clicked { (block (assign xs (list-append xs (item-read n))) (assign labels (list-append labels (interp \"row \" ((index-read i)))))) } } } }\n}",
+        );
     }
 }

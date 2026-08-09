@@ -167,9 +167,12 @@ fn lower_node_with_loop(
                     expr,
                 }),
             },
-            Member::SignalHandler { signal, body, .. } => {
+            Member::SignalHandler {
+                signal, arg, body, ..
+            } => {
                 handlers.push(IrHandler {
                     signal: signal.clone(),
+                    arg: arg.clone(),
                     expr: lower_block(body, ns, loop_ctx),
                 });
             }
@@ -905,6 +908,7 @@ mod tests {
         assert_eq!(vstack.handlers.len(), 1);
         let h = &vstack.handlers[0];
         assert_eq!(h.signal, "clicked");
+        assert_eq!(h.arg, None);
         assert_eq!(
             h.expr,
             HandlerExpr::CompoundAssign {
@@ -913,6 +917,20 @@ mod tests {
                 rhs: Box::new(HandlerExpr::IntLit(1)),
             }
         );
+    }
+
+    #[test]
+    fn key_down_handler_arg_survives_lowering() {
+        // M4-Phase 2 T8 (DD-M4-P2-005): the AST's `arg` carries straight
+        // through to `IrHandler.arg` unchanged.
+        let comp = lower_src(
+            "component C inherits W { state selected_index: i32 = 0 Box { key-down(\"ArrowLeft\") => { root.selected_index -= 1; } } }",
+        );
+        let b = &comp.root;
+        assert_eq!(b.handlers.len(), 1);
+        let h = &b.handlers[0];
+        assert_eq!(h.signal, "key-down");
+        assert_eq!(h.arg.as_deref(), Some("ArrowLeft"));
     }
 
     #[test]

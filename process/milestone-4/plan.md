@@ -229,6 +229,30 @@ and §Phase dependencies.
   §二層取り込み方針; withdrawing them costs a one-line disposition back
   to the candidate pool.
 
+  **This phase also specifies what a `Row` / `HStack` does when its
+  children do not fit** (owner-settled 2026-08-08; Revision 2). Today it
+  overlaps — the toolbar's two groups overflow their `Grid` columns
+  toward each other at a narrow client — and no decision stands behind
+  that: wrapping, clipping, shrinking and scrolling were all available
+  and none was chosen. **The overlap is not only visual.** A non-clipping
+  container is itself a hit-test candidate across its whole arranged
+  rectangle ([dsl_spec.md §4.19](../../docs/dsl_spec.md)), so the
+  overflowing group takes the clicks aimed at the widgets it covers:
+  M4-Phase 2 T10 measured every gallery tab `ToggleButton`'s own centre
+  resolving to a scroll `Button` instead, with `checked` unchanged after
+  a real click. Routing behaves as specified; what is undecided is the
+  layout rule. **"Overlapping is acceptable" remains an available
+  answer** — what this phase owes is not a particular fix but a rule
+  **written into [dsl_spec.md](../../docs/dsl_spec.md)**, where every
+  other layout primitive's behaviour already is (§4.9 `Box`, §4.10
+  `WrapPanel`, §4.11 `ScrollView`, §4.12 `Grid`, §4.13 `ZStack`). An
+  internal decision does not discharge it: today's overlap *is* a
+  decision of a kind — the implementation makes it every time — and the
+  gap is that no document states it.
+  `gallery_slice_integration.rs`'s `g7_the_overflowing_toolbar_swallows_clicks_aimed_at_the_tab_buttons`
+  is the tripwire and says in its own failure message that a red there
+  means the overflow was changed rather than broken.
+
 - **M4-Phase 5 — Single-line text editing.** The editable text widget:
   caret (click positioning, ← → / Home / End, rendering, follow-scroll
   on overflow), the **internal selection model** plus its user-facing
@@ -244,6 +268,24 @@ and §Phase dependencies.
   require — text content, get/set selection range, range replacement,
   and the caret / composition rectangle in screen coordinates — so
   Phase 6 is wiring rather than redesign.
+
+  **The handler half of that precedent does not exist for strings yet,
+  and this phase is where it lands** (measured at M4-Phase 2 T9; revision
+  1 below). `ToggleButton.checked` works because a handler can write a
+  `bool` state — the write M3-Phase 1 added for exactly that purpose. A
+  handler cannot write a scalar `string` state at all, for any
+  right-hand side: `wasamoc check` accepts `s = "abc"`, the compiler
+  emits it, and the evaluator rejects it at invocation, because
+  `dsl_spec.md` §8.9 marks the string forms binding-only and the runtime
+  has no string write. `string` is the only declarable state type a
+  handler cannot write. Two things follow for this phase: the capability
+  itself, and the evaluator change it needs — assignment currently picks
+  its typed path from the **right-hand side's shape**, which cannot type
+  an `item` read (whose type comes from the collection, not the
+  expression), so a `for`-body handler writing a string binder needs
+  dispatch on the left-hand side's declared type. Whether handler-body
+  assignments gain type checking at the same time is a separable, wider
+  question. `dsl_spec.md` §4.6 and §8.9 both move.
 
   Consumer (B4): the list window's first runnable form — a one-line
   entry field, an Add button, and the item rows.
@@ -766,11 +808,90 @@ M4 is complete when **all** of the following hold:
 
 ### Revision log
 
-*(No revisions yet. Revisions to this `Frozen agreement` follow the
-plan-revision discipline —
-[workflow.md](../procedures/workflow.md),
+Revisions to this `Frozen agreement` follow the plan-revision discipline
+— [workflow.md](../procedures/workflow.md),
 [DD-V-026](../cross-milestone/decisions/plan-revision-discipline.md):
-owner-authorised, critically checked, proportionally recorded.)*
+owner-authorised, critically checked, proportionally recorded.
+
+**Revision 1 (2026-08-08) — M4-Phase 5 gains a named prerequisite: the
+handler-side scalar `string` write.**
+
+- **What changed.** One paragraph added to the M4-Phase 5 description.
+  No scope, acceptance criterion, phase boundary or dependency moves;
+  the phase already owned "how a typed string reaches author-visible
+  state" through its one-way-binding-plus-handler approach.
+- **The premise that changed.** The phase's stated approach is "matching
+  the M3 `ToggleButton.checked` precedent" — one-way binding plus the
+  author's handler writing the state. M4-Phase 2 T9 measured that the
+  handler half of that precedent is **unavailable for strings**: there
+  is no scalar string write in the runtime, and `dsl_spec.md` §8.9
+  already marks the string expression forms binding-only. When this plan
+  was drafted (2026-07-28) nobody had checked whether the bool
+  precedent's mechanism had a string twin; it does not.
+- **Critical check.** The revision was proposed by the agent after the
+  measurement and authorised by the owner on 2026-08-08. The premise was
+  verified rather than assumed: the compiler was run against a probe
+  `.ui` (all three string right-hand sides — literal, state read,
+  interpolation — pass `check` and emit IR that §8.9 marks binding-only),
+  and the evaluator was run against each of the three (all reject at
+  invocation). The alternative placements were checked and rejected on
+  the phases' own stated scope: M4-Phase 3 says "String concatenation
+  stays out" and its consumers need reads, not writes; M4-Phase 4 is
+  scrolling / `Image` / `fill`; M4-Phase 7 is two phases past the point
+  where the one-way form is needed.
+- **Why the milestone plan rather than a phase handoff.** A phase
+  handoff carries one hop (phase N → phase N+1's `constraints.md`).
+  Three hops would have to survive Phase 3 and Phase 4 forwarding it,
+  and this plan is the only document M4-Phase 5's framing is guaranteed
+  to read.
+- **Not included.** The *interim* half of the same finding — that the
+  unsupported form is accepted silently today rather than diagnosed — is
+  not a milestone-plan item. It is an M4-Phase 3 pre-doc intake
+  (owner-settled the same day), because enforcing §8.9's existing
+  binding-only statement is a defect fix against normative text already
+  in force, not a new surface.
+
+**Revision 2 (2026-08-08) — M4-Phase 4 gains a named deliverable: what a
+`Row` / `HStack` does when its children do not fit.**
+
+- **What changed.** One paragraph added to the M4-Phase 4 description. No
+  acceptance criterion, phase boundary or dependency moves, and no
+  particular layout rule is chosen here — the phase owes **a rule stated
+  in `dsl_spec.md`**, and "overlapping is acceptable" is one of its
+  available contents. The obligation is the *stating*: the runtime
+  already behaves one way, and what is missing is a document that says
+  so, which is why "we decided internally to leave it" would not
+  discharge this.
+- **The premise that changed.** M4-Phase 2's framing agreement ④
+  (owner-approved 2026-08-05) already sent the question here, on the
+  basis of an M4-Phase 1 observation recorded as a **visual** overlap.
+  M4-Phase 2 T10 measured a second half nobody had: the overflowing group
+  also **takes the clicks** aimed at the widgets it covers, so the
+  overlapped controls stop working rather than merely looking wrong. That
+  changes what the receiving phase is deciding — a cosmetic question
+  became a functional one.
+- **Critical check.** Measured, not inferred, and by a fixture that
+  prints its evidence: each gallery tab `ToggleButton`'s own centre
+  resolves to a scroll `Button` (`All` → `Scroll down`, `Albums` →
+  `Scroll down`, `Favorites` → `Scroll up`), and a real click at
+  `Albums`' centre leaves all three `checked` values unchanged. The cause
+  was checked against the specification rather than assumed to be a
+  defect: [dsl_spec.md §4.19](../../docs/dsl_spec.md) makes every widget
+  with a visual a candidate, a layout container included, and the runtime
+  does exactly that. Authorised by the owner on 2026-08-08 after the
+  measurement was presented with that reading.
+- **Why the milestone plan rather than a phase handoff.** The same test
+  Revision 1 applied: a handoff carries one hop, and M4-Phase 4 is two
+  from the phase that measured this. It would have to survive M4-Phase 3
+  forwarding a finding that is not M4-Phase 3's. Two documents a reader
+  might follow point elsewhere — this plan's M4-Phase 4 entry did not
+  mention it at all, and
+  [M4-Phase 1's handoff](phase-1/implementation/handoff.md) still names
+  **M4-Phase 2** as the landing place, which framing ④ superseded. That
+  row is not edited: a closed phase's handoff is its record of what was
+  known then, and this entry is the authoritative placement.
+- **Not included.** What the rule should say. Also not included: any
+  change to hit-testing, which behaves as specified.
 
 ## Progress
 
@@ -781,7 +902,7 @@ tracking belongs in each phase's `implementation/plan.md` (with
 | Phase | Status | Progress file | ADR | Notes |
 |---|---|---|---|---|
 | M4-Phase 1 — Per-monitor DPI awareness | phase-end recorded; phase→main owner approval pending | [plan.md](phase-1/implementation/plan.md) | [preamble.md](phase-1/implementation/preamble.md) | Discharges AC7 and the M3 runtime-DPI residual. Framing owner-aligned 2026-07-28; four decisions Accepted 2026-07-28 (Per-Monitor-Aware V2 declared by the runtime in `wasamo_init`; layout in DIP with conversion confined to the seams and crispness bought at the rasterization surface; per-window scale with a fixed `WM_DPICHANGED` order; DIP as the outward unit with no new ABI function). Framing agreements ①/②/③ each tested inside the slate — no stage-2 plan revision required, and "Phase 7 is the milestone's only ABI-bearing phase" survives. Moment 1 spec sync landed 2026-07-28 ([architecture.md §12](../../docs/architecture.md#coordinate-spaces), [dsl_spec.md §1 units](../../docs/dsl_spec.md), [abi_spec.md §4.1 / §4.2](../../docs/abi_spec.md), [layout-engine.md §3.1](../../docs/notes/layout-engine.md) answered); Moment 2 implementation sync landed at T12, including the corrected `verification-environments.md` Observation 4 procedure. Initial phase-end CI runs `30873359437` and `30873615639` failed the DPI matrix test; repair code commit `1f162dc` passed [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516) on the experimental branch. After the review-remediation test-target change, [phase-branch run 30881324493](https://github.com/matarillo/wasamo/actions/runs/30881324493) passed and directly verified the current code tree; the CI criterion is discharged without erasing the failed-run history |
-| M4-Phase 2 — Event routing + focus model + generic click | not started | — | — | Milestone core; pre-ADR fixture spike required; stretch re-evaluation checkpoint at ADR Accepted |
+| M4-Phase 2 — Event routing + focus model + generic click | phase-end recorded; phase→main owner approval pending | [plan.md](phase-2/implementation/plan.md) | [preamble.md](phase-2/decisions/preamble.md) | Milestone core. Framing owner-aligned 2026-08-05 (seven agreements, six of them explicitly as revisable hypotheses; touch = synthesized injection with stated limits, no hardware available). Pre-ADR spike discharged — [focus-traversal-spike.md](phase-2/decisions/exploration/focus-traversal-spike.md): traversal core as Win32-independent pure logic under unit test, plus a mechanism fixture driving it from the real `.ui` → IR → runtime path. Five decisions Accepted 2026-08-06: DD-001 (target-then-bubble with no capture phase and consume-on-handle; an unconsumed key reaches the default window procedure; touch on `WM_POINTER*` without changing the host process's input mode), DD-002 (layout-derived DIP hit rectangles retained beside the Visual write by the one lockstep pass; one topmost target bounded by ancestor clips, from which occlusion follows rather than needing a scrim rule), DD-003 (one `FocusState` per window with tree-order traversal, `enabled: false` removing a stop, click focusing the nearest focusable widget at or above the target, and group traversal and focus / active-item separation settled for M5 without building widgets), DD-004 (a modal scope as an annotated subtree whose presence is the entry — materialisation captures the restore target, not derivable from the tree afterwards, and moves focus inside), and DD-005 (per-item handlers admitted inside `for` bodies together with the registration lifecycle and the position-not-item identity consequence M3-Phase 7 routed here; `focus-group` and `modal-scope`; a `dismiss` request admitted beside `modal-scope` only, whose sources grow without the spelling changing; and one `key-down("<key>")` command signal, the physical-key half with non-character key names only). Moment 1 spec sync ([dsl_spec.md §4.19](../../docs/dsl_spec.md), [architecture.md §13](../../docs/architecture.md), [m4-interaction-intake.md](../../docs/notes/m4-interaction-intake.md)) re-syncs at the Accepted flip. **Stretch re-evaluation discharged 2026-08-05: both stretch intakes retained** (`Image` / direct-value `fill` stay at M4-Phase 4; multi-line editing stays ride-if-room — §Cross-phase dispositions 3). T1–T12 and the owner-visible smoke are complete; T13 synchronized the specs and drafted the phase-end retrospective / handoff. Its first cold suite fired CF-T7-1: allocator reuse retained a focus record on a fresh row without repainting its indicator. Owner-authorized T13a repaired that divergence through the existing focus writer, added an allocator-independent red/green fixture, completed full independent review and passed a replacement cold suite plus all consumer checks. Pointer-address identity remains a bounded handoff residual. T13/T13a were merged no-ff as `b42a212`; phase-branch [CI run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054) passed on `4b1076f`; phase→main merge remains a separate owner gate |
 | M4-Phase 3 — Predicate expressions | not started | — | — | Novel normative DSL content; absorbs three M3-deferred DSL axes |
 | M4-Phase 4 — Gallery completion | not started | — | — | Scroll / scrollbar / `Image` / direct `fill`; two stretch intakes |
 | M4-Phase 5 — Single-line text editing | not started | — | — | Must fix the text-store-facing internal model for Phase 6 |
