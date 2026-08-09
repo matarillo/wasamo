@@ -79,7 +79,7 @@ struct ButtonData {
     /// node... and not a new visual written at focus-change time").
     /// Paired with the window's `WindowFocus` record; written only by
     /// [`WidgetNode::set_button_focused_at`], whose only caller is
-    /// `crate::focus::move_focus`.
+    /// `crate::focus::with_focus_write`.
     focused: bool,
 }
 
