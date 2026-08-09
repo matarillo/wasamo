@@ -178,6 +178,16 @@ required to state
   inside the existing machinery for the same reason the drain is placed
   after the walk: the handler has already returned when regeneration
   runs, so nothing re-invokes it and no cycle is created.
+
+  **Qualified in part (2026-08-09, M4-Phase 2 T13;
+  owner-approved 2026-08-08).** The conclusion and reopen signal above
+  are unchanged, but the final causal sentence is too strong. T9's F5
+  measurement shows that a collection write regenerates the `for`
+  subtree inside `Signal::set`, during the handler statement rather than
+  after the handler returns. No cycle is created because that synchronous
+  regeneration updates the materialised subtree without re-invoking the
+  dispatching handler. See
+  [implementation log §T9](../implementation/log.md#t9--dsl-per-item-handlers-inside-for).
 - **Effect-ordering ties (residual 2) do not fire**, because this phase
   introduces no observable ordering contract between effects.
 
@@ -308,3 +318,11 @@ state — the exact shape DD-M4-P1-002 §Row 6 closed.
   nothing can regress visibly; the risk is the opposite direction — a
   later phase assuming keys are swallowed. Recorded so M4-Phase 6 reads
   it as a property rather than discovering it.
+
+## Revision history
+
+- 2026-08-06: Initial Accepted record.
+- 2026-08-09: Added the owner-approved dated qualification to the
+  residual-1 explanation. T9 F5 falsified only the claim that
+  regeneration waits for handler return; the decision, implementation,
+  and no-cycle conclusion remain unchanged.

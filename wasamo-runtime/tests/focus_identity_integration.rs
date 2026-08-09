@@ -53,6 +53,18 @@
 //! fixture actually distinguishes structural succession from its two
 //! neighbouring wrong answers.
 //!
+//! # Fixture 4 — structural rebase reconciles retained focus presentation
+//!
+//! CF-T7-1's natural allocator witness can only reach address reuse when
+//! the allocator happens to hand a freed row's address to the row appended
+//! in the same message. The implementation failure is deterministic once
+//! that happens, but occurrence is not. This fixture forces the equivalent
+//! derived state without mocking the OS: focus a generated Button, clear
+//! only its test-visible presentation flag while retaining the focus record,
+//! then append a different row so the real structural drain runs
+//! `sync_scopes_to_tree`. The retained focus must be repainted. Removing the
+//! post-rebase reconciliation makes this fixture deterministically red.
+//!
 //! # Helpers copied from `focus_traversal_integration.rs` and
 //! `event_routing_integration.rs`
 //!
@@ -71,7 +83,7 @@
 //! additions are [`pre_order_focus_id`] and [`count_nodes`] — a test-side
 //! replica of `FocusProjection::project`'s pre-order walk, needed because
 //! no ABI seam exposes a raw `FocusId` (the phase's "no new ABI function"
-//! obligation) — and the three fixtures themselves.
+//! obligation) — and the four fixtures themselves.
 //!
 //! # The client stays small (M4-Phase 1 T8 finding)
 //!
@@ -1039,6 +1051,99 @@ fn a_for_regeneration_that_frees_and_allocates_leaves_a_consistent_focus_record(
                          domain's first surviving stop (the 'anchor' Button) — T5's lazy \
                          successor rule"
                     );
+                }
+
+                ffi::wasamo_window_destroy(window);
+            }
+        },
+    );
+}
+
+const RETAINED_FOCUS_PRESENTATION_UI: &str = r#"component RetainedFocusPresentation inherits Window {
+    state xs: i32[] = [1, 2, 3]
+    VStack {
+        for x in xs {
+            Button { text: "row \{x}" }
+        }
+        Box {
+            aspect: 4:1
+            fill: #336699cc
+            clicked => { xs = xs.append(9); }
+        }
+    }
+}"#;
+
+#[test]
+fn a_structural_rebase_reconciles_a_retained_focus_records_presentation() {
+    run_on_owning_runtime_thread_or_skip(
+        "T13a: retained focus presentation reconciliation",
+        move || {
+            let ir = lower_ui_to_ir(RETAINED_FOCUS_PRESENTATION_UI);
+            unsafe {
+                let window = load_window(&ir);
+                let hwnd = (*window).hwnd;
+                normalise_to_reference_baseline(
+                    window,
+                    CLIENT_W,
+                    CLIENT_H,
+                    "T13a retained-focus baseline",
+                );
+                let factor = ffi::__window_scale_dpi_for_test(window) as f32 / REFERENCE_DPI as f32;
+
+                // root.children: [row 1, row 2, row 3, append control].
+                let (focused_rect, control_rect) = {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(root.children.len(), 4, "fixture precondition");
+                    assert_eq!(label_of(root.children[2].as_ref()), "row 3");
+                    (
+                        root.children[2]
+                            .__arranged_rect_for_test()
+                            .expect("row 3 laid out"),
+                        root.children[3]
+                            .__arranged_rect_for_test()
+                            .expect("append control laid out"),
+                    )
+                };
+
+                click_and_drain(
+                    hwnd,
+                    (focused_rect.x + focused_rect.width / 2.0) * factor,
+                    (focused_rect.y + focused_rect.height / 2.0) * factor,
+                );
+                assert_focused_stop(window, &[2], "row 3");
+
+                // Force the exact inconsistent derived state that address
+                // reuse produces: the record still names row 3, while the
+                // node carries a fresh ButtonData-style false flag.
+                {
+                    let root = (*window).root_widget.as_mut().expect("content root");
+                    assert!(root.children[2].__set_button_focused_flag_for_test(false));
+                    assert_eq!(
+                        root.children[2].__button_focused_for_test(),
+                        Some(false),
+                        "fault injection must make the witness discriminating"
+                    );
+                }
+                assert_eq!(
+                    ffi::__focus_path_for_test(window).as_deref(),
+                    Some(&[2usize][..]),
+                    "fault injection must not edit the retained focus record"
+                );
+
+                // Appending a different row retains the focused row and
+                // reaches the real emit::flush_layout Phase 2 structural
+                // seam. The post-rebase reconciliation must restore the
+                // presentation pair without moving focus.
+                click_and_drain(
+                    hwnd,
+                    (control_rect.x + control_rect.width / 2.0) * factor,
+                    (control_rect.y + control_rect.height / 2.0) * factor,
+                );
+                assert_focused_stop(window, &[2], "row 3");
+                {
+                    let root = (*window).root_widget.as_ref().expect("content root");
+                    assert_eq!(root.children.len(), 5, "append must materialise row 9");
+                    assert_eq!(label_of(root.children[3].as_ref()), "row 9");
                 }
 
                 ffi::wasamo_window_destroy(window);

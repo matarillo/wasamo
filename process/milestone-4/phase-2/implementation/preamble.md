@@ -1,7 +1,7 @@
 ---
 phase: M4-Phase 2
 title: Event routing, focus model, and generic click handling
-status: draft
+status: active
 adr: process/milestone-4/phase-2/decisions/preamble.md
 plan: process/milestone-4/plan.md
 opened: 2026-08-05

@@ -7349,3 +7349,406 @@ protocol's own shape bounds it:
   finding** above, for that last reason: the caption's second line is
   inside the lightbox content the protocol excludes. The finding stands on
   the frames and on `gallery.ui:167`, not on this pass.
+
+## T13 — Close gate
+
+### Start gate (recorded 2026-08-09, before any T13 normative edit)
+
+Read before choosing the approach, in the owner-specified order:
+[AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[retrospectives.md](../../../procedures/retrospectives.md),
+[workflow.md](../../../procedures/workflow.md), [plan.md](./plan.md) §T13,
+this log through T12, retrospective items 10 and 11 for T1–T12, the five
+Accepted DDs and their [preamble](../decisions/preamble.md), the framing
+acceptance and verification sections, constraints §6 / §9, the M4 plan and
+roadmap ACs, the Phase 1 handoff, every normative section named by T13, and
+[verification-environments.md](../../../../docs/notes/verification-environments.md)
+Observations 4 / 6. The branch is `feat/m4-phase-2-t13`, created from the
+clean, unpushed phase tip `0676acb`.
+
+#### Boundary fixed before the pass
+
+T13 owns re-verification and phase-close records, not a runtime repair. A
+false normative statement is corrected, an unstated landed rule is either
+recorded or explicitly left unspecified within the narrow choice the T13
+item assigns, and an Accepted DD whose conclusion still ships receives only
+the owner-authorised dated explanatory annotation. A discrepancy outside
+those bounds is recorded with an owner; it is not silently fixed. No process
+rule changes in this task. In particular, CF-T12-5 is carried as an **open
+question**, with no implication that a later phase will make the proposed
+obligation a rule.
+
+#### Failure-mode selection
+
+| Trap | Applies? | Start-gate reason and close artifact |
+|---|---|---|
+| #1 semantic migration | **No** | T13 changes no enum, IR variant, schema field or traversal. Re-decide if the re-verification unexpectedly requires source or schema work; that would exceed the current boundary and be recorded before implementation. |
+| #2 missed side effects | **Yes — documentation analogue.** | The close changes several coordinated phase-close surfaces. The close artifact will enumerate every touched normative statement, status / progress marker, ADR annotation, AC closure, residual pointer, retrospective mapping, handoff entry and task checkbox, including why untouching `abi_spec.md`, `VISION.md`, `CHANGELOG.md`, or a named candidate is correct. |
+| #3 parallel / derived data drift | **Yes — documentation analogue.** | `plan.md`, `log.md`, `phase-end.md`, `handoff.md`, roadmap / milestone progress and ADR revisions can become competing summaries of one rule. The artifact will identify the owning source for each statement and use pointers rather than restating normative behaviour in a derived ledger. |
+| #4 untested authored branch | **No.** | No code, diagnostic, reject arm, size arm or script branch is planned. Re-decide if T13 authors executable logic. |
+| #5 carry-forward underweighted | **Yes.** | T1–T12 carry-forward and findings are reclassified at phase end as doc-folded / carry-forward / local-only or retained finding, with evidence, owner and re-trigger. The final handoff is written only after that phase-end classification. |
+| #6 symptom at face value / flake-rolling | **No current failure.** | T13 begins from green recorded T12 evidence and no recurring failure. Any deterministic or twice-recurring rebuild, suite, evidence, or doc-check failure activates this trap and receives rerun history, root cause and disposition rather than a retry-to-green. |
+| #7 weak GUI evidence | **No new GUI-evidence deliverable.** | T13 does not launch or capture a GUI; T12 already produced and independently reviewed the 48-frame, positive-control set and the owner completed all ten smoke steps. T13 must nevertheless inspect the committed frames when confirming the five named runtime properties and the checked+focused composition; its artifact is a confirmation mapping to T12's already-closed #7 evidence, not a second claim that process survival rendered correctly. Re-decide if a new capture is needed. |
+
+#### Normative answers already in force, and known divergences entering the pass
+
+This phase was normatively synchronised ahead of implementation, so
+DD-V-031 requires the already-answering text to be named before work. The
+table is an input classification, not a conclusion that each sentence is
+still true:
+
+| Owner | Answer already present | Start-gate classification against landed evidence |
+|---|---|---|
+| `dsl_spec.md` §4.8 / §4.19 | disabled occlusion, focus eligibility and propagation | Occlusion and Tab skipping answer the runtime; the keyboard-activation wording overclaims a capability the runtime does not have and the owner sent to the candidate pool. |
+| `dsl_spec.md` §3 / §4.5 / §8.8 | authored signal and textual-IR handler grammar | They still encode the pre-argument / `clicked`-only surface and are known false after `dismiss` and `key-down(\"…\")`. |
+| `dsl_spec.md` §4.15 | per-item handler admission, invocation-time binder reads, positional identity and shared subtree lifetime | The admitted subsection answers the landed T9 model; two rows in the Diagnostics table still reject that same model and are known false. |
+| `dsl_spec.md` §4.16 | child-carried placement examples | T8 corrected the childless-widget example; T13 confirms rather than repairs it. |
+| `dsl_spec.md` §4.19 | target/bubble routing, key admission and fallthrough, focus groups, modal containment/restoration and dismissal | The core answer exists. Named gaps entering this pass are arrow-axis direction, outside-scope click focus, container candidacy consequence and the unrecognised-signal policy; the Button keyboard sentence is false. |
+| `dsl_spec.md` §8.9 | string handler expressions are binding-only and assignment admits the documented scalar/collection forms | Runtime rejection matches the text, while checker/lowering/loader accept the string assignment until invocation; owner assigned capability to Phase 5 and diagnostic intake to Phase 3, so T13 records an unenforced normative statement rather than changing behaviour. |
+| `architecture.md` §12.3 | enumerable DIP / device conversion seams | The pointer row omits screen-to-client conversion for `WM_POINTER*` and still claims Visual readback after T2 removed it. |
+| `architecture.md` §13 | layout-derived hit geometry, routing, touch, focus, scopes and dismissal | The model answers most landed behaviour. Known wording/gaps concern touch precision and focus/hover policy, the focus-indicator write path and composed state, and the pre-/post-mutation split in scope restoration. |
+| DD-M4-P2-001 | one drain per dispatch and no residual-1 cycle | The conclusion ships, but F5 falsifies the reason that regeneration waits for handler return. Per the 2026-08-08 owner disposition and `workflow.md`, this is a dated annotation, not a supersede. |
+
+The recognised-key table, `dismiss` admission, child-kind admission, exact
+checker/runtime callers, conversion sites and the scope/focus mechanics are
+not accepted from prose alone: the close pass audits the landed code and
+tests. T12's frame set is the rendered cross-check for traversal order,
+single-stop grouping, containment, restoration, dismissal and composed
+checked/focused appearance.
+
+#### Review lane
+
+**Normal review, confirmed at start and subject to close-time re-decision.**
+The implementation preamble's T13 prediction remains correct for the present
+boundary: normative documentation, phase-close ledgers and one dated
+explanatory ADR annotation change, with no schema / IR migration, runtime
+structural change, newly authored diagnostic / reject / size branch, or new
+GUI capture. T12's GUI-render evidence already received full independent
+review; this task maps and re-verifies it without replacing or widening its
+claim. If T13 crosses any of those boundaries, the applicable full or
+branch/test-focused lane composes before merge.
+
+### End-gate attempt 1 — CF-T7-1 re-triggered (2026-08-09)
+
+The required cold sequence reached a real phase residual rather than a
+documentation failure:
+
+| Command | Result |
+|---|---|
+| `cargo clean` | pass; 329 files / 180.0 MiB removed |
+| `cargo build --release --workspace` | pass in 61.3 s; only the known `wasamo-sys` import-library ordering warning and linker import-library message |
+| `cargo build --workspace` | pass in 48.3 s; same warnings |
+| `cargo test --workspace` | **fail** in `focus_identity_integration::a_for_regeneration_that_frees_and_allocates_leaves_a_consistent_focus_record` after the preceding suites passed (including 32 `wasamo-ir` and 609 runtime unit tests) |
+
+The failing run freed the focused row at `0x294cae60990` and allocated
+row 9 at the **same address** in the same message. `WindowFocus::rebase`
+therefore matched the stale anchor to the new node and retained focus path
+`[3]`, but the new node's presentation flag was `Some(false)`. The focus
+record and its painted indicator — documented as a derived pair with one
+writer — were inconsistent.
+
+Trap #6 is active. Three exact reruns against the unchanged build produced
+**pass, pass, fail**, and each outcome matched the allocator observation:
+
+| Exact rerun | Address reuse | Result |
+|---|---:|---|
+| 1 | false (`0x1819cf4bf90` → `0x1819cf4d090`) | pass |
+| 2 | false (`0x2913d6eafb0` → `0x2913d6ecc60`) | pass |
+| 3 | true (`0x1995196d240` → same) | **same assertion failure** |
+
+This is not a retry-to-green flake: address reuse is nondeterministic, but
+the failure is deterministic whenever reuse occurs (two observed reuse
+runs, two identical failures). It fires CF-T7-1's exact re-trigger and
+falsifies its former bound that reuse could only choose an unexpected
+focus target while keeping the record/presentation pair consistent.
+
+Static diagnosis: `WindowFocus::rebase` remaps ids by pointer, adopts the
+new projection and sees focused id 3 survive. Because focus never becomes
+`None`, `sync_scopes_to_tree` takes neither restoration nor structural
+succession and invokes no `with_focus_write`; the freshly allocated row
+therefore never receives the focus repaint. The smallest compatible repair
+is to reconcile the final retained focused id through the existing
+`with_focus_write` primitive after rebase and the exit / succession /
+entry decisions it feeds. That preserves the already-documented
+pointer-identity bound
+(the new row may become the unexpected focus target) while restoring the
+record/presentation invariant. A deterministic regression witness must
+force or simulate the lost-presentation state rather than rely only on
+allocator reuse.
+
+That repair was not silently taken. It crossed T13's recorded no-runtime
+boundary, changed the structural focus seam and therefore changed the
+review lane to **full independent review**. The owner authorized the
+bounded T13a repair on 2026-08-09; its start gate follows before any repair
+implementation.
+
+### T13a start gate — owner-authorized runtime repair (2026-08-09)
+
+The owner authorized the repair inside T13 after reviewing the cold-suite
+failure and the distinction between an implementation defect and the
+probabilistic reach of its existing test. The implementation boundary is
+now widened, visibly and narrowly: preserve pointer-anchor focus identity,
+repair only the post-rebase record/presentation inconsistency, and add a
+deterministic witness. A stable generation id or a new identity policy is
+outside this authorization.
+
+#### Failure-mode re-selection before code
+
+| Trap | Applies? | T13a reason and required close artifact |
+|---|---|---|
+| #1 semantic migration | **No.** | No enum/schema/IR migration and no focus-identity policy change. The existing `FocusId` / pointer-anchor representation stays. Re-decide if a generation id or new retained token becomes necessary. |
+| #2 missed side effects | **Yes.** | Rebase runs after every initial attach / structural drain. Enumerate focus record, group memory, active items, modal stack, restoration/succession, current and stale presentation, Composition failure handling, and every `sync_scopes_to_tree` call site. |
+| #3 parallel / derived data drift | **Yes.** | `WindowFocus::core.focused`, its anchor coordinate system and `ButtonData.focused` presentation are one derived triple. The repair must use `with_focus_write`, not create a second presentation writer. The deterministic test must show the previously inconsistent pair converges. |
+| #4 untested authored branch | **Yes — test-side forced state plus repair path.** | The existing allocator branch is probabilistic. Add an unconditional repair step and an allocator-independent integration witness that is red with the repair removed; retain the reuse test to cover the natural path when reachable. |
+| #5 carry-forward underweighted | **Yes.** | CF-T7-1 / CF-T9-1 moves from carried residual to fired defect. On success, close only the record/presentation inconsistency; retain the pointer-identity semantic bound and its re-trigger. Update retrospective/handoff from close-blocking to the exact residual that remains. |
+| #6 symptom / flake rolling | **Yes.** | The four-run evidence is already recorded: reuse false → pass twice, reuse true → identical failure twice. No number of green non-reuse runs dispositions it. Repair evidence begins with a deterministic red witness, then the full suite. |
+| #7 weak GUI evidence | **No new GUI-render claim at start.** | T13a's claim is the runtime's retained presentation flag paired with its focus record, observed through a mock-free real-Compositor integration test. It does not claim a captured host frame. T12 remains the evidence that focus presentation generally reaches pixels. Re-decide if implementation/review makes a new rendered claim necessary. |
+
+#### Normative answer and approach boundary
+
+DD-M4-P2-003 and `architecture.md` §13.3 already require one focus
+record and one presentation-write discipline; no new semantic answer is
+needed. `with_focus_write` is the owning primitive. The stochastic test's
+assertion is also retained: whatever node the record names must carry the
+focus presentation. T13a repairs implementation to those answers; it does
+not weaken either text to accept the inconsistency.
+
+#### Review lane re-decision
+
+**Full independent review.** T13a changes the structural focus seam and a
+GUI-visible presentation transition, so the original Normal T13 lane is
+superseded for the combined close. The full review includes the narrower
+branch/test-focused review of the forced-state witness. It must examine
+the realised code and tests after the repair, not only this plan.
+
+### T13a repair evidence and structural audit (2026-08-09)
+
+Commit `428d62a` keeps pointer-anchor identity unchanged and adds one final
+presentation reconciliation at `sync_scopes_to_tree` step 6. It runs after
+restoration, structural succession and modal entry have selected the final
+focus target; placing it earlier would needlessly animate an intermediate
+same-address target that one of those operations could immediately replace.
+The write closure is empty. The existing `with_focus_write` primitive alone
+resolves the final path and calls `set_button_focused_at(..., true)`; no
+second production writer was added.
+
+#### Deterministic failure and repair witness
+
+The new mock-free Windows integration fixture uses a real window and real
+Compositor, focuses generated `row 3`, then uses one test-only seam to clear
+only that node's cached `ButtonData.focused` flag while retaining focus path
+`[2]`. Clicking a non-focusable `Box` appends `row 9` and therefore reaches
+the real reactive structural drain. Its postcondition is the complete
+derived pair: focus remains `[2]` and the node there is again `Some(true)`.
+The child-count and `row 9` assertions prove the structural drain actually
+ran rather than letting an unrelated focus write make the test green.
+
+| Realised variant | Exact command | Result |
+|---|---|---|
+| Repair present | `cargo test -p wasamo-runtime --test focus_identity_integration a_structural_rebase_reconciles_a_retained_focus_records_presentation -- --exact --nocapture` | pass |
+| Step-6 `with_focus_write` call temporarily removed, no other change | same command | **deterministic fail**: retained path `[2]`, node flag `Some(false)` instead of `Some(true)` |
+| Repair restored | same command | pass |
+| Realised integration file | `cargo test -p wasamo-runtime --test focus_identity_integration` | pass, 5 / 5 |
+| Natural allocator witness, unchanged build | exact CF-T7-1 test repeated six times | pass, 6 / 6; all six happened to be non-reuse runs and are supporting evidence only |
+
+This dispositions trap #6 without retry-to-green: the forced-state fixture
+is the gate, while the allocator-address print remains the natural-path
+observer. The test seam has exactly one call site, in that fixture; it does
+not repaint or alter the focus record, so it cannot itself perform the
+repair under test.
+
+#### Complete production call-site audit
+
+`rg "sync_scopes_to_tree\\(" wasamo-runtime/src` finds the definition and
+exactly these two production calls:
+
+| Caller | State on entry | Effect of new final reconciliation |
+|---|---|---|
+| `window::set_root` | The replaced root's focus record was reset to default; initial modal entry may then select a stop. | No-op with no focus; otherwise reasserts the stop already painted by modal entry. No root-swap identity is retained. |
+| `emit::flush_layout` Phase 2 | All reactive conditional / iteration insertions and removals have materialised; rebase, exit / succession and entry run here. | Repaints only the final retained target when its cached flag is false, including the fired same-address allocation case. |
+
+#### Structural side effects and derived-state disposition
+
+| State / effect | Disposition |
+|---|---|
+| `WindowFocus::core.focused` and `anchors` | `rebase` still writes this coordinate pair exactly as before. The empty reconciliation closure changes neither. |
+| Group memory, per-widget active items, modal stack | Unchanged by the empty closure. Restoration, succession and entry retain their previous order and algorithms. |
+| Current presentation | The final focused Button-family node is set to `focused = true`; the guard makes an already-correct flag a no-op. |
+| Previous / stale presentation | `prev_path == next_path` in the empty write, so it clears no surviving node. A removed node no longer exists. Ordinary focus transitions still clear their previous path in the same primitive. |
+| Composition animation failure | As for every existing focus write, the cached flag changes before animation and the structural seam ignores the returned error. No new rollback policy is introduced; the deterministic fixture proves the cached record/presentation invariant, not pixel delivery under a Composition failure. |
+| Pending signal queue / dirty set | The repair invokes only the focus repaint primitive and enqueues no handler or layout work. It is after the existing modal-entry pending-count assertion and does not change the drain algorithm. |
+| Pointer-address ABA | **Not closed.** A fresh same-address node may still become the unexpected retained target. T13a closes only the additional record/presentation divergence once that accepted identity rule selects the target. |
+
+Trap #7 remains non-applicable to the T13a claim: the new assertion is a
+runtime derived-state witness, not a claim that a captured frame displays a
+particular pixel. It does use the real Windows runtime and Compositor rather
+than an OS mock. T12's separately inspected frames and owner-visible smoke
+remain the phase evidence that the same focus-presentation path reaches the
+screen in ordinary use. This classification is included in the pending full
+independent review rather than treated as self-approved.
+
+A warm `cargo test --workspace` after `428d62a` passed the complete
+workspace in 55 s, including 32 `wasamo-ir` tests, 609 runtime unit tests,
+all mock-free Windows integration binaries, 480 `wasamoc` tests and 8
+round-trip tests. This is an early regression check only. T13a still owes
+the end gate's new `cargo clean` sequence, external C / Zig hosts and the
+independent-review disposition before it can be checked.
+
+### T13a full independent review (2026-08-09)
+
+An independent agent that authored none of `428d62a` read `AGENTS.md`, the
+implementation-gate procedure, the realised commit and the T13a gate. It
+independently ran the deterministic fixture (1 / 1 pass, no skip), derived
+the two production call sites and the side effects, and reported **no
+blocking correctness or test-validity finding**.
+
+The reviewer agreed that step 6 belongs after restoration, succession and
+modal entry; that the forced cached-flag / retained-path state plus a real
+structural drain discriminates the repair; and that §13.3 already owns the
+normative one-presentation-primitive rule, so no further normative edit is
+required. It also agreed with trap #7's classification only under the exact
+claim used here: derived runtime-state reconciliation through the already
+pixel-verified primitive. T13a does not claim a new captured frame for this
+path.
+
+One low documentation finding was accepted: `ButtonData.focused`'s field
+comment still named `move_focus` as `set_button_focused_at`'s sole caller,
+while the method's own comment and realised code correctly name
+`with_focus_write`. Commit `9a4610b` corrects that stale caller name. It
+changes no code or test behaviour. With that remediation, the required full
+review is complete.
+
+### T13a end gate — final local verification (2026-08-09)
+
+The implementation-gate procedure was read again at close. The realised
+artifacts close traps #2 / #3 with the production call-site and structural
+side-effect tables above, #4 with the forced-state integration branch and
+its removal mutation, #5 with the narrowed handoff residual, and #6 with
+the two reuse failures followed by a deterministic repair gate. Trap #1
+remains inapplicable (no enum, schema or IR migration). Trap #7 remains
+inapplicable under the independently reviewed derived-state-only claim; no
+new path-specific pixel claim is made.
+
+Run against the repaired branch after `428d62a`, review remediation
+`9a4610b` and the repair-gate record `2871d49`:
+
+| Command | Result |
+|---|---|
+| `cargo clean` | pass; 9,537 files / 2.8 GiB removed |
+| `cargo build --release --workspace` | pass in 50.57 s; only the known import-library ordering / linker messages |
+| `cargo build --workspace` | pass in 43.08 s; same known messages; creates the uplifted debug runtime archive required before cold workspace tests |
+| `cargo test --workspace --no-fail-fast` | pass in 80.5 s; 1,271 tests, 0 failed, 0 ignored / skipped (the previous 1,270-test T12 total plus the one T13a fixture) |
+| `target\\release\\wasamoc.exe check examples\\gallery\\gallery.ui` | pass |
+| Visual Studio CMake configure + `--build build/gallery-c --config Release` | pass; regenerated `gallery.uic` / `gallery_uic.h` and produced `gallery-c.exe` |
+| quoted `zig build` ReleaseSafe invocation in `examples/gallery-zig` | pass; `gallery-zig.exe` present |
+
+The first CMake invocation by bare command name failed before configure
+because this PowerShell session has no `cmake` on `PATH`. The executable
+was found at Visual Studio 18 Community's bundled CMake path and the same
+configure/build then passed. This is a tool-resolution fact, not a rolled
+build failure. DSL and Zig were rerun individually because the initial
+parallel wrapper stopped reporting when the CMake command could not be
+resolved.
+
+T13a's authorized repair, deterministic regression gate, end-gate audit,
+full independent review and clean local evidence are therefore complete.
+This closes the local gate only; task closure remains after Moment 2,
+handoff and the T13 retrospective, and phase-branch CI belongs to the
+post-merge phase-end batch.
+### Moment 2 implementation re-verification
+
+This is the item-by-item comparison required by `plan.md` §T13. The
+runtime source and the tests that exercise it were read alongside the
+normative sentence; a green suite is recorded separately at the end gate
+rather than being substituted for this comparison.
+
+| # | Plan check | Landed evidence and disposition |
+|---|---|---|
+| 1 | Disabled occlusion versus child traversal | `hit::resolve_topmost` chooses one target before dispatch and `ClickDisposition::Suppress` prevents a disabled Button from firing without exposing a lower sibling. §4.8 / §4.19 already agreed; no child-traversal wording survived. |
+| 2 | Disabled traversal skip | `focus_core::collect_stops` omits disabled stops; `a_disabled_stop_is_skipped` pins it. Retained in §4.8 / §4.19. |
+| 3 | Disabled Tab wording | The runtime has no Button key activation (`run_clicked_handlers` is reached from pointer click only). Both sections now state the shipped Tab consequence and no longer imply a keyboard-activation feature. CF-T8-1 remains in the candidate pool for the M5 widget-family decision. |
+| 4 | §4.19 `for` example under §4.15 | The example has exactly one body-root widget and uses `for photo, i in photos`; the parser's optional index-binder production accepts it. The gallery and the per-item integration fixture exercise the same form. |
+| 5 | Per-item handler semantics | `ForItemHandlerEvalContext` resolves item/index at invocation; `per_item_handler_integration` covers click identity, same-length reset, surviving position and removal failure. Handler registration is owned and released by the generated subtree. §4.15 / §4.19 match. |
+| 6 | False §4.15 diagnostic rows | Removed the two rows that rejected handlers and handler-position binder reads, and corrected the body bullet that still prohibited handlers anywhere in the template. |
+| 7 | §8.9 string-assignment enforcement | Reconfirmed: §8.9 marks `StrLit`, `StrPropRead` and `Interpolation` binding-only; checker, lowering and loader admit an `(assign …)` string RHS, while evaluator invocation rejects it. **Unenforced normative statement retained**, not rewritten as a supported capability: capability owner M4-Phase 5; diagnostic pre-doc intake M4-Phase 3 (milestone-plan revision 1). |
+| 8 | DD-M4-P2-001 residual-1 reason | Added the owner-approved 2026-08-09 qualification and preamble revision pointer. T9 F5 shows regeneration inside `Signal::set` during the handler statement; the no-cycle conclusion and decision are unchanged, so no supersede. |
+| 9 | Recognised keys and fallthrough | `wasamo_ir::RECOGNISED_KEY_NAMES` contains the exact 22 names printed in §4.19; runtime `key_name_for_vk` is anti-drift tested against it. `WM_KEYDOWN` returns only for traversal/group/dismiss/handled authored key/host slot; otherwise it reaches `DefWindowProcW`. |
+| 10 | `dismiss` admission and kept-key table | Checker and loader both require a sibling `modal-scope: true`; `dismiss_on_key` addresses Escape to the innermost scope. Tab, group arrows and scoped Escape are the only built-ins kept ahead of the authored walk. Text unchanged. |
+| 11 | Focus-indicator write path | `effective_button_color` and `set_focused` repaint node presentation; no focus path creates or positions a Visual. The six `SetOffset` / `SetSize` call sites remain in `sync_visuals`. §13.3 now states the landed split. |
+| 12 | Presence-entry and clip bound | `sync_scopes_to_tree` runs at initial root attachment and structural drain; entry moves focus to the first stop. `resolve_topmost` intersects ancestor clip bounds. §13.1 / §13.4 match. |
+| 13 | Restore versus successor sequence | `sync_scopes_to_tree` uses the restore anchor captured at entry, then falls back to the first surviving post-mutation stop. §13.4 now states those two times rather than claiming every successor is computed before mutation. |
+| 14 | Focus-group arrow axes | `arrow_direction`: Left / Up → previous; Right / Down → next. Added the exact mapping and both-axis rule to §4.19. |
+| 15 | Click outside an entered scope | `focus_landing_outside_an_entered_modal_scope_is_none`: landing is bounded by `traversal_root`, so focus is unchanged. Added the sentence to §4.19's pointer-limit paragraph. |
+| 16 | Authored and textual-IR handler grammar | Synced §3 to `IDENT ("(" STRING_LIT ")")? "=>" block`, added the `IDENT` + `(` disambiguation row, and synced §8.8 to the optional `STRING` argument used by `on key-down("…")`. |
+| 17 | §4.5 signal inventory | Replaced the false clicked-only statement with the three defined signals and their §4.19 admission pointer. |
+| 18 | Button keyboard activation | Owner outcome from T8 retained: do not build it here; revisit one activation contract with the M5 keyboard-operable widget set. The two false normative clauses were narrowed, and the keys-kept table remains unchanged. |
+| 19 | Unknown signal diagnostic | Current checker and loader accept arbitrary bare signal names; no DD requires narrowing that surface. §4.5 now states that other names' semantics and diagnostic requirements are **unspecified**. Re-trigger remains a fourth signal or the first silent-handler bug report. |
+| 20 | Child admission | `wasamo_ir::LAYOUT_CHILDLESS_WIDGET_KINDS` is the shared four-kind owner read by checker and loader. §4.4 now states that Rectangle / Text / Button / ToggleButton admit no widget children and points container rules to their sections. |
+| 21 | Containers as hit candidates | Every `WidgetNode` visual participates in `resolve_topmost`; T10 G7 measured the overflow consequence. §4.19 now says a non-clipping layout container's painted overflow remains reachable and can occlude a sibling; M4-Phase 4 still owns the overflow-layout policy. |
+| 22 | §4.16 placement example | Confirmed the example uses direct child-carried `slot.row` / `slot.column` on a Button and does not put a widget child inside a childless kind. No T13 repair. |
+| 23 | Touch-promotion precision | `WM_POINTERDOWN` and `WM_POINTERUP` are the promotion-suppression gates; ENTER / UPDATE / LEAVE are claimed but inert. §13.2 now states that measured division. |
+| 24 | Touch focus / presentation / primary contact | `touch_pointer_integration`: a tap focuses like click, non-primary dispatches nothing, and the inert-message test pins no hover/pressed mutation. §13.2 now states all three limits, including no touch-down feedback in M4. |
+| 25 | Pointer screen-to-client conversion | `pointer_message_to_client_dip` performs `ScreenToClient` before DIP division for `WM_POINTER*`; mouse is already client physical. Added both paths to §12.3's enumerated inbound seam. |
+| 26 | Stale Visual readback sentence | Hit rectangles have been retained in DIP since T2. Removed §12.3 row 2's false Visual-readback conversion and pointed to §13.1. |
+| 27 | Checked + focused composition | `effective_button_color` composes `checked` before the focused blend; its colour tests and T12 frames show a third appearance. Added the composition sentence to §13.3. |
+| 28 | Fixture spelling in the public DSL spec | `rg` found no M4-Phase 2 fixture identifier or test-only signal spelling in `docs/dsl_spec.md`; only public DSL / IR forms appear. |
+
+One additional mechanical drift was found while doing the named pass:
+`dsl_spec.md`'s revision table already ended at 1.20 while the header still
+said 1.19. The Moment 2 record is 1.21 and brings the header forward; this
+does not change a language rule.
+
+### Rendered-evidence confirmation mapping
+
+T13 inspected the committed PNGs, not only their fixture names. No new
+capture is needed and trap #7 remains out of scope: this mapping confirms
+the already independently reviewed T12 claim without widening it.
+
+| Runtime property | T12 rendered positive control |
+|---|---|
+| Declaration-order traversal | `b1` → `b2` → `b3` → `b4` paints All → Scroll down → Scroll up → Open lightbox; `b5` wraps and `brev` reverses. The differentiating single-group-stop frame is `b2`, because Albums / Favorites were skipped. |
+| `focus-group` is one Tab stop | Same B sequence: after All, the next painted focus is Scroll down, not another tab. |
+| Scope containment and covering-widget occlusion | `c-openA` ≡ `c-openA-click` / `c-blocked` ≡ `c-closed` in their agreement regions; five Tabs move among lightbox controls in `c-openB` / `c-tab` without painting toolbar focus, while after close `c-tab-closed` reaches the toolbar. |
+| Restoration and dismissal | `d-closed` ≡ `d-pre` shows Escape returned to the pre-open focused state; `d-home` ≡ `d-open` is the recognised-but-unhandled-key agreement leg, excluding a generic redraw or key effect. |
+| Checked/focused composition | `b1` shows checked+focused All distinct from checked-only and neither; `c-fired` shows the clicked Albums state while the previously checked All changes, excluding focus colour as the handler result. |
+
+The owner separately completed the ten-step human-visible smoke on
+2026-08-09 with every step as described, including no discomfort during
+free operation. That evidence remains T12's; T13 does not relabel it as a
+new observation.
+
+### Close-time review-lane re-decision before verification
+
+The combined T13/T13a lane is **full independent review**. Moment 2 itself
+contains one dated qualification on an Accepted DD and normative prose /
+grammar corrections, with no IR/schema migration, diagnostic/reject/size
+branch, or new GUI evidence. T13a did cross the runtime structural and
+GUI-visible presentation boundary, and its realised code, deterministic
+witness, call sites and side effects received the full review recorded
+above. T12's existing full review remains the owner of the rendered-frame
+quality claim; T13 does not widen that claim.
+
+### T13/T13a task close (2026-08-09)
+
+T13/T13a close after the replacement local gate, Moment 2 runtime/spec
+comparison, closing handoff and the separate T13 task retrospective, in
+that order. `AGENTS.md` was read at task start as required by DD-V-024,
+and `implementation-gates.md` was read again at close. The combined full
+review is complete with no blocking finding; its one low documentation
+finding was fixed before the replacement clean suite.
+
+The implementation preamble and task-plan front matter had remained
+`draft` despite T0–T13 having run under the owner-approved plan. This
+close normalizes both to the truthful in-flight state, `active`, so the
+post-merge phase-end batch can perform the specified `active` → `closing`
+transition. No phase-close status, phase retrospective or phase CI result
+is claimed on the task branch.
+
+The historical task-branch workflow run `31298945418` is supporting
+evidence for the unchanged runtime tree only. It is not the phase-branch
+run required by phase-end checklist item 16. Remaining work is owned by
+the post-merge phase-end batch: audit the phase retrospective against the
+merge commit, obtain separate authorization for the phase-branch push,
+dispatch CI on that branch, record its run id, and only after green flip
+the handoff to `recorded` and the implementation documents to `closing`.

@@ -355,6 +355,15 @@ impl WindowFocus {
 ///    before, nothing changes.
 /// 5. **Entry**: walk the projection in pre-order and enter every
 ///    `FocusRole::ModalScope` node not already on the stack.
+/// 6. **Reconcile final presentation** through [`with_focus_write`].
+///    Normally this is a no-op because the surviving or newly selected
+///    focused node already carries its indicator. It is load-bearing when
+///    an allocator reuses a removed focused node's address for a fresh node
+///    in the same drain: pointer-anchor rebasing deliberately treats that
+///    address as retained, so the fresh node's default `focused = false`
+///    must be repainted to match the retained record. Running this after
+///    restoration, succession and entry avoids painting an intermediate
+///    target that one of those steps immediately replaces.
 ///
 /// Steps 3, 4 and 5 each go through [`with_focus_write`], so every focus
 /// move this function makes is painted.
@@ -438,6 +447,22 @@ pub(crate) fn sync_scopes_to_tree(
         "modal scope entry must write runtime focus state only and enqueue no further \
          drain work (docs/architecture.md §13.4)"
     );
+
+    // Step 6: `rebase` can retain a focused id without changing its
+    // numeric value. That normally means the same surviving node already
+    // paints the indicator, but a freed node's address can be handed to a
+    // fresh node during one structural drain (CF-T7-1 / CF-T9-1). Pointer
+    // identity then intentionally retains focus on the fresh node while
+    // its newly constructed ButtonData still has `focused = false`.
+    //
+    // A no-op focus write uses the existing sole presentation primitive:
+    // `with_focus_write` always reconciles the current next path, and
+    // `set_button_focused_at` itself is a no-op when the flag already
+    // agrees. This adds no second writer. It runs after every operation
+    // that can replace the rebased target, so no intermediate target gets
+    // a redundant focus animation.
+    let (_, paint) = with_focus_write(root, compositor, focus, &projection, |_, _| {});
+    let _ = paint;
 }
 
 /// `Tab` / `Shift+Tab` are the only keys traversal takes at T5
