@@ -7728,10 +7728,10 @@ full independent review and clean local evidence are therefore complete.
 Actual GitHub Actions is not claimed: the branch remains unpushed and the
 owner's separate push authorization is still required.
 
-### T13 phase-branch CI completion (2026-08-09)
+### T13 task-branch CI completion (2026-08-09)
 
 After explicit owner authorization, `feat/m4-phase-2-t13` was pushed and
-the `CI` workflow was dispatched against exact phase HEAD
+the `CI` workflow was dispatched against exact task HEAD
 `11f77b689bc234453d2e9ff2f6a1a540c879320a`. GitHub Actions
 [run 31298945418](https://github.com/matarillo/wasamo/actions/runs/31298945418)
 completed **successfully**; job
@@ -7749,7 +7749,23 @@ maintenance observation rather than a phase failure or a reason to change
 CI YAML inside T13.
 
 The dispatched SHA includes every code, test, normative-spec, handoff and
-retrospective change through the local close record `11f77b6`. Only this
-run-id recording and status flips under `process/` follow it. Item 16 is
-therefore satisfied for the current code tree. No merge has been performed;
-phase-to-`main` remains a separate explicit owner gate.
+retrospective change through the local close record `11f77b6`. Only run-id
+recording and status flips under `process/` follow it. This satisfies the
+T13 task close and verifies its code tree. It does **not** satisfy phase-end
+procedure item 16 after the owner selected a task-to-phase no-ff integration:
+that item requires a run whose branch is `feat/m4-phase-2` after the merge.
+
+### Phase integration after T13 (2026-08-09)
+
+After the T13 task retrospective was added as `29a36ff`, the owner-approved
+no-ff merge produced phase HEAD `b23e27e` on `feat/m4-phase-2`. The merge is
+tree-equivalent to the reviewed task branch — `git diff
+feat/m4-phase-2-t13..b23e27e` is empty — so the clean local suite and full
+independent review continue to cover the realised code tree. The branch
+itself remains local and unpushed.
+
+The phase-end retrospective and handoff are therefore returned from
+`recorded` to `closing`: their prior green run remains direct task evidence,
+but the phase branch named by item 16 still needs a separately authorized
+push and `workflow_dispatch`. No phase-to-`main` merge is authorized or
+performed.

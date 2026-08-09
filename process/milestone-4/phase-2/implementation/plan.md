@@ -1300,10 +1300,10 @@ identity:
 - [x] T13a
 
 - [x] T13
-  - Owner-authorized phase-branch CI
+  - Owner-authorized task-branch CI
     [run 31298945418](https://github.com/matarillo/wasamo/actions/runs/31298945418)
-    passed on `11f77b689bc234453d2e9ff2f6a1a540c879320a`; phase-to-`main`
-    merge remains a separate owner gate.
+    passed on `11f77b689bc234453d2e9ff2f6a1a540c879320a`. After no-ff
+    integration, phase-branch CI remains a separate phase-close gate.
 
 ---
 
