@@ -81,7 +81,7 @@ second obligation.
 | CF-T5-3, CF-T5-4, CF-T5-5, CF-T5-6 | **closed / doc-folded** — T12 observes the indicator; foreground activation is in Observation 4; T8 pins authored-key ordering around the host slot; T13 corrected §13.3. |
 | CF-T6-1, CF-T6-3, CF-T6-5 | **closed** — T7 made presence-entry reachable and fixed group click landing; T8 removed the per-kind signal-gate asymmetry. |
 | CF-T6-2, CF-T6-4 | **carry-forward** — combined group/scope semantics remain a candidate-pool question, and the cross-crate focus-container lists remain deliberately duplicated with a new-container trigger. |
-| CF-T7-1, CF-T9-1 | **carry-forward, one residual** — T9 built the nearest free/allocate shape and did not observe address reuse; that narrows but does not close the anchor ABA risk. |
+| CF-T7-1, CF-T9-1 | **re-triggered; close-blocking** — T13's cold full suite observed address reuse twice. Both times the focus record retained the new row while its focus presentation stayed false. The former “unexpected focus only” bound is falsified; repair/disposition requires an owner-approved scope change and full independent review. |
 | CF-T7-2, CF-T7-3 | **carry-forward** — direct ABI mutations still bypass the focus seam; nested-scope multi-entry integration belongs to M4-Phase 9. |
 | CF-T7-4, CF-T7-5 | **closed by phase sync** — §4.19 now fixes arrow directions and outside-scope click focus. |
 | CF-T8-1 | **candidate-pool carry-forward** — Button keyboard activation is intentionally decided with M5's keyboard-operable widget family. No implementation intent is implied. |
@@ -107,12 +107,15 @@ not reintroduced there as future work.
 
 ### 16. Actual GitHub Actions CI
 
-**Pending owner-authorized push.** The phase branch is explicitly
+**Blocked before push by CF-T7-1, then pending owner-authorized push.**
+The cold local suite exposed the address-reuse focus/presentation defect
+recorded in `implementation/log.md` §T13 and the phase is not currently
+merge-ready. The phase branch is explicitly
 unpushed, and project procedure makes push a separate owner gate. Local
-clean rebuild and the complete evidence-profile suite are recorded in
-`implementation/log.md` before requesting that authorization. This
-section will record the `workflow_dispatch` run id and result; until it
-is green, T13 and this retrospective remain `closing`, not complete.
+repair scope/disposition, a new clean complete evidence-profile suite and
+then push authorization are required in that order. This section will
+record the `workflow_dispatch` run id and result; until it is green, T13
+and this retrospective remain `closing`, not complete.
 
 ### 17. Human-visible GUI smoke
 
@@ -142,7 +145,7 @@ checks in the required order.
 | Verification closure mapping | complete above |
 | CF-* classification | complete above |
 | Handoff | written after this classification; remains part of the closing batch |
-| Local clean evidence-profile verification | pending end-gate command record |
+| Local clean evidence-profile verification | failed: CF-T7-1 address reuse made focus record and presentation disagree; repeated on the second observed reuse |
 | Actual phase-branch CI | pending owner-authorized push and run id |
 | Owner GUI smoke | complete 2026-08-09 |
 | Review lane | Normal; no T13 independent-review trigger |
