@@ -7050,20 +7050,29 @@ go and no later task to absorb it.
   attenuation table above. Placement: `carry-forward`. Re-trigger:
   **M4-Phase 9** (the top layer is a second, probably more opaque cover),
   and any phase whose evidence is "the background did not react".
-- **CF-T12-2 — a capture script's verdicts need the same red-test
-  discipline as a fixture's asserts, *and the discipline has to reach
-  the bands as well as the legs*.** 13 of 37 verdicts here could not
-  discriminate as written: 2 because a leg sampled a region the
+- **CF-T12-2 — a comparison script breaks as readily at "how the pass
+  band was built" as at the comparison itself.** 13 of 37 verdicts here
+  could not discriminate as written: 2 because a leg sampled a region the
   instrument could not see, and **11 because the band each was judged
-  against was computed from the quantity it asserts** — a shape that is
-  invisible in the leg's own text and only appears when the band's
-  definition is read beside it. A self-check pass finds the first class
-  and **cannot** find the second unless it has a row for every verdict,
-  which is why coverage is now enforced by the script rather than
-  claimed in prose. Evidence: the `-SelfCheck` pass with its
-  coverage assertion, and the three dispositions. Placement:
-  `carry-forward`. Re-trigger: the next task whose deliverable is a
-  comparison script — first candidate M4-Phase 4's scroll evidence.
+  against was computed from the quantity it asserts** — a shape invisible
+  in the leg's own text, which appears only when the band's definition is
+  read beside it. A self-check pass finds the first class and **cannot**
+  find the second unless it has a row for every verdict.
+  **This is a recorded hazard, not a proposed rule.** A carry-forward
+  under [implementation-gates.md](../../../procedures/implementation-gates.md)
+  §2 #5 is an invariant a later task could trip, recorded with evidence
+  and a re-trigger *even when no ADR changes* — and no rule covers this
+  today: [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)'s
+  red-test obligation is pure-logic only and states that it "does not
+  widen the GUI screenshot/positive-control rule", the wider version
+  having been **rejected as disproportionate** at the M4-Phase 1
+  phase-end owner decision. Widening it would need a successor record,
+  which is the owner's call and not this gate's. What this task leaves
+  instead is a **working mechanism to copy**: `-Compare` registers its
+  verdicts and `-SelfCheck` fails on any gap. Evidence: the `-SelfCheck`
+  pass with its coverage assertion, and the three dispositions.
+  Placement: `carry-forward`. Re-trigger: the next task whose deliverable
+  is a comparison script — first candidate M4-Phase 4's scroll evidence.
 - **CF-T12-3 — the frames record a behaviour no normative text
   states.** A click on a Button-family widget moves focus to it, so a
   toolbar tab ends up checked *and* focused, and §4.19 fixes the rule
