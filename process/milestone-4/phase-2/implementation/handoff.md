@@ -1,19 +1,21 @@
 ---
 title: M4-Phase 2 handoff
-status: closing
+status: recorded
 source-phase: M4-Phase 2
 date: 2026-08-09
 ---
 
 # M4-Phase 2 — Handoff
 
-> **Status: closing.** T13 distilled this document from the T1–T13 CF-*
+> **Status: recorded.** T13 distilled this document from the T1–T13 CF-*
 > ledgers after the local gate and Moment 2 implementation sync. The
 > post-merge phase-end retrospective audits the classification in
-> [phase-end.md](../retrospectives/phase-end.md); this document becomes
-> `recorded` only after the owner-authorized phase-branch CI run is green.
-> It carries constraints and open questions, not unearned acceptance
-> claims.
+> [phase-end.md](../retrospectives/phase-end.md). Owner-authorized
+> phase-branch CI
+> [run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054)
+> is green on `4b1076f4d10493f0cae662c736dc54102ffafc67`. This
+> document carries constraints and open questions, not unearned acceptance
+> claims; in particular CF-T12-5 remains an open question, not policy.
 
 ## Main learnings
 
@@ -128,10 +130,10 @@ later phase does not mistake closed work for an obligation.
 The repaired local clean rebuild, complete suite, consumer checks and full
 independent review are recorded in
 [log.md §T13a end gate](./log.md#t13a-end-gate--final-local-verification-2026-08-09).
-Actual GitHub Actions CI remains pending the owner's separate authorization
-to push the post-merge phase history. T13/T13a close on their local gate,
-Moment 2, handoff and task retrospective; the later CI result neither
-substitutes for nor reopens that task gate. After a green
-`workflow_dispatch` run, record its run id in the log and phase
-retrospective and flip this document to `recorded`. Phase→`main` merge
-remains a separate explicit owner gate.
+Owner-authorized phase-branch `workflow_dispatch`
+[run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054)
+passed on the pushed post-merge SHA
+`4b1076f4d10493f0cae662c736dc54102ffafc67`. It directly closes the
+phase-branch CI gate and does not substitute for or reopen the earlier
+T13/T13a task gate. Phase→`main` merge remains a separate explicit owner
+gate.
