@@ -7728,3 +7728,27 @@ GUI-visible presentation boundary, and its realised code, deterministic
 witness, call sites and side effects received the full review recorded
 above. T12's existing full review remains the owner of the rendered-frame
 quality claim; T13 does not widen that claim.
+
+### T13/T13a task close (2026-08-09)
+
+T13/T13a close after the replacement local gate, Moment 2 runtime/spec
+comparison, closing handoff and the separate T13 task retrospective, in
+that order. `AGENTS.md` was read at task start as required by DD-V-024,
+and `implementation-gates.md` was read again at close. The combined full
+review is complete with no blocking finding; its one low documentation
+finding was fixed before the replacement clean suite.
+
+The implementation preamble and task-plan front matter had remained
+`draft` despite T0–T13 having run under the owner-approved plan. This
+close normalizes both to the truthful in-flight state, `active`, so the
+post-merge phase-end batch can perform the specified `active` → `closing`
+transition. No phase-close status, phase retrospective or phase CI result
+is claimed on the task branch.
+
+The historical task-branch workflow run `31298945418` is supporting
+evidence for the unchanged runtime tree only. It is not the phase-branch
+run required by phase-end checklist item 16. Remaining work is owned by
+the post-merge phase-end batch: audit the phase retrospective against the
+merge commit, obtain separate authorization for the phase-branch push,
+dispatch CI on that branch, record its run id, and only after green flip
+the handoff to `recorded` and the implementation documents to `closing`.
