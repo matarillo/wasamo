@@ -7073,10 +7073,10 @@ go and no later task to absorb it.
   214.4)` and `c-fired`'s `(66.6, 66.6, 66.6)`. Placement: **T13
   re-verification item** (below), not a finding — the runtime matches
   the rule; what is unstated is the composition.
-- **CF-T12-4 — the owner smoke has not been run.** The protocol is
-  written and checked performable; the owner's pass is a separate gate
-  and its result belongs in this log when it happens. Placement:
-  `carry-forward`. Re-trigger: the phase-end merge gate.
+- **CF-T12-4 — the owner smoke. CLOSED 2026-08-09**, run against the
+  target commit with all ten steps seen as described and step 9's
+  open-ended check clean. Recorded in full at §Owner human-visible smoke
+  below. Not carried forward.
 
 **One finding, not a carry-forward** ([DD-V-030](../../../cross-milestone/decisions/dd-v-030-carry-forward-buildability.md):
 a shape with an owner is a finding). **The lightbox caption's second line
@@ -7259,3 +7259,40 @@ unexercised by it; it read 6 of the 48 frames; it did not verify start-gate
 facts 1, 2, 3, 5 or 7 independently, nor T10's frames. Those are the
 lead's measurements, taken at the start gate and during the run, and they
 stand on that rather than on the review.
+
+#### Owner human-visible smoke — run 2026-08-09, all ten steps as described
+
+The owner ran [evidence/owner-smoke/protocol.md](./evidence/owner-smoke/protocol.md)
+against the target commit and reported **every step seen as described**,
+including step 9's open-ended one: *違和感なし* — no discomfort in free
+operation, which is the only step the protocol leaves without a stated
+expectation.
+
+**CF-T12-4 closes.** The assistant baseline and the owner's pass are now
+both in hand, and neither substitutes for the other
+([CLAUDE.md §Testing rules](../../../../CLAUDE.md)): the frame set shows
+that specific state reaches specific pixels, and the smoke shows that a
+person operating the app finds it works. T12's deliverable is complete.
+
+**What this pass does and does not establish**, stated because the
+protocol's own shape bounds it:
+
+- **It is confirmation against stated expectations, not independent
+  discovery.** Every step but the last names what should be seen, because
+  an owner cannot judge a Tab order without knowing the expected order.
+  That is the confirmation-bias hazard the review's R9 narrowed boundary 5
+  around, and it is why the *discriminating* work sits in the frame set —
+  which compares measured pixels against legs that were each shown able to
+  go red — rather than here. The two are complementary in exactly that
+  direction.
+- **Step 9 is the part that could have found something unplanned**, and it
+  is the part with no expectation to confirm. It came back clean.
+- **It says nothing about touch** (framing agreement ⑥: no touch hardware;
+  T11's synthesized injection carries that half with its limit stated), and
+  nothing about the two things the protocol tells the owner not to judge —
+  the width-driven toolbar overlap (M4-Phase 4) and the picture inside the
+  lightbox (M4-Phase 3 / 4).
+- **It neither corroborates nor contradicts the truncated-caption
+  finding** above, for that last reason: the caption's second line is
+  inside the lightbox content the protocol excludes. The finding stands on
+  the frames and on `gallery.ui:167`, not on this pass.
