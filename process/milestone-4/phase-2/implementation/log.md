@@ -7086,6 +7086,43 @@ go and no later task to absorb it.
   target commit with all ten steps seen as described and step 9's
   open-ended check clean. Recorded in full at §Owner human-visible smoke
   below. Not carried forward.
+- **CF-T12-5 — whether to *oblige* a task to show its positive control's
+  comparisons can fail is a question the next phase opens, and it is
+  open.** Owner-settled 2026-08-09: **record it and decide at the next
+  phase's pre-doc — the obligation itself is not decided.** This
+  carry-forward carries the question, not an intention.
+  - **What was settled, and what was not.** Settled: the placement of
+    such a rule would not be the plan. This phase measured that
+    plan-time predictions about *verification method* fail at about the
+    rate implementation predictions do (T6's four layers, T8's lane,
+    T9's "only new IR content", T11's question itself, T12's calibration),
+    so loading more prediction into a document the process already treats
+    as a hypothesis runs against the grain. The forcing point that
+    already exists is the start gate and trap #7's close artifact. **Not
+    settled: whether any of it becomes an obligation at all.**
+  - **The material a future decision needs, recorded now so it is not
+    re-derived.** An obligation here is a **structural** change
+    ([AGENTS.md §Process rule lifecycle](../../../../AGENTS.md)): it adds
+    a review obligation, and it touches
+    [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md),
+    whose text says it "does not widen the GUI screenshot/positive-control
+    rule". DD-V-029's own revision rule requires a **successor vision
+    decision record** before extending it. Any such successor must also
+    be **narrower than the version already rejected** at the M4-Phase 1
+    phase-end owner decision ("every green or identical observation must
+    be falsified", rejected as disproportionate) — otherwise it reopens a
+    settled decision rather than extending one.
+  - **Why it is not urgent, stated so the deferral is a judgment rather
+    than a delay.** Neither the plan-side nor the gate-side version would
+    have caught this task's eleven; those came from the independent
+    review and are now bounded by a mechanical coverage check inside the
+    script. A rule change here must not be presented as the remedy for
+    them. M4-Phase 4's scroll evidence is the next task that writes a
+    comparison script, so one more measurement exists by the time the
+    question is taken up.
+  - Placement: **next-phase pre-doc input**; T13 carries it into
+    [handoff.md](./handoff.md). Re-trigger: drafting the next phase's
+    framing.
 
 **One finding, not a carry-forward** ([DD-V-030](../../../cross-milestone/decisions/dd-v-030-carry-forward-buildability.md):
 a shape with an owner is a finding). **The lightbox caption's second line
