@@ -7468,9 +7468,10 @@ new projection and sees focused id 3 survive. Because focus never becomes
 `None`, `sync_scopes_to_tree` takes neither restoration nor structural
 succession and invokes no `with_focus_write`; the freshly allocated row
 therefore never receives the focus repaint. The smallest compatible repair
-is to reconcile the retained focused id through the existing
-`with_focus_write` primitive immediately after rebase, before exit /
-succession. That preserves the already-documented pointer-identity bound
+is to reconcile the final retained focused id through the existing
+`with_focus_write` primitive after rebase and the exit / succession /
+entry decisions it feeds. That preserves the already-documented
+pointer-identity bound
 (the new row may become the unexpected focus target) while restoring the
 record/presentation invariant. A deterministic regression witness must
 force or simulate the lost-presentation state rather than rely only on
@@ -7520,3 +7521,100 @@ GUI-visible presentation transition, so the original Normal T13 lane is
 superseded for the combined close. The full review includes the narrower
 branch/test-focused review of the forced-state witness. It must examine
 the realised code and tests after the repair, not only this plan.
+
+### T13a repair evidence and structural audit (2026-08-09)
+
+Commit `428d62a` keeps pointer-anchor identity unchanged and adds one final
+presentation reconciliation at `sync_scopes_to_tree` step 6. It runs after
+restoration, structural succession and modal entry have selected the final
+focus target; placing it earlier would needlessly animate an intermediate
+same-address target that one of those operations could immediately replace.
+The write closure is empty. The existing `with_focus_write` primitive alone
+resolves the final path and calls `set_button_focused_at(..., true)`; no
+second production writer was added.
+
+#### Deterministic failure and repair witness
+
+The new mock-free Windows integration fixture uses a real window and real
+Compositor, focuses generated `row 3`, then uses one test-only seam to clear
+only that node's cached `ButtonData.focused` flag while retaining focus path
+`[2]`. Clicking a non-focusable `Box` appends `row 9` and therefore reaches
+the real reactive structural drain. Its postcondition is the complete
+derived pair: focus remains `[2]` and the node there is again `Some(true)`.
+The child-count and `row 9` assertions prove the structural drain actually
+ran rather than letting an unrelated focus write make the test green.
+
+| Realised variant | Exact command | Result |
+|---|---|---|
+| Repair present | `cargo test -p wasamo-runtime --test focus_identity_integration a_structural_rebase_reconciles_a_retained_focus_records_presentation -- --exact --nocapture` | pass |
+| Step-6 `with_focus_write` call temporarily removed, no other change | same command | **deterministic fail**: retained path `[2]`, node flag `Some(false)` instead of `Some(true)` |
+| Repair restored | same command | pass |
+| Realised integration file | `cargo test -p wasamo-runtime --test focus_identity_integration` | pass, 5 / 5 |
+| Natural allocator witness, unchanged build | exact CF-T7-1 test repeated six times | pass, 6 / 6; all six happened to be non-reuse runs and are supporting evidence only |
+
+This dispositions trap #6 without retry-to-green: the forced-state fixture
+is the gate, while the allocator-address print remains the natural-path
+observer. The test seam has exactly one call site, in that fixture; it does
+not repaint or alter the focus record, so it cannot itself perform the
+repair under test.
+
+#### Complete production call-site audit
+
+`rg "sync_scopes_to_tree\\(" wasamo-runtime/src` finds the definition and
+exactly these two production calls:
+
+| Caller | State on entry | Effect of new final reconciliation |
+|---|---|---|
+| `window::set_root` | The replaced root's focus record was reset to default; initial modal entry may then select a stop. | No-op with no focus; otherwise reasserts the stop already painted by modal entry. No root-swap identity is retained. |
+| `emit::flush_layout` Phase 2 | All reactive conditional / iteration insertions and removals have materialised; rebase, exit / succession and entry run here. | Repaints only the final retained target when its cached flag is false, including the fired same-address allocation case. |
+
+#### Structural side effects and derived-state disposition
+
+| State / effect | Disposition |
+|---|---|
+| `WindowFocus::core.focused` and `anchors` | `rebase` still writes this coordinate pair exactly as before. The empty reconciliation closure changes neither. |
+| Group memory, per-widget active items, modal stack | Unchanged by the empty closure. Restoration, succession and entry retain their previous order and algorithms. |
+| Current presentation | The final focused Button-family node is set to `focused = true`; the guard makes an already-correct flag a no-op. |
+| Previous / stale presentation | `prev_path == next_path` in the empty write, so it clears no surviving node. A removed node no longer exists. Ordinary focus transitions still clear their previous path in the same primitive. |
+| Composition animation failure | As for every existing focus write, the cached flag changes before animation and the structural seam ignores the returned error. No new rollback policy is introduced; the deterministic fixture proves the cached record/presentation invariant, not pixel delivery under a Composition failure. |
+| Pending signal queue / dirty set | The repair invokes only the focus repaint primitive and enqueues no handler or layout work. It is after the existing modal-entry pending-count assertion and does not change the drain algorithm. |
+| Pointer-address ABA | **Not closed.** A fresh same-address node may still become the unexpected retained target. T13a closes only the additional record/presentation divergence once that accepted identity rule selects the target. |
+
+Trap #7 remains non-applicable to the T13a claim: the new assertion is a
+runtime derived-state witness, not a claim that a captured frame displays a
+particular pixel. It does use the real Windows runtime and Compositor rather
+than an OS mock. T12's separately inspected frames and owner-visible smoke
+remain the phase evidence that the same focus-presentation path reaches the
+screen in ordinary use. This classification is included in the pending full
+independent review rather than treated as self-approved.
+
+A warm `cargo test --workspace` after `428d62a` passed the complete
+workspace in 55 s, including 32 `wasamo-ir` tests, 609 runtime unit tests,
+all mock-free Windows integration binaries, 480 `wasamoc` tests and 8
+round-trip tests. This is an early regression check only. T13a still owes
+the end gate's new `cargo clean` sequence, external C / Zig hosts and the
+independent-review disposition before it can be checked.
+
+### T13a full independent review (2026-08-09)
+
+An independent agent that authored none of `428d62a` read `AGENTS.md`, the
+implementation-gate procedure, the realised commit and the T13a gate. It
+independently ran the deterministic fixture (1 / 1 pass, no skip), derived
+the two production call sites and the side effects, and reported **no
+blocking correctness or test-validity finding**.
+
+The reviewer agreed that step 6 belongs after restoration, succession and
+modal entry; that the forced cached-flag / retained-path state plus a real
+structural drain discriminates the repair; and that §13.3 already owns the
+normative one-presentation-primitive rule, so no further normative edit is
+required. It also agreed with trap #7's classification only under the exact
+claim used here: derived runtime-state reconciliation through the already
+pixel-verified primitive. T13a does not claim a new captured frame for this
+path.
+
+One low documentation finding was accepted: `ButtonData.focused`'s field
+comment still named `move_focus` as `set_button_focused_at`'s sole caller,
+while the method's own comment and realised code correctly name
+`with_focus_write`. Commit `9a4610b` corrects that stale caller name. It
+changes no code or test behaviour. With that remediation, the required full
+review is complete.

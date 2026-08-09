@@ -1282,9 +1282,9 @@ identity:
 - keep the accepted pointer-anchor / rebase semantics and their bounded
   possibility that a same-address fresh node becomes the retained focus
   target;
-- after rebase, reconcile any retained focused id through the existing
-  `with_focus_write` presentation primitive before restoration /
-  structural succession;
+- after rebase and after restoration / succession / modal entry have
+  settled the final target, reconcile any retained focused id through the
+  existing `with_focus_write` presentation primitive;
 - add an allocator-independent, mock-free Windows integration witness
   that forces the equivalent state — retained focus record plus a fresh
   node's default `focused = false` presentation — and proves the
