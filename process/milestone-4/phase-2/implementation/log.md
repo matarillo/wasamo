@@ -6747,7 +6747,9 @@ the self-check pass rather than replacing the full review
 | `fd5d192` | start gate (eight measured facts, the DD-V-031 normative table, trap selection with trap #1's retraction condition, the review lane, five boundaries) |
 | `b06611e` | the capture script, its 48 frames and their README — the four controls in one sitting |
 | `18e17fb` | the owner smoke protocol |
-| (this commit) | this close gate and the T12 item revision |
+| `b7ce010` | this close gate and the T12 item revision |
+| `a41d51d` | the independent review's central finding: bands no longer computed from the quantity they judge; self-check coverage enforced by the script; region-scoped wrong pairings; the in-run guards made reachable |
+| `0d9f659` | the review record and ten prose corrections, plus the truncated-caption finding |
 
 #### Trap selection re-decided at close (plan's standing instruction)
 
