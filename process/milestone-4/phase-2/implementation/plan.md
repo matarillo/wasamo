@@ -1273,6 +1273,32 @@ leaves a different tab checked.
   decided at the **next phase's pre-doc**, and M4-Phase 2 closes with no
   rule change (owner-settled 2026-08-09, [log.md](./log.md) §T12).
 
+### T13a — CF-T7-1 focus-presentation repair (owner-authorized 2026-08-09)
+
+Added after T13's cold full suite fired the exact allocator-address reuse
+residual. This is a repair inside T13, not permission to redesign focus
+identity:
+
+- keep the accepted pointer-anchor / rebase semantics and their bounded
+  possibility that a same-address fresh node becomes the retained focus
+  target;
+- after rebase, reconcile any retained focused id through the existing
+  `with_focus_write` presentation primitive before restoration /
+  structural succession;
+- add an allocator-independent, mock-free Windows integration witness
+  that forces the equivalent state — retained focus record plus a fresh
+  node's default `focused = false` presentation — and proves the
+  structural seam repaints it; retain the stochastic allocator witness as
+  supporting evidence, not the only regression gate;
+- re-run the implementation start/end gates for the expanded runtime
+  boundary, including call-site / derived-state / side-effect artifacts,
+  and complete **full independent review** before close;
+- repeat the clean evidence-profile suite from `cargo clean`, then run the
+  remaining CMake / Zig / DSL checks. Push and actual CI remain separate
+  owner gates.
+
+- [ ] T13a
+
 - [ ] T13
 
 ---
