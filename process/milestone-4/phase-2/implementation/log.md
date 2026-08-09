@@ -7690,3 +7690,40 @@ while the method's own comment and realised code correctly name
 `with_focus_write`. Commit `9a4610b` corrects that stale caller name. It
 changes no code or test behaviour. With that remediation, the required full
 review is complete.
+
+### T13a end gate — final local verification (2026-08-09)
+
+The implementation-gate procedure was read again at close. The realised
+artifacts close traps #2 / #3 with the production call-site and structural
+side-effect tables above, #4 with the forced-state integration branch and
+its removal mutation, #5 with the narrowed handoff residual, and #6 with
+the two reuse failures followed by a deterministic repair gate. Trap #1
+remains inapplicable (no enum, schema or IR migration). Trap #7 remains
+inapplicable under the independently reviewed derived-state-only claim; no
+new path-specific pixel claim is made.
+
+Run against the repaired branch after `428d62a`, review remediation
+`9a4610b` and the repair-gate record `2871d49`:
+
+| Command | Result |
+|---|---|
+| `cargo clean` | pass; 9,537 files / 2.8 GiB removed |
+| `cargo build --release --workspace` | pass in 50.57 s; only the known import-library ordering / linker messages |
+| `cargo build --workspace` | pass in 43.08 s; same known messages; creates the uplifted debug runtime archive required before cold workspace tests |
+| `cargo test --workspace --no-fail-fast` | pass in 80.5 s; 1,271 tests, 0 failed, 0 ignored / skipped (the previous 1,270-test T12 total plus the one T13a fixture) |
+| `target\\release\\wasamoc.exe check examples\\gallery\\gallery.ui` | pass |
+| Visual Studio CMake configure + `--build build/gallery-c --config Release` | pass; regenerated `gallery.uic` / `gallery_uic.h` and produced `gallery-c.exe` |
+| quoted `zig build` ReleaseSafe invocation in `examples/gallery-zig` | pass; `gallery-zig.exe` present |
+
+The first CMake invocation by bare command name failed before configure
+because this PowerShell session has no `cmake` on `PATH`. The executable
+was found at Visual Studio 18 Community's bundled CMake path and the same
+configure/build then passed. This is a tool-resolution fact, not a rolled
+build failure. DSL and Zig were rerun individually because the initial
+parallel wrapper stopped reporting when the CMake command could not be
+resolved.
+
+T13a's authorized repair, deterministic regression gate, end-gate audit,
+full independent review and clean local evidence are therefore complete.
+Actual GitHub Actions is not claimed: the branch remains unpushed and the
+owner's separate push authorization is still required.

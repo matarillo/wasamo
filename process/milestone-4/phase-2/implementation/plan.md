@@ -1297,7 +1297,7 @@ identity:
   remaining CMake / Zig / DSL checks. Push and actual CI remain separate
   owner gates.
 
-- [ ] T13a
+- [x] T13a
 
 - [ ] T13
 
