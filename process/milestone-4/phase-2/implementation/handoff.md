@@ -37,6 +37,13 @@ not by the first frame merely showing focus on All. A comparison must
 also validate the band that judges it; whether to turn that lesson into
 a standing obligation remains deliberately open (CF-T12-5).
 
+An allocator-dependent test can be a useful residual sensor without being
+a stable regression gate. When T13's sensor finally observed address reuse,
+the implementation defect was repaired and a deterministic forced-state
+fixture was added while the natural allocator observer remained. Do not
+weaken a conditioned assertion merely because most runs do not reach its
+condition.
+
 ## Immediate intake for M4-Phase 3
 
 | Source | Input to Phase 3 framing | Re-trigger / completion |
@@ -71,7 +78,7 @@ a standing obligation remains deliberately open (CF-T12-5).
 | **CF-T4-2** | `set_button_state_at`'s equal-state guard is not independently pinned; its unique avoided effect is redundant mid-animation brush work. | Any change to Button state transition or brush animation. |
 | **CF-T4-3** | Replacing a live window root resets hover but no production example or test replaces a root after pointer input. | First live-root replacement API consumer. |
 | **CF-T6-4** | Checker and loader intentionally duplicate the seven focus-annotation container names across crates with no mechanical tie. | Any new container kind, first candidate M4-Phase 4 `Image` only if it is a container; otherwise M5's widget set. |
-| **CF-T7-1 / CF-T9-1 — re-triggered at T13** | Focus anchors are node addresses. T13's cold suite and one exact rerun both reused the freed row address. The retained focus record then named the new row while its focus presentation stayed false, falsifying the former “unexpected focus only” bound. This is a close-blocking runtime defect, not a later-phase residual that can be shipped unchanged. | Owner-approved repair scope plus full independent review; then a new clean full-suite run. The existing probabilistic fixture is the observed witness, and the repair needs a deterministic witness for record/presentation reconciliation. |
+| **CF-T7-1 / CF-T9-1 — presentation repaired at T13a; identity remainder carried** | Focus anchors remain node addresses, so allocator reuse can still make a fresh same-address node the retained focus target. T13a closes the additional divergence the cold suite exposed: after structural restoration / succession / entry, the existing single focus writer reconciles that final target's presentation. A deterministic forced-state fixture is red without the repair; full independent review and the replacement cold suite are green. | First requirement for stable logical identity across regeneration, or a user-visible wrong-target report. Do not remove the natural allocator observer or the deterministic presentation fixture while pointer anchors remain. A generation token or different identity policy requires a new decision; T13a did not select one. |
 | **CF-T7-2** | Four direct-ABI child mutators do not run the focus projection/rebase seam. Exposure is bounded because production does not read `focused_path` and ABI-created nodes cannot carry focus annotations. | First production `focused_path` reader or ABI surface for focus annotation. |
 | **CF-T8-4** | Unknown bare signal names are accepted and may never fire; the public spec deliberately leaves their diagnostic semantics unspecified instead of turning T13 into a new reject decision. | Fourth defined signal or first bug report caused by a silently misspelled handler. |
 | **CF-T9-4** | Invocation-time binder resolution has one discriminating integration test; no other test reddens if attachment-time snapshots replace it. | Any change to handler attachment, loop-scope snapshots or `ForItemHandlerEvalContext`; do not delete/narrow that test without replacement. |
@@ -116,10 +123,11 @@ later phase does not mistake closed work for an obligation.
 
 ## Merge and CI residue
 
-The local clean rebuild and complete suite are recorded in
-[log.md §T13](./log.md#t13--close-gate). Actual GitHub Actions CI remains
-pending the owner's separate authorization to push the unpushed phase
-history. After a green `workflow_dispatch` run, record its run id in the
-log and phase retrospective, flip this document to `recorded`, and only
-then mark T13 complete. Phase→`main` merge remains a separate explicit
-owner gate.
+The repaired local clean rebuild, complete suite, consumer checks and full
+independent review are recorded in
+[log.md §T13a end gate](./log.md#t13a-end-gate--final-local-verification-2026-08-09).
+Actual GitHub Actions CI remains pending the owner's separate authorization
+to push the unpushed phase history. After a green `workflow_dispatch` run,
+record its run id in the log and phase retrospective, flip this document to
+`recorded`, and only then mark T13 complete. Phase→`main` merge remains a
+separate explicit owner gate.
