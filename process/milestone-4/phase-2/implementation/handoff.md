@@ -1,17 +1,18 @@
 ---
 title: M4-Phase 2 handoff
-status: recorded
+status: closing
 source-phase: M4-Phase 2
 date: 2026-08-09
 ---
 
 # M4-Phase 2 — Handoff
 
-> **Status: recorded (phase-end 2026-08-09).** This document was written
-> after the CF-* phase-end classification in
-> [phase-end.md](../retrospectives/phase-end.md) and finalized after the
-> owner-authorized phase-branch CI run passed. It carries constraints and
-> open questions, not unearned later-phase acceptance claims.
+> **Status: closing.** This document was written after the CF-* phase-end
+> classification in [phase-end.md](../retrospectives/phase-end.md). T13's
+> task-branch CI is green, but the owner-selected no-ff integration means
+> the merged `feat/m4-phase-2` branch still owes its own phase-end CI run.
+> It carries constraints and open questions, not unearned later-phase
+> acceptance claims.
 
 ## Main learnings
 
@@ -126,9 +127,12 @@ later phase does not mistake closed work for an obligation.
 The repaired local clean rebuild, complete suite, consumer checks and full
 independent review are recorded in
 [log.md §T13a end gate](./log.md#t13a-end-gate--final-local-verification-2026-08-09).
-Owner-authorized GitHub Actions
+Owner-authorized T13 task-branch GitHub Actions
 [run 31298945418](https://github.com/matarillo/wasamo/actions/runs/31298945418)
-passed on phase HEAD `11f77b689bc234453d2e9ff2f6a1a540c879320a`, so the
-phase CI gate and T13 are complete. This run-id / status recording is the
-only later change to the handoff. Phase→`main` merge remains a separate
-explicit owner gate.
+passed on `feat/m4-phase-2-t13` HEAD
+`11f77b689bc234453d2e9ff2f6a1a540c879320a`, so T13 is complete. It is
+direct evidence for the unchanged code tree, but it is not the branch named
+by phase procedure item 16. The no-ff merge produced local phase HEAD
+`b23e27e`; `feat/m4-phase-2` still requires an owner-authorized push and
+green `workflow_dispatch` before this handoff returns to `recorded`.
+Phase→`main` merge remains another explicit owner gate.
