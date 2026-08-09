@@ -6495,3 +6495,857 @@ than as a decision the phase is done with (CF-T11-6). Nothing in the
 phase is blocked by it: AC1's touch half is closed by the two tiers that
 exist, and adding the CI-gated variant later is additive, needing a
 GitHub Actions capability probe and nothing else.
+
+---
+
+## T12 — GUI evidence with positive controls
+
+### Start gate (recorded 2026-08-09, before any capture code was written)
+
+#### Eight measured facts (probes run before writing a line of the capture script)
+
+1. **The development desktop is a single 120-DPI monitor, so this sitting
+   is at scale 1.25 throughout.** `EnumDisplayMonitors` + `GetDpiForMonitor`
+   under a harness that declared Per-Monitor-Aware V2 **and read its posture
+   back**: one monitor, `(0,0)-(2452,1291)` physical, work area
+   `(0,0)-(2452,1231)`, DPI **120**, primary. The plan item asks for "at
+   least one control (A or C) at a display scale ≠ 100%"; here **all four**
+   are, which discharges that row without a second sitting. Recorded as a
+   measurement rather than an assumption because the same probe shows how
+   easily it could be got wrong: `GetDpiForWindow(GetDesktopWindow())`
+   returns **96** on this machine. The scale must be read from the window
+   under capture, which is what T10's script already does.
+2. **The window geometry T10 used still fits, and reusing it is what keeps
+   the toolbar out of the overlap.** 1000x750 at (120,120) inside a
+   2452x1291 desktop; T10 measured the resulting client at 982x703 px =
+   785.6x562.4 DIP, at which its own frames show the toolbar's six controls
+   cleanly separated. The item's capture-width rule now has an input-side
+   reason as well (T10's G7: where the toolbar overflows, a tab
+   `ToggleButton` stops being clickable at all), and control C clicks a tab
+   `ToggleButton`, so this is load-bearing here rather than cosmetic.
+3. **The runtime has not changed on any path control A exercises since T10
+   captured it.** `git diff --stat 99af98c..ecda8d8 -- wasamo-runtime/src
+   wasamo-ir/src wasamoc/src examples/` is **one file** — `window.rs`,
+   +391/-11 — and all of it is T11's five `WM_POINTER*` arms, two new
+   helpers (`pointer_message_to_client_dip`, the claimed-member predicate)
+   and a doc rewrite on `pointer_physical`. The `WM_LBUTTONDOWN` /
+   `WM_LBUTTONUP` / `WM_MOUSEMOVE` / `WM_KEYDOWN` arms are untouched.
+   **Citing T10's control-A frames would therefore have been defensible on
+   the staleness ground**; the decision below to re-take rests on a
+   different ground, and saying so keeps the decision from resting on a
+   reason that is not true.
+4. **The gallery has four Tab stops, and the first two are already pinned
+   at the state level.** `focus-group: true` on the toolbar-left `HStack`
+   makes All / Albums / Favorites **one** stop (dsl_spec §4.19
+   `focus-group`), and `gallery_slice_integration.rs`'s G10 asserts by
+   label that one Tab focuses `All` and a second focuses `Scroll down`.
+   The thumbnails are `Box`es, not Button-family, so they are not stops
+   (§4.19 Focus). Declaration order therefore gives:
+   **[group] → Scroll down → Scroll up → Open lightbox → wrap**.
+   Screen order matches: `Cell { row: 0 column: 0 h-align: start }` puts
+   the group at the left of the client and
+   `Cell { row: 0 column: 1 h-align: end }` puts the other three at the
+   right in declaration order — so the four stops are **monotone
+   left-to-right**, which is what makes control B's ordering claim
+   measurable from the frames instead of from hand-worked pixel constants.
+5. **The lightbox has three stops and entry focuses the first.** `<`, `>`,
+   `x` in declaration order inside the lightbox `Grid`; G2 pins the entry
+   at the state level and T10's frames show the `<` Button amber. Five Tabs
+   inside the scope therefore land on `x` — deliberately more presses than
+   the scope has stops, so a leak has several chances to happen.
+6. **`Home` is a recognised key name with no handler anywhere in the
+   gallery.** `wasamo_ir::RECOGNISED_KEY_NAMES` has 22 entries and `Home`
+   is one; `examples/gallery/gallery.ui` authors `key-down("ArrowLeft")`
+   and `key-down("ArrowRight")` only; and §4.19's keys-the-runtime-keeps
+   table does not list `Home`. That is exactly what control D's re-audited
+   row asks for — a **recognised** key with no handler, so the leg
+   discriminates rather than being satisfiable by "the compiler never
+   heard of it". `Enter` is avoided deliberately: whether Button keyboard
+   activation should exist is CF-T8-1, open for T13, and a leg standing on
+   an open question is not a leg.
+7. **The scrim is `#101820cc` — alpha `cc`, not opaque — so the toolbar is
+   visible through an open lightbox.** T4 measured the consequence
+   directly (the checked `ToggleButton` entered its hovered colour
+   *through* the scrim before T4 fixed it). This matters because control
+   C's containment leg is a **no-change** claim about the toolbar band
+   while the lightbox is open, and a no-change claim through an opaque
+   cover would be vacuous. It is not taken on trust: the run measures the
+   band's observability in-flight (fact 8's sensor leg).
+8. **Control C's blocker is the lightbox `Grid`, and the geometry says why
+   a toolbar-height point reaches it.** The lightbox `Grid` is
+   stretch/stretch with `rows: 1* 44 300 64 1*`; at a 562.4 DIP client the
+   two flexible rows are 77.2 DIP each, so a point at the toolbar's
+   y ≈ 28 DIP falls in the `Grid`'s **empty** first row — no `Cell` and no
+   Button contains it, so `resolve_topmost` falls back to the `Grid`
+   itself, which carries no `clicked` handler and whose ancestor walk
+   reaches only the `modal-scope` `ZStack` (which carries `dismiss` and
+   `key-down`, not `clicked`) and the root. T10 measured the same
+   conclusion through `__resolve_topmost_for_test` (G5). Neither the
+   `Grid` nor the `ZStack` is focusable, so the blocked click must also
+   leave focus alone — which is why control C can compare **whole client**
+   rectangles rather than only the toolbar band.
+
+#### Normative statements that already answer this task (DD-V-031)
+
+This phase synchronised its normative text at Moment 1, ahead of
+implementation, so the start gate lists what already fixes the behaviour
+being measured. T12 builds no behaviour; what the table fixes is **what
+each control is entitled to assert**, and a control that asserted more
+than its section says would be evidence for a rule the project has not
+made.
+
+| Document / section | What it already fixes | Which control stands on it |
+|---|---|---|
+| dsl_spec §4.19 Per-item handlers | a binder read resolves when the handler runs, so clicking thumbnail N gives `Photo #N` | A |
+| dsl_spec §4.19 Focus | nothing focused at open; Tab / Shift+Tab in declaration order wrapping both ends; a click never clears focus | B |
+| dsl_spec §4.19 `focus-group` | an annotated container is **one** Tab stop; arrows move within it | B (why Tab ×1 is the whole strip, not `All` alone) |
+| dsl_spec §4.19 `modal-scope` | presence is the entry; Tab cycles only within the subtree; entry moves focus to the scope's first stop and remembers the previous one | C |
+| dsl_spec §4.19 "What a scope does not do" | the scope confines the **keyboard only**; a background click is stopped by a **covering widget inside the scope**, not by the scope | C — and it is why C's click leg is evidence about *occlusion*, with containment carried by C's Tab leg |
+| dsl_spec §4.19 `dismiss` / "Which keys the runtime keeps" | `Escape` while a scope is present becomes a dismissal request on the innermost one; a key that reaches the end of the walk with no handler is not consumed | D |
+| architecture.md §13.3 | the focus indicator is presentation state, not a `Visual` written at focus-change time | B (what the indicator is, hence that it can be sampled as colour) |
+
+No divergence found at this gate. One near-miss recorded rather than
+resolved: §4.19's scope section says restoration returns focus "to the
+remembered widget", and control C opens the lightbox by **clicking a
+thumbnail**, which §4.19 itself says does not move focus — so the
+remembered widget is whatever the keyboard was on beforehand. That is the
+section's own worked example, not a divergence, and it is what makes C's
+closed-before / closed-after frames comparable.
+
+#### What T12's responsibility actually is (critical re-reading of the item)
+
+The item reads as "take four frame sets". Read against the landed code
+and the three tasks that already took frames, it is narrower in one place
+and wider in two.
+
+- **Narrower: T12 is not where these behaviours are first checked.** Every
+  one of the four has a state-level twin that already passes — G1, G10,
+  G2/G3, and the `escapes_two_legs` / key-slot fixtures. What no state
+  read-back can show is that the state reaches **pixels**, and that is the
+  entire product of this task. So each control is written as "the frame a
+  wrong implementation would also produce, and the leg that separates it",
+  never as a re-assertion of the fixture.
+- **Wider (1): the legs themselves must be shown able to go red.** T11's
+  retrospective lesson (c) is the governing one here — a red-test nobody
+  has seen go red is not a red-test. A capture script's verdicts are the
+  same class of hazard as a fixture's asserts, and they are *worse*,
+  because a comparison over the wrong region or with an over-generous
+  tolerance passes silently and looks like a measurement. T12 therefore
+  owes a **self-check pass**: every verdict fed a deliberately wrong
+  pairing from its own committed frames, and shown to fail. This is not in
+  the item's text; it is what the item's text would be worth nothing
+  without.
+- **Wider (2): the sensor for control C has to be measured, not assumed.**
+  C's containment leg is a no-change claim about a region seen through a
+  semi-transparent scrim. A no-change claim is satisfied for free if the
+  region cannot register change at all. The run therefore carries a
+  **transmissivity leg**: two lightbox-open frames that differ only in
+  which tab is checked underneath must **differ** in the toolbar band. If
+  that leg fails, the containment leg is withdrawn rather than reported.
+
+#### Decisions this task makes explicitly
+
+- **Control A is re-taken, not cited** — and the ground is *not*
+  staleness, which fact 3 shows does not apply. It is that the item's own
+  alternative ("re-take them beside the other three so the set is captured
+  at one sitting") buys something the cite does not: one build, one launch,
+  one window geometry and one measured scale across all four controls, so
+  the four sets are mutually comparable and a single `-Compare` run reads
+  the whole artifact. T10's set is **cited beside it** as an independent
+  earlier sitting; two sittings agreeing on A is worth more than either.
+  The re-take is the item row's minimal shape (thumbnail N vs M, and N
+  twice, with the `[photo]` box as the localisation leg) and does **not**
+  reproduce T10's arrow-key legs, which are T10's and are cited.
+- **The order is B, A, D, C**, and it is forced rather than chosen.
+  Control B's baseline needs *nothing focused*, which only a fresh launch
+  gives (§4.19: nothing is focused when a window opens, and no authored
+  surface in this phase clears focus). Control C ends with a different tab
+  checked, which is a permanent state change, so it goes last. A and D sit
+  between because both are insensitive to a leftover toolbar focus
+  indicator: A samples the lightbox caption cell, and D compares two
+  frames that carry the same indicator.
+- **Control C opens the lightbox by clicking a thumbnail, not the "Open
+  lightbox" Button.** A `Box` thumbnail is not focusable, so the click
+  leaves focus alone and the scope's remembered widget is unchanged —
+  which is what makes C's closed-before and closed-after frames comparable
+  over the **whole client**. Opening with the Button would make the Button
+  the restore target and put a focus indicator into the comparison.
+- **Control D's unrelated key is `Home`** (fact 6).
+
+#### Trap selection (implementation-gates §1)
+
+```
+- [ ] #1 semantic migration   - [x] #2 side effects   - [x] #3 parallel data   - [x] #4 branch tests
+- [x] #5 carry-forward        - [x] #6 root cause     - [x] #7 GUI positive control
+```
+
+- **#1 semantic migration — not applicable.** No enum, IR or schema type
+  is touched; this task adds no production Rust at all. **Retraction
+  condition, stated because T10's identical judgement failed:** if any
+  leg turns out to need a fact no existing accessor exposes and the
+  answer would otherwise be *deduced*, the trap is re-selected and the
+  accessor is added as a second **caller** of production logic (T10's
+  `__resolve_topmost_for_test` shape), never as a second implementation.
+  The capture path here reads pixels rather than widget state, which is
+  why the exposure is expected to be nil rather than merely hoped to be.
+- **#2 side effects — applies, in its documentation form.** The task
+  writes prose that other documents own: the plan item, the evidence
+  README, the owner smoke protocol and this log. The derived effect to
+  enumerate is *which document each statement belongs to*.
+- **#3 parallel data — applies, in the documentation analogue the trap
+  names.** The owner smoke protocol restates behaviour whose source of
+  truth is dsl_spec §4.19, and the evidence README restates the capture
+  discipline whose source of truth is
+  [verification-environments.md](../../../../docs/notes/verification-environments.md)
+  Observation 4. Both must **cite** rather than re-state, or the phase
+  acquires a second, drifting copy of its own rules.
+- **#4 branch tests — applies, in the form the §Wider (1) reading gives
+  it.** Every verdict branch in the comparison must be shown firing under
+  a deliberately wrong input. Recorded as the self-check pass.
+- **#5 carry-forward — applies.** T12 is the last task before the close
+  gate, so anything it finds has exactly one place to go (T13 or the
+  phase handoff) and no later task to absorb it.
+- **#6 root cause — armed.** Capture runs fail for environmental reasons
+  (foreground refused, a window not yet titled — T11's CF-T11-5). A
+  re-run to green without a named cause is the failure mode; each retry
+  is recorded with what it was retried *for*.
+- **#7 GUI positive control — this is the task.** Every control ships a
+  difference leg, an agreement leg, and the measured jitter floor the two
+  are judged against.
+
+#### Review lane
+
+**Full independent review**, matching
+[preamble.md](./preamble.md)'s prediction for T12 (GUI-render evidence).
+Not corrected at this gate: the trigger the preamble names is the trigger
+that actually applies. The trap #4 branch-focused check composes in over
+the self-check pass rather than replacing the full review
+([implementation-gates.md §4](../../../procedures/implementation-gates.md)).
+
+#### Boundaries this task does not cross (and what would retract each)
+
+1. **No production Rust, and no change to `examples/gallery/gallery.ui`.**
+   Retracted only under the #1 retraction condition above, by the lead,
+   recorded at the close gate.
+2. **No re-taking of T7's or T10's committed frames.** They are cited.
+   Retracted if a leg here contradicts one of them — which would be a
+   finding, not a re-take.
+3. **The toolbar overlap is not fixed, measured or worked around.** It is
+   M4-Phase 4's ([constraints.md §6](../requirements/constraints.md)); the
+   capture width simply keeps it out of frame, and the frames record that
+   it is out of frame rather than that it is absent.
+4. **No normative text is edited.** Anything found goes to T13's
+   re-verification list, in the shape T11 used.
+5. **The owner smoke protocol prescribes no verdict the owner must
+   reach.** It says what to do and what to look at; what the owner
+   concludes is the owner's.
+
+### Close gate (recorded 2026-08-09)
+
+| commit | content |
+|---|---|
+| `fd5d192` | start gate (eight measured facts, the DD-V-031 normative table, trap selection with trap #1's retraction condition, the review lane, five boundaries) |
+| `b06611e` | the capture script, its 48 frames and their README — the four controls in one sitting |
+| `18e17fb` | the owner smoke protocol |
+| `b7ce010` | this close gate and the T12 item revision |
+| `a41d51d` | the independent review's central finding: bands no longer computed from the quantity they judge; self-check coverage enforced by the script; region-scoped wrong pairings; the in-run guards made reachable |
+| `0d9f659` | the review record and ten prose corrections, plus the truncated-caption finding |
+
+#### Trap selection re-decided at close (plan's standing instruction)
+
+**Unchanged in what applies, and one row's *content* turned out to be
+where the task's real work was.** #2, #3, #4, #5, #6 and #7 applied as
+selected; #1 stayed non-applicable and its retraction condition did not
+fire — the task wrote no production Rust, touched no `.ui`, and needed no
+new accessor, because the whole instrument reads pixels rather than
+widget state.
+
+The row that behaved differently from its prediction is **#7**. The start
+gate treated it as "this is the task" and expected the work to be
+capture mechanics. What it actually cost was **calibration**, and the
+scale of that only became clear at the independent review: of the **37**
+verdicts `-Compare` registers, **13** could not have discriminated
+anything as first written, and not one of the 13 was visible in a
+passing run. Two were caught inside the task by checks the start gate had
+armed for exactly this (§Wider (1) and (2)); the remaining **11** were
+caught by the review, and they are the same failure in a place the start
+gate did not think to look — the bands the legs are judged against were
+derived from the very quantity the jitter legs assert. Both halves are
+recorded below, and the second is the more instructive.
+
+#### #7 — GUI evidence: the four controls
+
+Script, frames and provenance:
+[capture-t12-controls.ps1](./evidence/capture-t12-controls.ps1),
+[evidence/t12-frames/](./evidence/t12-frames/). **One sitting**: one
+`cargo build --release --workspace`, one launch of
+`target\release\gallery-rust.exe`, one window at (120,120) 1000x750
+throughout, display scale **1.25** (120 DPI), **client** rectangle
+982x703 px = 785.6x562.4 DIP, **real key presses** (`keybd_event`) with
+foreground activation earned by a click and read back, and the input path
+printed into the run because the frames look identical either way. Two
+frames per set, 24 sets, 48 frames; the meta file carries the commit, the
+derived click points and a SHA-256 per file.
+
+**The measured within-set jitter was 0 at every metric, in every set.**
+Every agreement leg below is therefore byte-identical rather than merely
+inside a band — `b5` ≡ `b1`, `b3b` ≡ `b3`, `brev` ≡ `b2`, `a0` ≡ `a0b`,
+`c-openA-click` ≡ `c-openA`, `d-home` ≡ `d-open`, and six frames of
+different sets share one hash. Recorded as a measurement of this host and
+this sitting, not as a property to rely on: F-33's 13/channel tolerance
+was available and simply not needed here.
+
+| Control | Leg | Region | Result |
+|---|---|---|---|
+| **A** | DIFFERENCE caption, thumbnail 0 vs 3 | caption | **79** px over threshold, `max_channel` 206 |
+| A | AGREEMENT caption, thumbnail 0 twice | caption | 0 |
+| A | AGREEMENT `[photo]` box, thumbnail 0 vs 3 | photo | 0 |
+| **B** | DIFFERENCE stop 1 painted | toolbar | **2567**, bbox x[10..69] |
+| B | DIFFERENCE stop 2 painted | toolbar | **5547**, bbox x[564..693] |
+| B | DIFFERENCE stop 3 painted | toolbar | **4636**, bbox x[704..811] |
+| B | DIFFERENCE stop 4 painted | toolbar | **6444**, bbox x[821..971] |
+| B | monotone left-to-right, and consecutive bboxes disjoint | toolbar | PASS |
+| B | AGREEMENT wrap returns to the first stop (`b5` vs `b1`) | toolbar | 0 |
+| B | AGREEMENT traversal is deterministic (`b3b` vs `b3`) | toolbar | 0 |
+| B | AGREEMENT Shift+Tab from stop 3 returns to stop 2 | toolbar | 0 |
+| B | DIFFERENCE Shift+Tab actually moved (`brev` vs `b3`) | toolbar | **10183** |
+| **C** | SENSOR the toolbar is observable through the scrim | toolbar, open | **6964** px differing, `max_channel` 31 |
+| C | AGREEMENT a click on the covered toolbar does nothing | whole client | 0 |
+| C | AGREEMENT and it wrote no state either — checked in the clear | whole client | 0 |
+| C | DIFFERENCE the same coordinate fires with the lightbox closed | toolbar | **12373** |
+| C | DIFFERENCE the handler ran — the previously checked tab lost its colour | `All`'s bbox | **2583** |
+| C | EXCLUDE `All`'s new colour is not the checked+focused blend | `All`'s bbox | Δ 86.7 per channel |
+| C | AGREEMENT five Tabs inside the scope never reach the toolbar | toolbar, open | **0 px differing at all** |
+| C | DIFFERENCE …but they did move focus inside it | `<`/`>`/`x` columns | **4369** |
+| C | DIFFERENCE with the scope gone, one Tab reaches the toolbar | toolbar | **9729** |
+| C | AGREEMENT the world returned after open/Tab/close | whole client | 0 |
+| **D** | AGREEMENT a recognised key with no handler changes nothing | whole client | 0 |
+| D | DIFFERENCE Escape closed the lightbox | whole client | **525698** |
+| D | AGREEMENT the client returned to its pre-open state | whole client | 0 |
+
+**Read as images, not only as numbers**, by the lead:
+
+- **B is legible frame by frame.** In `b-n` no control carries an
+  indicator and `All` is the plain checked blue. In `b1` `All` alone has
+  turned pale grey, with `Albums` and `Favorites` untouched — which
+  excludes an implementation that highlights the whole annotated
+  container, and **nothing more**: a build with no `focus-group` at all,
+  three separate stops, renders `b1` identically. **`b2` is the frame
+  that carries the single-stop rule**, and it carries it in a number
+  rather than an impression: stop 2's painted bbox is `x[564..693]`,
+  which is `Scroll down`, while `Albums`' face sits near `x[80..178]`.
+  Tab left the group instead of stepping inside it. In `b4` `All` is blue
+  again and `Open lightbox` — the accent Button — is pale green. The four
+  painted bboxes land on the four controls the toolbar shows, left to
+  right, with the group counted once.
+- **C's containment is visible in a single pair.** In `c-openB` the `<`
+  Button is amber (the scope entry's indicator, on a node the same drain
+  created) and `>` / `x` are neutral. In `c-tab`, after five Tabs, `<` is
+  neutral and **`x` is amber** — the third stop, which is where 5 presses
+  over 3 stops must land. The toolbar band between those two frames is
+  byte-identical.
+- **The scrim's transparency is visible too.** `c-openA` shows `All`
+  highlighted through the scrim and `c-openB` shows `Albums`; the sensor
+  leg is a thing the eye confirms, not only the metric.
+- **A reads `Photo #0` and `Photo #3`** in the frames the numbers pair
+  up, with the `[photo]` box and every other pixel identical. A single
+  open frame could not have supported that — an implementation that
+  opened the lightbox from any click, or captured a fixed index at
+  generation time, renders the same picture.
+- In every closed frame the toolbar's six controls are **cleanly
+  separated** at this 785.6 DIP client. The width-driven overlap
+  ([constraints.md §6](../requirements/constraints.md)) is out of frame
+  here, which is what the item's capture-width rule asks the frames to
+  show rather than assert.
+
+This is the assistant baseline and does **not** replace the owner's
+human-visible smoke ([CLAUDE.md §Testing rules](../../../../CLAUDE.md)).
+
+#### The two legs that could not have discriminated anything, and what they cost
+
+Both are the same failure class in different places: **a leg that passes
+without being able to fail.** Neither was visible in a green run; both
+were found because the start gate had armed a check for them.
+
+**1. The scrim divides the background's contrast by five, and the
+containment leg was being judged with an instrument that could not see
+through it.** Control C's central claim — five Tabs inside the scope
+never reach the toolbar — is a *no-change* claim about a region behind a
+semi-transparent cover, and a no-change claim is satisfied for free if
+the region cannot register change. The sensor leg (§Wider (2)) measured
+it and failed:
+
+| | `max_channel` | px differing at all | px over the 60-summed bar |
+|---|---:|---:|---:|
+| unscrimmed, `All`'s face, checked → unchecked | 157 | 2608 | 2583 |
+| **scrimmed**, same face, same change | **31** | **2608** | **0** |
+
+`px_differing_at_all` is *identical*: the scrim hides nothing. It divides
+contrast by **5.06**, against the **5.00** that `1/(1-0.8)` predicts from
+the alpha in the gallery's own `fill: #101820cc` (`cc` = 204/255) — a
+1.2% gap, consistent with quantisation (157 × 0.2 = 31.4 → 31), which is
+close enough to identify the mechanism and not close enough to call the
+two numbers equal. The 60-summed bar exists to clear F-33's text jitter
+on *unscrimmed* frames, and under the scrim it cannot see a real change
+at all.
+
+**Disposition: the two lightbox-open toolbar-band legs are judged on
+`px_differing_at_all`.** This is a **tightening** — the agreement bar
+moves from "under 40 px over a 60-summed threshold" to "under 40 px
+differing by *any* amount", and the leg meets it at **0** — and it is
+recorded on the plan item so a later reader does not "correct" it back.
+Every other leg keeps the original metric untouched.
+
+The proxy is **argued** conservative rather than shown: the
+focus-indicator swing covers the **same 2608-pixel button face** at
+`max_channel` 97 *unscrimmed*, and the attenuation table above measures
+that the scrim leaves `px_differing_at_all` untouched, so an indicator
+appearing on a toolbar stop under the scrim would register on this
+metric. A *scrimmed* focus-indicator swing is measured nowhere and
+cannot be in this design — it is the thing containment denies. The
+inference is sound; it is an inference.
+
+**2. "The same coordinate fires" cannot be read off the button that was
+clicked.** The leg first identified the fired click by re-finding the
+checked ToggleButton's blue on the clicked tab. It found **0 px**.
+Measured cause: a click on a Button moves focus to it (§4.19 Focus), so
+`Albums` ends up checked *and focused*, whose rendered colour is a third
+blend again — and control B had already measured that blend, at
+`(143.8, 153.2, 149.5)` on `b1`.
+
+**Disposition: the leg moves to `All`** — the *previously* checked tab,
+never clicked and never focused in this sequence, so only the handler's
+`tab_all_selected = false` can change its face. Measured: `(52.4, 121.2,
+214.4)` → `(66.6, 66.6, 66.6)`. Re-tuning the predicate was rejected:
+that would have made the leg depend on a colour blend rather than on a
+behaviour. The one look-alike that could otherwise explain a colour
+change at `All` without the handler running — focus landing there — is
+excluded against `b1`'s own measurement, 86.7 per channel away.
+
+#### #4 — every verdict shown able to go red (the branch-test artifact)
+
+`-SelfCheck` feeds every verdict a deliberately wrong pairing drawn from
+the same committed frames and requires each to fail. It calls the same
+`Assert-*` functions the real pass calls, so it exercises the shipped
+predicate rather than a copy. **`-Compare` registers 43 verdicts;
+`-SelfCheck` exercises 45 rows — the 43 plus the two in-run guards
+`-Compare` never touches — and it fails the run if any registered verdict
+has no row.** Result: 45/45 fired red, coverage complete, exit 0.
+
+**The coverage is enforced by the script rather than asserted here, and
+that is the review's doing.** The first version of this pass covered 23
+of 37 verdicts while three documents called it "every", and the 14 it
+left out were exactly the ones that could not have gone red — the
+tautological jitter legs plus three unwritten stop rows. A prose claim
+about coverage is the same hazard as a leg nobody has seen fail, one
+level up. It is now a check.
+
+**Each DIFFERENCE row's wrong pairing is classified `region-scoped` or
+`degenerate`, and the split is printed**: 11 region-scoped, 1 degenerate
+of 12. A degenerate row — two byte-identical frames — proves only that
+`0 > 40` is false; it cannot catch a mis-specified region, which is
+precisely the hazard this pass exists for. So each row is now fed two
+frames that differ **elsewhere but not in the sampled region**: `a0` vs
+`a3` for the toolbar legs (they differ only in the lightbox caption),
+`b1` vs `b2` for the caption leg (they differ only in the toolbar),
+`c-openB` vs `c-tab` for the sensor, `b2` vs `b3` for `All`'s bbox,
+`c-openA` vs `c-openB` for the lightbox columns. Each pairing's claimed
+property was measured before it was wired in. The one degenerate row is
+`D Escape closed the lightbox`, and it is degenerate necessarily: its
+region is the whole client, so any two frames that differ at all differ
+inside it. The output says that rather than leaving it looking like an
+oversight.
+
+Two rows are worth naming:
+
+- **C containment** (wrong pairing `c-openA` vs `c-openB`) *falsely
+  passed* under the original metric — the symptom of finding 1 showing
+  up a second time, resolved by the metric rather than by editing the
+  row.
+- **The six noise-floor rows**, fed a genuinely differing pair, report
+  `max_channel` 191–208 against the limit of 13 and fail. Under the
+  bands this task first shipped, the equivalent legs could not have
+  failed at all.
+
+This is the T11 retrospective's lesson (c) applied to a capture script:
+its verdicts are the same hazard class as a fixture's asserts, and worse,
+because a comparison over the wrong region — or against a band derived
+from itself — passes silently and *looks* like a measurement.
+
+#### #2 / #3 — side effects and parallel data, in their documentation form
+
+The task writes no state, so both traps apply in the form the catalog
+names for documentation work: a second source of truth in derived prose.
+Enumerated, with where each statement's owner is:
+
+| Statement | Owner | How this task avoids a second copy |
+|---|---|---|
+| what a modal scope confines, what `focus-group` means, what a click does to focus | dsl_spec §4.19 | the script header and the frames README **cite** §4.19; the owner protocol names behaviours in plain Japanese without restating the rule text |
+| capture mechanics (PMv2 read-back, CopyFromScreen, client rectangle, foreground earned) | [verification-environments.md](../../../../docs/notes/verification-environments.md) Obs 4 | cited by name in the script header and the README; not restated |
+| the width-driven toolbar overlap and its owner | [constraints.md §6](../requirements/constraints.md) | the protocol tells the owner not to judge it and links the constraint |
+| T10's control-A frames and their numbers | [evidence/t10-frames/](./evidence/t10-frames/) | linked, never re-tabulated here |
+| the scrim attenuation and the metric it forces | **this task** | stated once in the plan item, once in the script header, and measured in the `-Compare` output — the output is the source, the prose points at it |
+
+No `.uic`, no schema, no parallel index exists in this task's outputs.
+
+#### The owner smoke protocol, checked performable at the target commit
+
+[evidence/owner-smoke/protocol.md](./evidence/owner-smoke/protocol.md),
+in Japanese because the owner runs it (the Phase 1 T11 shape; the record
+side stays English). The framing requires it to be "verified against the
+target commit before it is used", and the verification is this mapping —
+every step is performable at `fd5d192` because something at that commit
+already exercises it:
+
+| Step | What makes it performable at this commit |
+|---|---|
+| 0 nothing focused at open | `b-n`, this task's own frame |
+| 1 Tab order, the strip as one stop, wrap, Shift+Tab | `b1`–`b5`, `brev`; G10 part 1 |
+| 2 arrows inside the group | G10 part 2 |
+| 3 which thumbnail opened it | `a0` / `a3` / `a0b`; G1, G2 |
+| 4 covered click does nothing, then fires when closed | `c-openA-click`, `c-blocked`, `c-fired`; G5 |
+| 5 Tab contained inside the lightbox | `c-openB` vs `c-tab` |
+| 6 ← → and the `<` / `>` Buttons step the caption | T10's `k5` / `k6` / `k4`; G4, G8 |
+| 7 `Home` does not close, `Esc` does, `x` does | `d-home`, `d-closed`; G9 |
+| 8 focus restores after close | G3 leg (b) |
+| 9 free operation | the host launches and survives the whole capture run |
+
+**What the protocol does and does not leave open, stated precisely**
+because the start gate's boundary 5 ("prescribes no verdict the owner
+must reach") is looser than the artifact. The protocol **does** state
+what should be seen at each step — it has to, since an owner cannot
+judge a Tab order without knowing which order is expected — and that is
+expectation-setting, the standard confirmation-bias hazard of a human
+pass. What it leaves open is the **conclusion**: it asks the owner to
+record "seen / not seen / seen differently, and how", never to sign off
+a pass, and it says in its own closing paragraph that where the
+observation and the expectation disagree it does not decide which is
+right. Boundary 5 holds in that narrower sense and not in the wider one
+it was written in.
+
+#### #6 — deterministic failure, root-caused rather than re-rolled
+
+Two failing legs, neither re-run to green. Each was reproduced, measured
+at the pixel level by the lead independently of the agent that wrote the
+script, root-caused to a physical fact (the scrim's own alpha; the
+click-moves-focus rule), and dispositioned above. **No threshold was
+loosened**: one leg's metric changed to a strictly stricter one and one
+leg moved to a region where its claim is unambiguous.
+
+The capture run itself needed no retry: the window-polling loop replaced
+the fixed three-second wait CF-T11-5 recorded, and every in-run guard
+(the whole-client diff after each open and each Escape) passed on the
+first attempt.
+
+#### #5 — carry-forward
+
+T12 is the last task before the close gate, so each item has one place to
+go and no later task to absorb it.
+
+- **CF-T12-1 — a semi-transparent cover silently disables a
+  visible-change threshold.** Any later no-change claim about a region
+  behind a scrim, an overlay or a top layer needs its own sensor leg and
+  its own metric; the attenuation factor is the cover's alpha complement
+  and is derivable from the `.ui` rather than guessed. Evidence: the
+  attenuation table above. Placement: `carry-forward`. Re-trigger:
+  **M4-Phase 9** (the top layer is a second, probably more opaque cover),
+  and any phase whose evidence is "the background did not react".
+- **CF-T12-2 — a comparison script breaks as readily at "how the pass
+  band was built" as at the comparison itself.** 13 of 37 verdicts here
+  could not discriminate as written: 2 because a leg sampled a region the
+  instrument could not see, and **11 because the band each was judged
+  against was computed from the quantity it asserts** — a shape invisible
+  in the leg's own text, which appears only when the band's definition is
+  read beside it. A self-check pass finds the first class and **cannot**
+  find the second unless it has a row for every verdict.
+  **This is a recorded hazard, not a proposed rule.** A carry-forward
+  under [implementation-gates.md](../../../procedures/implementation-gates.md)
+  §2 #5 is an invariant a later task could trip, recorded with evidence
+  and a re-trigger *even when no ADR changes* — and no rule covers this
+  today: [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)'s
+  red-test obligation is pure-logic only and states that it "does not
+  widen the GUI screenshot/positive-control rule", the wider version
+  having been **rejected as disproportionate** at the M4-Phase 1
+  phase-end owner decision. Widening it would need a successor record,
+  which is the owner's call and not this gate's. What this task leaves
+  instead is a **working mechanism to copy**: `-Compare` registers its
+  verdicts and `-SelfCheck` fails on any gap. Evidence: the `-SelfCheck`
+  pass with its coverage assertion, and the three dispositions.
+  Placement: `carry-forward`. Re-trigger: the next task whose deliverable
+  is a comparison script — first candidate M4-Phase 4's scroll evidence.
+- **CF-T12-3 — the frames record a behaviour no normative text
+  states.** A click on a Button-family widget moves focus to it, so a
+  toolbar tab ends up checked *and* focused, and §4.19 fixes the rule
+  ("a click moves focus to the nearest focusable widget at or above")
+  without saying that the two presentation states compose. Evidence:
+  `b1`'s `(143.8, 153.2, 149.5)` against `c-closed`'s `(52.4, 121.2,
+  214.4)` and `c-fired`'s `(66.6, 66.6, 66.6)`. Placement: **T13
+  re-verification item** (below), not a finding — the runtime matches
+  the rule; what is unstated is the composition.
+- **CF-T12-4 — the owner smoke. CLOSED 2026-08-09**, run against the
+  target commit with all ten steps seen as described and step 9's
+  open-ended check clean. Recorded in full at §Owner human-visible smoke
+  below. Not carried forward.
+- **CF-T12-5 — whether to *oblige* a task to show its positive control's
+  comparisons can fail is a question the next phase opens, and it is
+  open.** Owner-settled 2026-08-09, in two parts. **(i) No rule this
+  time.** M4-Phase 2 closes with no rule change: no edit to
+  [implementation-gates.md](../../../procedures/implementation-gates.md),
+  no successor to DD-V-029, no new obligation on any task in this phase.
+  Nothing has to be reverted for that to be true — the start gate's
+  boundary 4 held, and this task edited no normative or process text.
+  **(ii) The question is carried, and decided at the next phase's
+  pre-doc.** This carry-forward carries the question, not an intention:
+  **the deferral is not an implied yes**, and the next phase may as
+  properly answer "no rule" as "rule".
+  - **What was settled, and what was not.** Settled: the placement of
+    such a rule would not be the plan. This phase measured that
+    plan-time predictions about *verification method* fail at about the
+    rate implementation predictions do (T6's four layers, T8's lane,
+    T9's "only new IR content", T11's question itself, T12's calibration),
+    so loading more prediction into a document the process already treats
+    as a hypothesis runs against the grain. The forcing point that
+    already exists is the start gate and trap #7's close artifact. **Not
+    settled: whether any of it becomes an obligation at all.**
+  - **The material a future decision needs, recorded now so it is not
+    re-derived.** An obligation here is a **structural** change
+    ([AGENTS.md §Process rule lifecycle](../../../../AGENTS.md)): it adds
+    a review obligation, and it touches
+    [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md),
+    whose text says it "does not widen the GUI screenshot/positive-control
+    rule". DD-V-029's own revision rule requires a **successor vision
+    decision record** before extending it. Any such successor must also
+    be **narrower than the version already rejected** at the M4-Phase 1
+    phase-end owner decision ("every green or identical observation must
+    be falsified", rejected as disproportionate) — otherwise it reopens a
+    settled decision rather than extending one.
+  - **Why it is not urgent, stated so the deferral is a judgment rather
+    than a delay.** Neither the plan-side nor the gate-side version would
+    have caught this task's eleven; those came from the independent
+    review and are now bounded by a mechanical coverage check inside the
+    script. A rule change here must not be presented as the remedy for
+    them. M4-Phase 4's scroll evidence is the next task that writes a
+    comparison script, so one more measurement exists by the time the
+    question is taken up.
+  - Placement: **next-phase pre-doc input**; T13 carries it into
+    [handoff.md](./handoff.md). Re-trigger: drafting the next phase's
+    framing.
+
+**One finding, not a carry-forward** ([DD-V-030](../../../cross-milestone/decisions/dd-v-030-carry-forward-buildability.md):
+a shape with an owner is a finding). **The lightbox caption's second line
+is rendered truncated.** `examples/gallery/gallery.ui:167` authors
+`"Box 4:3 placeholder; the Image widget and the photo name land later in
+M4"`; every lightbox frame in this set renders it ending at `…the photo
+name land`. The rendered run spans roughly x 240–737 px = 497 px, which
+is the caption cell's own width (`columns: 1* 56 400 56 1*`, 400 DIP =
+500 px at 1.25), so the line is laid out to the cell and stops — with no
+ellipsis and nothing to tell an author it happened.
+
+**Not a T12 regression, and not a T12 defect**: T10's committed
+`t10-item-identity-a0.png` shows the identical truncation, so it predates
+this task and went unnoticed there too. It is recorded here because this
+task is the one that read the frames closely enough to see it. **Owner:
+M4-Phase 4**, which owns what a container does when its children do not
+fit ([constraints.md §6](../requirements/constraints.md), framing
+agreement ④) — the same question one level down, for a single `Text`
+inside a fixed track rather than for a `Row`. The status strip at the
+bottom of the same frames is *not* truncated, so the behaviour is
+specific to content wider than its track, not general to long text.
+
+#### Re-audit of the whole task list (cross-task obligation)
+
+Read T13 and the cross-task obligations again at close, not only T12's
+own item.
+
+- **T13** gains **one** re-verification item, from CF-T12-3: §4.19 fixes
+  the click-moves-focus rule and §13.3 fixes what the focus indicator
+  is, but **no section says the presentation states compose** — that a
+  checked `ToggleButton` which is also focused renders a third
+  appearance distinct from both. M4 has only a background change to
+  express any of them, and DD-M4-P2-003 requires focus to be visibly
+  distinct from selected *and* hovered, which this frame set measures
+  and satisfies. T13 decides only whether §13.3 gains the sentence; the
+  runtime is not in question.
+- **T13** also inherits a **confirmation rather than a repair**: the
+  T12 frames are the rendered evidence for §4.19's traversal order,
+  `focus-group` single-stop rule, scope containment, restoration and
+  `dismiss`, so its Moment 2 re-verification of those clauses has
+  something to check against rather than only a fixture name.
+- **Cross-task obligations** — no new ABI function (framing agreement ⑦
+  holds trivially: this task adds a PowerShell script and Markdown, and
+  no Rust at all). The stretch checkpoint is unaffected. The re-audit
+  discipline itself is what produced CF-T12-3, which no leg was aimed at
+  and which fell out of reading `b1` beside `c-fired`.
+- **Nothing in T12 makes any normative statement false.** Every leg
+  agreed with §4.19.
+
+#### Review lane
+
+**Full independent review**, as
+[preamble.md](./preamble.md) predicted for T12 and the start gate
+confirmed (GUI-render evidence). Not corrected at either gate. The trap
+#4 branch-focused check composes in over the `-SelfCheck` pass rather
+than replacing the full review. **The close gate was written before the
+review**, keeping
+[implementation-gates.md](../../../procedures/implementation-gates.md)
+§0's order.
+
+#### Verification
+
+`cargo fmt --all -- --check` zero exit; `git diff --check` clean. Clean
+rebuild in both profiles: `cargo clean` (6,652 files / 2.4 GiB removed)
+→ `cargo build --release --workspace` (47.20s, zero exit) →
+`cargo build --workspace` (35.46s, zero exit) →
+`cargo test --workspace --no-fail-fast` **zero exit**, **1,270 passed,
+0 failed, 0 ignored** across **51 sections** (46 test binaries + 5
+doc-test sections), with **zero** `test result: FAILED` blocks —
+`wasamo_runtime` unit 609, `gallery_slice_integration` 10,
+`touch_pointer_integration` 10. Counted in **sections**, the unit every
+earlier gate in this phase used, so the figure is comparable to the
+series it sits in: T10 recorded 50 / 1,258 and T11 added
+`touch_pointer_integration.rs` (10) plus two `window.rs` unit tests.
+T12 adds no Rust, so the delta is zero and the reconciliation is exact.
+
+This is a **regression check, not evidence** that the controls are
+right ([preamble.md §What "green" is worth](./preamble.md)): no test in
+the suite routes an event through a real window and a rendered frame,
+which is the whole reason this task exists. The evidence is the frame
+set and its two comparison passes.
+
+`-Compare` and `-SelfCheck` were each re-run by the lead independently
+of the agent that wrote the script, against the committed frames: exit 0
+and exit 0, with every number reproducing.
+
+#### Independent review, and the defect it found that the close gate had missed
+
+Performed by a subagent that wrote none of the code and had not seen the
+capture run, over the whole branch diff plus the start gate, the plan
+item, DD-M4-P2-001–005, §4.19 and Observation 4. It re-ran `-Compare`
+and `-SelfCheck`, read six of the frames as images, and ran one
+non-invasive experiment against a scratch copy of the frame set.
+
+**Fourteen findings. Eleven taken, one narrowed, two carried.** The
+lead re-measured every one rather than accepting it as reported.
+
+**The one that matters — R1: a band computed from the quantity it
+judges.** Each region's pass band was `max(measured within-set noise × 4,
+floor)`, and the eleven "two frames with no input agree within the
+measured jitter" legs were then compared against it. Since a leg's own
+value is bounded by the maximum the band is built from, **no frame set
+could ever fail them.** The reviewer did not stop at deriving that: it
+copied the 48 frames to a scratch directory, painted 2,000 magenta pixels
+into `b-n-1`'s toolbar band, and re-ran — the jitter leg **passed** with
+gross jitter present while all four control-B difference legs went red,
+because the inflated band had propagated to every leg in that region. A
+noisy sitting would therefore have destroyed the real claims and
+certified the noise.
+
+This is the same failure as the task's own two findings — a leg that
+passes without being able to fail — in the one place the start gate's
+§Wider (1) reading did not reach. That reading armed a check on the
+**legs**; nothing armed a check on the **bands**. The self-check pass
+could not have found it either, because the eleven legs had no
+self-check row, and they had no row for the same reason they could not
+fail. **Two blind spots that hid each other**, which is why an
+independent reader found it and neither gate did.
+
+Remediation, all four defects, verified by the lead re-running both
+passes: every band is now a **chosen constant with a stated reason**, and
+the measured noise is a **checked quantity** — a six-row pre-flight gate
+requiring each region's within-set jitter to sit inside F-33's 13/channel
+with no pixel over the visible-change bar, failing the run rather than
+absorbing the noise into a band; the eleven jitter legs judge against
+those same independent constants; `-SelfCheck` covers all 43 registered
+verdicts plus the two extracted in-run guards, with coverage enforced by
+the script; and the DIFFERENCE rows use region-scoped wrong pairings.
+`-Compare` 43/43 and `-SelfCheck` 45/45, both exit 0, with **every
+measured number unchanged** — the frames were not re-captured and did not
+need to be, because the defect was in how the numbers were judged, not in
+the numbers.
+
+**Ten further findings taken, all in this log or the plan:** the
+"fourteen legs" denominator did not reproduce (it is 13 of 37, and the
+distinction between the 2 the task found and the 11 the review found is
+the interesting part); "the measurement and the `.ui` agree to two
+decimal places" was false (5.06 against 5.00, a 1.2% gap consistent with
+quantisation); the prose in three documents described a stricter
+threshold than the code implements; "the proxy is **shown** conservative"
+was an inference stated as a measurement; the suite figure changed
+counting unit mid-series (46 binaries against the phase's 51 sections);
+`-SelfCheck`'s DIFFERENCE rows were all degenerate; the in-run guards
+were unreachable verdict branches; the bands were picked constants
+described as measurements; and the link between the capture geometry and
+the geometry an owner gets by not resizing the window was real but stated
+nowhere. Each is corrected in place above.
+
+**R6 is the one worth naming separately, because it is a defect in the
+lead's own reading of the evidence.** The close gate claimed `b1` — `All`
+alone turning pale, `Albums` and `Favorites` untouched — showed what
+`focus-group: true` means. It does not: a build with **no** grouping at
+all, three separate stops, renders `b1` identically. What carries the
+single-stop rule is `b2`, whose painted bbox is `x[564..693]` = `Scroll
+down` while `Albums`' face sits near `x[80..178]`. The evidence was
+present and cited against the wrong frame. Corrected above. A frame that
+*looks* like the property is not the frame that *distinguishes* it —
+which is the trap #7 principle turned on the analysis rather than on the
+capture.
+
+**One narrowed (R9).** The reviewer read boundary 5 ("the owner smoke
+protocol prescribes no verdict") as in tension with a protocol whose
+every step states what should be seen. Correct, and the boundary's wording
+was the loose half: the protocol must state expectations or an owner
+cannot judge a Tab order at all. Boundary 5 is restated above in the
+sense that is true — the protocol leaves the **conclusion** open, not the
+expectation.
+
+**Two carried as observations rather than corrections.** Control A's
+caption difference has the thinnest margin in the set (79 against a band
+of 40) and is the one text-only region, so it is the leg most exposed to
+a future sitting with real F-33 jitter — now bounded by the noise gate,
+which fails such a sitting instead of widening the band under it. And the
+reviewer noticed the truncated lightbox caption independently of the
+lead, which is recorded as a finding with M4-Phase 4 above.
+
+**What the review did not check, in its own words:** it did not run
+`-Capture`, so the guards, `Try-Activate` and the capture sequence are
+unexercised by it; it read 6 of the 48 frames; it did not verify start-gate
+facts 1, 2, 3, 5 or 7 independently, nor T10's frames. Those are the
+lead's measurements, taken at the start gate and during the run, and they
+stand on that rather than on the review.
+
+#### Owner human-visible smoke — run 2026-08-09, all ten steps as described
+
+The owner ran [evidence/owner-smoke/protocol.md](./evidence/owner-smoke/protocol.md)
+against the target commit and reported **every step seen as described**,
+including step 9's open-ended one: *違和感なし* — no discomfort in free
+operation, which is the only step the protocol leaves without a stated
+expectation.
+
+**CF-T12-4 closes.** The assistant baseline and the owner's pass are now
+both in hand, and neither substitutes for the other
+([CLAUDE.md §Testing rules](../../../../CLAUDE.md)): the frame set shows
+that specific state reaches specific pixels, and the smoke shows that a
+person operating the app finds it works. T12's deliverable is complete.
+
+**What this pass does and does not establish**, stated because the
+protocol's own shape bounds it:
+
+- **It is confirmation against stated expectations, not independent
+  discovery.** Every step but the last names what should be seen, because
+  an owner cannot judge a Tab order without knowing the expected order.
+  That is the confirmation-bias hazard the review's R9 narrowed boundary 5
+  around, and it is why the *discriminating* work sits in the frame set —
+  which compares measured pixels against legs that were each shown able to
+  go red — rather than here. The two are complementary in exactly that
+  direction.
+- **Step 9 is the part that could have found something unplanned**, and it
+  is the part with no expectation to confirm. It came back clean.
+- **It says nothing about touch** (framing agreement ⑥: no touch hardware;
+  T11's synthesized injection carries that half with its limit stated), and
+  nothing about the two things the protocol tells the owner not to judge —
+  the width-driven toolbar overlap (M4-Phase 4) and the picture inside the
+  lightbox (M4-Phase 3 / 4).
+- **It neither corroborates nor contradicts the truncated-caption
+  finding** above, for that last reason: the caption's second line is
+  inside the lightbox content the protocol excludes. The finding stands on
+  the frames and on `gallery.ui:167`, not on this pass.
