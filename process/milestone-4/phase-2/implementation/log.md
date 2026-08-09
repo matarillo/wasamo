@@ -7499,3 +7499,57 @@ and phase-close records. It contains no runtime, IR/schema migration,
 diagnostic/reject/size branch, or new GUI evidence. Thus no full or narrow
 independent-review trigger was added by T13; T12's existing full review is
 the owner of the rendered-evidence quality claim.
+
+### End-gate attempt 1 — CF-T7-1 re-triggered (2026-08-09)
+
+The required cold sequence reached a real phase residual rather than a
+documentation failure:
+
+| Command | Result |
+|---|---|
+| `cargo clean` | pass; 329 files / 180.0 MiB removed |
+| `cargo build --release --workspace` | pass in 61.3 s; only the known `wasamo-sys` import-library ordering warning and linker import-library message |
+| `cargo build --workspace` | pass in 48.3 s; same warnings |
+| `cargo test --workspace` | **fail** in `focus_identity_integration::a_for_regeneration_that_frees_and_allocates_leaves_a_consistent_focus_record` after the preceding suites passed (including 32 `wasamo-ir` and 609 runtime unit tests) |
+
+The failing run freed the focused row at `0x294cae60990` and allocated
+row 9 at the **same address** in the same message. `WindowFocus::rebase`
+therefore matched the stale anchor to the new node and retained focus path
+`[3]`, but the new node's presentation flag was `Some(false)`. The focus
+record and its painted indicator — documented as a derived pair with one
+writer — were inconsistent.
+
+Trap #6 is active. Three exact reruns against the unchanged build produced
+**pass, pass, fail**, and each outcome matched the allocator observation:
+
+| Exact rerun | Address reuse | Result |
+|---|---:|---|
+| 1 | false (`0x1819cf4bf90` → `0x1819cf4d090`) | pass |
+| 2 | false (`0x2913d6eafb0` → `0x2913d6ecc60`) | pass |
+| 3 | true (`0x1995196d240` → same) | **same assertion failure** |
+
+This is not a retry-to-green flake: address reuse is nondeterministic, but
+the failure is deterministic whenever reuse occurs (two observed reuse
+runs, two identical failures). It fires CF-T7-1's exact re-trigger and
+falsifies its former bound that reuse could only choose an unexpected
+focus target while keeping the record/presentation pair consistent.
+
+Static diagnosis: `WindowFocus::rebase` remaps ids by pointer, adopts the
+new projection and sees focused id 3 survive. Because focus never becomes
+`None`, `sync_scopes_to_tree` takes neither restoration nor structural
+succession and invokes no `with_focus_write`; the freshly allocated row
+therefore never receives the focus repaint. The smallest compatible repair
+is to reconcile the retained focused id through the existing
+`with_focus_write` primitive immediately after rebase, before exit /
+succession. That preserves the already-documented pointer-identity bound
+(the new row may become the unexpected focus target) while restoring the
+record/presentation invariant. A deterministic regression witness must
+force or simulate the lost-presentation state rather than rely only on
+allocator reuse.
+
+That repair is **not silently taken**. It crosses T13's recorded no-runtime
+boundary, changes the structural focus seam and therefore changes the
+review lane to **full independent review**. The remaining local suites and
+the push/CI request are paused pending the owner's choice: add a gated
+repair task before close, or stop phase close and route the repair to a
+separate task. T13 remains unchecked and no completion claim is made.
