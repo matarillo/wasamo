@@ -20,6 +20,14 @@ display scale **1.25** (120 DPI), **client** rectangle 982x703 px =
 a click and read back. The meta file also carries the SHA-256 and the
 derived click points, so the artifact records its own provenance.
 
+That 1000x750 is **not an arbitrary pin**: the runtime realises the
+gallery's 800x600 DIP window as 1000x750 physical at this scale, so the
+size the script fixes is the size the app opens at. An owner who follows
+[owner-smoke/protocol.md](../owner-smoke/protocol.md) and does not resize
+the window is therefore looking at the same client these frames show —
+which is what keeps the protocol's click positions valid and keeps the
+width-driven toolbar overlap out of both.
+
 The numeric legs and the assistant's reading of these images are in
 [log.md](../../log.md) §T12 close gate.
 
@@ -49,10 +57,19 @@ the alpha predicts — while `px_differing_at_all` is **2608 either way**.
 The scrim does not hide the toolbar; it dims it below the 60-summed
 "visible change" bar the other legs use. So control C's two
 lightbox-open toolbar-band legs are judged on `px_differing_at_all`
-against a floor measured from those sets' own frame pairs. That is a
-**tightening** — the agreement bar becomes "no pixel differs by any
-amount" — and it is why the sensor leg exists at all: a no-change claim
-about a region the instrument cannot see would have been unfalsifiable.
+instead. That is a **tightening** — the agreement bar moves from "under
+40 px over a 60-summed threshold" to "under 40 px differing by *any*
+amount", and the leg meets it at 0 — and it is why the sensor leg exists
+at all: a no-change claim about a region the instrument cannot see would
+have been unfalsifiable.
+
+**The bands are chosen constants, and the noise is checked against an
+independent tolerance rather than feeding them.** An earlier version
+computed each band from the measured within-set jitter, which made the
+"two frames with no input agree" legs compare a quantity against a
+multiple of itself. Every band is now fixed with a stated reason, and a
+sitting whose jitter exceeds F-33's 13/channel fails the run instead of
+widening the bands it is supposed to be judged by.
 
 **A click on a Button moves focus, so "the click fired" cannot be read
 off the button that was clicked.** After the `Albums` click that button
@@ -84,9 +101,20 @@ powershell.exe -NoProfile -STA -File capture-t12-controls.ps1 -SelfCheck
 Windows PowerShell 5.1, not `pwsh` 7 — `System.Drawing`.
 
 `-SelfCheck` is the artifact that makes the rest of them worth reading:
-it feeds **every** verdict a deliberately wrong pairing drawn from these
-same committed frames and requires each one to fail. A leg nobody has
-seen go red is not a leg (M4-Phase 2 T11 retrospective, lesson c).
+it feeds every verdict a deliberately wrong pairing drawn from these same
+committed frames and requires each one to fail. A leg nobody has seen go
+red is not a leg (M4-Phase 2 T11 retrospective, lesson c).
+
+**"Every" is checked by the script, not asserted here.** `-Compare`
+registers each verdict under a name and `-SelfCheck` fails if any name
+has no row — because the first version of this file said "every" while
+the pass covered 23 of 37 verdicts, and the 14 it left out were precisely
+the ones that could not have gone red. Each row also states whether its
+wrong pairing is **region-scoped** (the two frames differ elsewhere, so
+the row tests that the sampled region is the right one) or **degenerate**
+(identical frames, which tests only the comparison itself); whole-client
+legs can only be the latter, since any two differing frames differ over
+the whole client.
 
 ## This is the assistant baseline, not the owner's smoke
 

@@ -995,10 +995,23 @@ leaves a different tab checked.
   state change — and divides `max_channel` from **157 to 31**, a 5.06×
   attenuation against the 5 its own alpha predicts. That is below the
   60-summed visible-change bar every other leg uses, so the two
-  lightbox-open toolbar-band legs are judged on `px_differing_at_all`
-  against a floor measured from their own frame pairs. **This is a
-  tightening** — the agreement bar becomes "no pixel differs by any
-  amount" — and it must not be "corrected" back.
+  lightbox-open toolbar-band legs are judged on `px_differing_at_all`.
+  **This is a tightening** — the agreement bar moves from "under 40 px
+  over a 60-summed threshold" to "under 40 px differing by *any*
+  amount", and the leg meets it at 0 — and it must not be "corrected"
+  back.
+- **A band must not be computed from the quantity it judges.** The
+  bands were first written as `max(measured noise × 4, floor)`, which
+  made the eleven "two frames with no input agree" legs tautologies —
+  each was compared against a multiple of its own maximum — and let a
+  noisy sitting simultaneously redden the difference legs and widen
+  every agreement leg in the same region. Found at the independent
+  review, demonstrated by painting 2,000 pixels into a copy of one
+  frame. The bands are now **independent constants with stated
+  reasons**, and the measured noise is a **checked** quantity: each
+  region's within-set jitter must sit inside F-33's own 13/channel with
+  no pixel over the visible-change bar, or the run fails rather than
+  absorbing the noise into a band.
 - **"The same coordinate fires" cannot be read off the button that was
   clicked.** A click on a Button moves focus to it (§4.19 Focus), so the
   clicked tab ends up checked *and* focused, which is a third colour
@@ -1008,13 +1021,19 @@ leaves a different tab checked.
   look-alike it has to exclude ("focus landed there instead") is
   excluded against control B's own measurement of what a checked and
   focused tab looks like.
-- **Every verdict is shown able to go red.** A comparison over a wrong
-  region or with an over-generous tolerance passes silently and looks
-  like a measurement, which is the T11 retrospective's lesson (c) in a
-  new place. The script's `-SelfCheck` feeds all 23 verdicts a
-  deliberately wrong pairing drawn from the committed frames and
-  requires each to fail. It is what the other two passes are worth
-  nothing without.
+- **Every verdict is shown able to go red, and the coverage is enforced
+  by the script rather than claimed.** A comparison over a wrong region
+  or with an over-generous tolerance passes silently and looks like a
+  measurement, which is the T11 retrospective's lesson (c) in a new
+  place. `-SelfCheck` feeds every verdict a deliberately wrong pairing
+  drawn from the committed frames and requires each to fail — and it
+  **fails the run if any verdict `-Compare` registers has no row**,
+  because the first version of this pass claimed "every" while covering
+  23 of 37, and the 14 it missed were exactly the ones that could not
+  have gone red. Where a wrong pairing can be chosen so the two frames
+  differ **elsewhere but not in the sampled region**, it is, so the row
+  tests the region too; where no such pairing exists (whole-client legs)
+  the row says so rather than looking like an oversight.
 - **The measured within-set jitter in this sitting was 0**, and every
   agreement leg is byte-identical by SHA-256 rather than merely inside a
   band. Recorded as a measurement of this host and this sitting, not as
