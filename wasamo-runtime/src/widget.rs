@@ -2093,7 +2093,7 @@ impl WidgetNode {
     /// [`Self::set_button_state_at`]: a stale `path` is a silent no-op,
     /// for the reason recorded there.
     ///
-    /// **The only caller is `crate::focus::move_focus`.** That is what
+    /// **The only caller is `crate::focus::with_focus_write`.** That is what
     /// keeps `WindowFocus`'s focused id and this painted flag written by
     /// one primitive — the same pairing discipline [`HoverState`] carries
     /// for hover (T4 trap #3), and the shape DD-M4-P2-003 fixes for focus
@@ -2196,6 +2196,26 @@ impl WidgetNode {
     #[doc(hidden)]
     pub fn __button_focused_for_test(&self) -> Option<bool> {
         self.button_data().map(|btn| btn.focused)
+    }
+
+    /// Test-only fault injector for the retained-focus presentation pair
+    /// (M4-Phase 2 T13a). It changes only the cached presentation flag and
+    /// deliberately performs no Composition repaint. That reproduces the
+    /// allocator-independent state CF-T7-1 reaches when a fresh node reuses
+    /// the removed focused node's address: the focus record is retained,
+    /// while fresh `ButtonData` starts with `focused = false`.
+    ///
+    /// Returns `false` for a non-Button-family node. Production focus writes
+    /// must continue to use `focus::with_focus_write`; this seam exists only
+    /// so the integration test can prove the structural rebase repairs the
+    /// derived pair without waiting for allocator reuse.
+    #[doc(hidden)]
+    pub fn __set_button_focused_flag_for_test(&mut self, focused: bool) -> bool {
+        let Some(button) = self.button_data_mut() else {
+            return false;
+        };
+        button.focused = focused;
+        true
     }
 
     /// Test-only accessor for this node's [`focus_role`](Self::focus_role)
