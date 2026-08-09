@@ -7088,9 +7088,16 @@ go and no later task to absorb it.
   below. Not carried forward.
 - **CF-T12-5 — whether to *oblige* a task to show its positive control's
   comparisons can fail is a question the next phase opens, and it is
-  open.** Owner-settled 2026-08-09: **record it and decide at the next
-  phase's pre-doc — the obligation itself is not decided.** This
-  carry-forward carries the question, not an intention.
+  open.** Owner-settled 2026-08-09, in two parts. **(i) No rule this
+  time.** M4-Phase 2 closes with no rule change: no edit to
+  [implementation-gates.md](../../../procedures/implementation-gates.md),
+  no successor to DD-V-029, no new obligation on any task in this phase.
+  Nothing has to be reverted for that to be true — the start gate's
+  boundary 4 held, and this task edited no normative or process text.
+  **(ii) The question is carried, and decided at the next phase's
+  pre-doc.** This carry-forward carries the question, not an intention:
+  **the deferral is not an implied yes**, and the next phase may as
+  properly answer "no rule" as "rule".
   - **What was settled, and what was not.** Settled: the placement of
     such a rule would not be the plan. This phase measured that
     plan-time predictions about *verification method* fail at about the
