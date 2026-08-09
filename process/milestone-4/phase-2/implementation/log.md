@@ -7481,3 +7481,42 @@ boundary, changed the structural focus seam and therefore changed the
 review lane to **full independent review**. The owner authorized the
 bounded T13a repair on 2026-08-09; its start gate follows before any repair
 implementation.
+
+### T13a start gate — owner-authorized runtime repair (2026-08-09)
+
+The owner authorized the repair inside T13 after reviewing the cold-suite
+failure and the distinction between an implementation defect and the
+probabilistic reach of its existing test. The implementation boundary is
+now widened, visibly and narrowly: preserve pointer-anchor focus identity,
+repair only the post-rebase record/presentation inconsistency, and add a
+deterministic witness. A stable generation id or a new identity policy is
+outside this authorization.
+
+#### Failure-mode re-selection before code
+
+| Trap | Applies? | T13a reason and required close artifact |
+|---|---|---|
+| #1 semantic migration | **No.** | No enum/schema/IR migration and no focus-identity policy change. The existing `FocusId` / pointer-anchor representation stays. Re-decide if a generation id or new retained token becomes necessary. |
+| #2 missed side effects | **Yes.** | Rebase runs after every initial attach / structural drain. Enumerate focus record, group memory, active items, modal stack, restoration/succession, current and stale presentation, Composition failure handling, and every `sync_scopes_to_tree` call site. |
+| #3 parallel / derived data drift | **Yes.** | `WindowFocus::core.focused`, its anchor coordinate system and `ButtonData.focused` presentation are one derived triple. The repair must use `with_focus_write`, not create a second presentation writer. The deterministic test must show the previously inconsistent pair converges. |
+| #4 untested authored branch | **Yes — test-side forced state plus repair path.** | The existing allocator branch is probabilistic. Add an unconditional repair step and an allocator-independent integration witness that is red with the repair removed; retain the reuse test to cover the natural path when reachable. |
+| #5 carry-forward underweighted | **Yes.** | CF-T7-1 / CF-T9-1 moves from carried residual to fired defect. On success, close only the record/presentation inconsistency; retain the pointer-identity semantic bound and its re-trigger. Update retrospective/handoff from close-blocking to the exact residual that remains. |
+| #6 symptom / flake rolling | **Yes.** | The four-run evidence is already recorded: reuse false → pass twice, reuse true → identical failure twice. No number of green non-reuse runs dispositions it. Repair evidence begins with a deterministic red witness, then the full suite. |
+| #7 weak GUI evidence | **No new GUI-render claim at start.** | T13a's claim is the runtime's retained presentation flag paired with its focus record, observed through a mock-free real-Compositor integration test. It does not claim a captured host frame. T12 remains the evidence that focus presentation generally reaches pixels. Re-decide if implementation/review makes a new rendered claim necessary. |
+
+#### Normative answer and approach boundary
+
+DD-M4-P2-003 and `architecture.md` §13.3 already require one focus
+record and one presentation-write discipline; no new semantic answer is
+needed. `with_focus_write` is the owning primitive. The stochastic test's
+assertion is also retained: whatever node the record names must carry the
+focus presentation. T13a repairs implementation to those answers; it does
+not weaken either text to accept the inconsistency.
+
+#### Review lane re-decision
+
+**Full independent review.** T13a changes the structural focus seam and a
+GUI-visible presentation transition, so the original Normal T13 lane is
+superseded for the combined close. The full review includes the narrower
+branch/test-focused review of the forced-state witness. It must examine
+the realised code and tests after the repair, not only this plan.
