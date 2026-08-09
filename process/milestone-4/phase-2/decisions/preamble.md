@@ -123,10 +123,12 @@ require.
 
 ## Revisions
 
-*(None yet. Revisions after acceptance follow the supersede rule, and a
-qualification that does not change what a reader would implement is
-recorded as a dated annotation instead —
-[workflow.md §凍結文書](../../../procedures/workflow.md).)*
+- 2026-08-09: DD-M4-P2-001's residual-1 explanation received an
+  owner-approved dated qualification. T9 F5 showed that collection
+  regeneration runs during the handler statement, not after handler
+  return; the routing decision and its no-cycle conclusion are unchanged.
+  This is an annotation rather than a supersession under
+  [workflow.md §凍結文書](../../../procedures/workflow.md).
 
 Per framing agreement 5, a spike may also run **during** the phase, and
 a finding from it may reopen an Accepted decision here through the same
