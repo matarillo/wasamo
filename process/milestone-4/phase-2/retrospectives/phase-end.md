@@ -108,15 +108,21 @@ reintroduced there as future work.
 
 ### 16. Actual GitHub Actions CI
 
-**Pending owner-authorized push and phase-branch `workflow_dispatch`.**
-The cold local suite exposed the address-reuse focus/presentation defect
-recorded in `implementation/log.md` §T13. Owner-authorized T13a repaired
-that divergence, completed full independent review and passed a new clean
-complete evidence-profile suite plus all three host / DSL consumer checks.
-The phase branch remains explicitly unpushed, and project procedure makes
-push a separate owner gate. This section will record the run id and result;
-until it is green, this retrospective and the handoff remain `closing`.
-T13/T13a are already closed and are not reopened by the pending phase gate.
+After separate owner authorization, `feat/m4-phase-2` was pushed and CI was
+dispatched against exact post-merge phase HEAD
+`4b1076f4d10493f0cae662c736dc54102ffafc67`.
+[Run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054)
+completed successfully in job
+[93217506536](https://github.com/matarillo/wasamo/actions/runs/31302529054/job/93217506536)
+(4m43s). Release and debug workspace builds, workspace tests, both C ABI
+smokes, CMake and Zig smokes, counter/gallery C/Rust/Zig hosts and both DSL
+checks were green.
+
+The sole annotation is non-failing: `mlugg/setup-zig@v2` declares Node.js
+20 and GitHub forced it onto Node.js 24. Zig installation and all downstream
+Zig consumers passed, so no CI YAML remediation is required. This run
+closes checklist item 16 for the phase branch; phase-to-`main` merge and its
+post-push CI remain separate owner gates.
 
 ### 17. Human-visible GUI smoke
 
@@ -145,9 +151,9 @@ checks in the required order.
 | Moment 2 normative sync | complete locally (`dsl_spec.md` 1.21, `architecture.md` §12.3 / §13) |
 | Verification closure mapping | complete above |
 | CF-* classification | complete above |
-| Handoff | prepared by T13, audited against the classification above and updated with T13a's repaired / carried split; remains `closing` pending phase CI |
+| Handoff | `status: recorded`; prepared by T13, audited against the classification above, and closed after the green phase-branch run |
 | Local clean evidence-profile verification | green after T13a: release + debug workspace builds, 1,271 tests with 0 failed / ignored, C / Rust / Zig hosts and DSL check |
-| Actual phase-branch CI | pending owner-authorized push and run id |
+| Actual phase-branch CI | green: run `31302529054`, job `93217506536`, SHA `4b1076f4d10493f0cae662c736dc54102ffafc67` |
 | Owner GUI smoke | complete 2026-08-09 |
 | Review lane | Full independent review for T13a complete; no blocking finding, one stale caller comment remediated in `2969a6b` |
 | Phase→main merge | owner gate; not authorized or performed |

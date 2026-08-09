@@ -1,7 +1,7 @@
 ---
 phase: M4-Phase 2
 title: Implementation task list
-status: active
+status: closing
 adr: process/milestone-4/phase-2/decisions/preamble.md
 ---
 
@@ -1300,6 +1300,10 @@ identity:
 - [x] T13a
 
 - [x] T13
+  - Post-merge phase-branch CI
+    [run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054)
+    passed on `4b1076f4d10493f0cae662c736dc54102ffafc67`; the
+    phase-end retrospective owns the phase-to-`main` gate.
 
 ---
 
