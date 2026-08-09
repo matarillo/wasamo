@@ -2,7 +2,7 @@
 phase: M4-Phase 2
 title: Phase-end retrospective
 date: 2026-08-09
-status: closing
+status: recorded
 scope: phase-end
 merge_target: main
 ---
@@ -11,8 +11,9 @@ merge_target: main
 
 This is the phase retrospective for the phase-to-`main` close gate. T13
 does not write a task retrospective: its merge target is `main`, and its
-work is the phase close itself. The branch remains local and unpushed;
-actual GitHub Actions CI and the phase merge are separate owner gates.
+work is the phase close itself. The branch was pushed only after explicit
+owner authorization and its phase-branch CI is green. The phase-to-`main`
+merge remains a separate owner gate.
 
 ## Phase-end checklist (items 12–18)
 
@@ -107,15 +108,22 @@ not reintroduced there as future work.
 
 ### 16. Actual GitHub Actions CI
 
-**Pending owner-authorized push and phase-branch `workflow_dispatch`.**
-The cold local suite exposed the address-reuse focus/presentation defect
-recorded in `implementation/log.md` §T13. Owner-authorized T13a repaired
-that divergence, completed full independent review and passed a new clean
-complete evidence-profile suite plus all three host / DSL consumer checks.
-The phase branch remains explicitly unpushed, and project procedure makes
-push a separate owner gate. This section will record the run id and result;
-until it is green, T13 and this retrospective remain `closing`, not
-complete.
+After explicit owner authorization, `feat/m4-phase-2-t13` was pushed and
+the workflow was dispatched against exact phase HEAD
+`11f77b689bc234453d2e9ff2f6a1a540c879320a`.
+[Run 31298945418](https://github.com/matarillo/wasamo/actions/runs/31298945418)
+completed successfully in job
+[93208499151](https://github.com/matarillo/wasamo/actions/runs/31298945418/job/93208499151)
+(4m08s). Release/debug workspace builds, workspace tests, both C ABI
+smokes, CMake and Zig smokes, all counter/gallery hosts and both DSL checks
+were green.
+
+The run's sole annotation is non-failing: `mlugg/setup-zig@v2` declares
+Node.js 20 and GitHub forced it onto Node.js 24. Zig installation and all
+downstream Zig consumers passed, so no CI YAML change is required for this
+phase. Only this CI evidence and status record under `process/` follows the
+verified SHA; the current code tree is directly verified. Item 16 and T13
+are complete. Phase-to-`main` merge is not authorized or performed.
 
 ### 17. Human-visible GUI smoke
 
@@ -144,9 +152,9 @@ checks in the required order.
 | Moment 2 normative sync | complete locally (`dsl_spec.md` 1.21, `architecture.md` §12.3 / §13) |
 | Verification closure mapping | complete above |
 | CF-* classification | complete above |
-| Handoff | written after this classification and updated with T13a's repaired / carried split; remains part of the closing batch |
+| Handoff | `status: recorded`; includes T13a's repaired / carried split and the green phase-branch CI pointer |
 | Local clean evidence-profile verification | green after T13a: release + debug workspace builds, 1,271 tests with 0 failed / ignored, C / Rust / Zig hosts and DSL check |
-| Actual phase-branch CI | pending owner-authorized push and run id |
+| Actual phase-branch CI | green: [run 31298945418](https://github.com/matarillo/wasamo/actions/runs/31298945418) on `11f77b689bc234453d2e9ff2f6a1a540c879320a` |
 | Owner GUI smoke | complete 2026-08-09 |
 | Review lane | Full independent review for T13a complete; no blocking finding, one stale caller comment remediated in `9a4610b` |
 | Phase→main merge | owner gate; not authorized or performed |
