@@ -1,17 +1,17 @@
 ---
 title: M4-Phase 2 handoff
-status: closing
+status: recorded
 source-phase: M4-Phase 2
 date: 2026-08-09
 ---
 
 # M4-Phase 2 — Handoff
 
-> **Status: closing.** This document was written after the CF-* phase-end
-> classification in
-> [phase-end.md](../retrospectives/phase-end.md). It becomes `recorded`
-> only after the owner-authorized phase-branch CI run is green. It carries
-> constraints and open questions, not unearned acceptance claims.
+> **Status: recorded (phase-end 2026-08-09).** This document was written
+> after the CF-* phase-end classification in
+> [phase-end.md](../retrospectives/phase-end.md) and finalized after the
+> owner-authorized phase-branch CI run passed. It carries constraints and
+> open questions, not unearned later-phase acceptance claims.
 
 ## Main learnings
 
@@ -126,8 +126,9 @@ later phase does not mistake closed work for an obligation.
 The repaired local clean rebuild, complete suite, consumer checks and full
 independent review are recorded in
 [log.md §T13a end gate](./log.md#t13a-end-gate--final-local-verification-2026-08-09).
-Actual GitHub Actions CI remains pending the owner's separate authorization
-to push the unpushed phase history. After a green `workflow_dispatch` run,
-record its run id in the log and phase retrospective, flip this document to
-`recorded`, and only then mark T13 complete. Phase→`main` merge remains a
-separate explicit owner gate.
+Owner-authorized GitHub Actions
+[run 31298945418](https://github.com/matarillo/wasamo/actions/runs/31298945418)
+passed on phase HEAD `11f77b689bc234453d2e9ff2f6a1a540c879320a`, so the
+phase CI gate and T13 are complete. This run-id / status recording is the
+only later change to the handoff. Phase→`main` merge remains a separate
+explicit owner gate.
