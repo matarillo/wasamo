@@ -81,7 +81,7 @@ second obligation.
 | CF-T5-3, CF-T5-4, CF-T5-5, CF-T5-6 | **closed / doc-folded** — T12 observes the indicator; foreground activation is in Observation 4; T8 pins authored-key ordering around the host slot; T13 corrected §13.3. |
 | CF-T6-1, CF-T6-3, CF-T6-5 | **closed** — T7 made presence-entry reachable and fixed group click landing; T8 removed the per-kind signal-gate asymmetry. |
 | CF-T6-2, CF-T6-4 | **carry-forward** — combined group/scope semantics remain a candidate-pool question, and the cross-crate focus-container lists remain deliberately duplicated with a new-container trigger. |
-| CF-T7-1, CF-T9-1 | **re-triggered; close-blocking** — T13's cold full suite observed address reuse twice. Both times the focus record retained the new row while its focus presentation stayed false. The former “unexpected focus only” bound is falsified; repair/disposition requires an owner-approved scope change and full independent review. |
+| CF-T7-1, CF-T9-1 | **repaired at T13a / identity remainder carried forward** — T13's first cold suite and one exact rerun observed address reuse and exposed a retained-record / false-presentation divergence. Owner-authorized T13a reconciles the final retained target through the existing focus writer; an allocator-independent fixture is deterministically red without that call, the full independent review is complete and the new cold suite is green. Pointer-address ABA can still select an unexpected fresh same-address target, so that identity-policy remainder stays in the handoff rather than being claimed closed. |
 | CF-T7-2, CF-T7-3 | **carry-forward** — direct ABI mutations still bypass the focus seam; nested-scope multi-entry integration belongs to M4-Phase 9. |
 | CF-T7-4, CF-T7-5 | **closed by phase sync** — §4.19 now fixes arrow directions and outside-scope click focus. |
 | CF-T8-1 | **candidate-pool carry-forward** — Button keyboard activation is intentionally decided with M5's keyboard-operable widget family. No implementation intent is implied. |
@@ -107,15 +107,15 @@ not reintroduced there as future work.
 
 ### 16. Actual GitHub Actions CI
 
-**Blocked before push by CF-T7-1, then pending owner-authorized push.**
+**Pending owner-authorized push and phase-branch `workflow_dispatch`.**
 The cold local suite exposed the address-reuse focus/presentation defect
-recorded in `implementation/log.md` §T13 and the phase is not currently
-merge-ready. The phase branch is explicitly
-unpushed, and project procedure makes push a separate owner gate. Local
-repair scope/disposition, a new clean complete evidence-profile suite and
-then push authorization are required in that order. This section will
-record the `workflow_dispatch` run id and result; until it is green, T13
-and this retrospective remain `closing`, not complete.
+recorded in `implementation/log.md` §T13. Owner-authorized T13a repaired
+that divergence, completed full independent review and passed a new clean
+complete evidence-profile suite plus all three host / DSL consumer checks.
+The phase branch remains explicitly unpushed, and project procedure makes
+push a separate owner gate. This section will record the run id and result;
+until it is green, T13 and this retrospective remain `closing`, not
+complete.
 
 ### 17. Human-visible GUI smoke
 
@@ -139,16 +139,16 @@ checks in the required order.
 
 | Artifact | State |
 |---|---|
-| AGENTS / implementation gate procedures read | complete; recorded at T13 start gate |
+| AGENTS / implementation gate procedures read | complete; AGENTS recorded at T13 start, implementation gates read again and dispositioned at T13a close |
 | Five Accepted DDs | complete; DD-001 dated qualification only |
 | Moment 2 normative sync | complete locally (`dsl_spec.md` 1.21, `architecture.md` §12.3 / §13) |
 | Verification closure mapping | complete above |
 | CF-* classification | complete above |
-| Handoff | written after this classification; remains part of the closing batch |
-| Local clean evidence-profile verification | failed: CF-T7-1 address reuse made focus record and presentation disagree; repeated on the second observed reuse |
+| Handoff | written after this classification and updated with T13a's repaired / carried split; remains part of the closing batch |
+| Local clean evidence-profile verification | green after T13a: release + debug workspace builds, 1,271 tests with 0 failed / ignored, C / Rust / Zig hosts and DSL check |
 | Actual phase-branch CI | pending owner-authorized push and run id |
 | Owner GUI smoke | complete 2026-08-09 |
-| Review lane | Normal; no T13 independent-review trigger |
+| Review lane | Full independent review for T13a complete; no blocking finding, one stale caller comment remediated in `9a4610b` |
 | Phase→main merge | owner gate; not authorized or performed |
 
 ## Main learning forwarded
@@ -164,3 +164,9 @@ The durable evidence learning is narrower: a positive control must be
 able to exclude the relevant look-alike, and a comparison implementation
 must be checked together with the band that judges it. Whether that
 becomes an obligation is deliberately unresolved as CF-T12-5.
+
+T13 adds a separate test-design learning: an allocator-dependent fixture
+can be a valuable sensor without being a sufficient regression gate. Once
+its condition fired and exposed a real implementation defect, the repair
+kept that natural observer and added a deterministic fixture for the exact
+derived state. The assertion was not weakened to make non-reuse runs green.
