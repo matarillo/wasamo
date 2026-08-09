@@ -7349,3 +7349,82 @@ protocol's own shape bounds it:
   finding** above, for that last reason: the caption's second line is
   inside the lightbox content the protocol excludes. The finding stands on
   the frames and on `gallery.ui:167`, not on this pass.
+
+## T13 — Close gate
+
+### Start gate (recorded 2026-08-09, before any T13 normative edit)
+
+Read before choosing the approach, in the owner-specified order:
+[AGENTS.md](../../../../AGENTS.md),
+[implementation-gates.md](../../../procedures/implementation-gates.md),
+[retrospectives.md](../../../procedures/retrospectives.md),
+[workflow.md](../../../procedures/workflow.md), [plan.md](./plan.md) §T13,
+this log through T12, retrospective items 10 and 11 for T1–T12, the five
+Accepted DDs and their [preamble](../decisions/preamble.md), the framing
+acceptance and verification sections, constraints §6 / §9, the M4 plan and
+roadmap ACs, the Phase 1 handoff, every normative section named by T13, and
+[verification-environments.md](../../../../docs/notes/verification-environments.md)
+Observations 4 / 6. The branch is `feat/m4-phase-2-t13`, created from the
+clean, unpushed phase tip `0676acb`.
+
+#### Boundary fixed before the pass
+
+T13 owns re-verification and phase-close records, not a runtime repair. A
+false normative statement is corrected, an unstated landed rule is either
+recorded or explicitly left unspecified within the narrow choice the T13
+item assigns, and an Accepted DD whose conclusion still ships receives only
+the owner-authorised dated explanatory annotation. A discrepancy outside
+those bounds is recorded with an owner; it is not silently fixed. No process
+rule changes in this task. In particular, CF-T12-5 is carried as an **open
+question**, with no implication that a later phase will make the proposed
+obligation a rule.
+
+#### Failure-mode selection
+
+| Trap | Applies? | Start-gate reason and close artifact |
+|---|---|---|
+| #1 semantic migration | **No** | T13 changes no enum, IR variant, schema field or traversal. Re-decide if the re-verification unexpectedly requires source or schema work; that would exceed the current boundary and be recorded before implementation. |
+| #2 missed side effects | **Yes — documentation analogue.** | The close changes several coordinated phase-close surfaces. The close artifact will enumerate every touched normative statement, status / progress marker, ADR annotation, AC closure, residual pointer, retrospective mapping, handoff entry and task checkbox, including why untouching `abi_spec.md`, `VISION.md`, `CHANGELOG.md`, or a named candidate is correct. |
+| #3 parallel / derived data drift | **Yes — documentation analogue.** | `plan.md`, `log.md`, `phase-end.md`, `handoff.md`, roadmap / milestone progress and ADR revisions can become competing summaries of one rule. The artifact will identify the owning source for each statement and use pointers rather than restating normative behaviour in a derived ledger. |
+| #4 untested authored branch | **No.** | No code, diagnostic, reject arm, size arm or script branch is planned. Re-decide if T13 authors executable logic. |
+| #5 carry-forward underweighted | **Yes.** | T1–T12 carry-forward and findings are reclassified at phase end as doc-folded / carry-forward / local-only or retained finding, with evidence, owner and re-trigger. The final handoff is written only after that phase-end classification. |
+| #6 symptom at face value / flake-rolling | **No current failure.** | T13 begins from green recorded T12 evidence and no recurring failure. Any deterministic or twice-recurring rebuild, suite, evidence, or doc-check failure activates this trap and receives rerun history, root cause and disposition rather than a retry-to-green. |
+| #7 weak GUI evidence | **No new GUI-evidence deliverable.** | T13 does not launch or capture a GUI; T12 already produced and independently reviewed the 48-frame, positive-control set and the owner completed all ten smoke steps. T13 must nevertheless inspect the committed frames when confirming the five named runtime properties and the checked+focused composition; its artifact is a confirmation mapping to T12's already-closed #7 evidence, not a second claim that process survival rendered correctly. Re-decide if a new capture is needed. |
+
+#### Normative answers already in force, and known divergences entering the pass
+
+This phase was normatively synchronised ahead of implementation, so
+DD-V-031 requires the already-answering text to be named before work. The
+table is an input classification, not a conclusion that each sentence is
+still true:
+
+| Owner | Answer already present | Start-gate classification against landed evidence |
+|---|---|---|
+| `dsl_spec.md` §4.8 / §4.19 | disabled occlusion, focus eligibility and propagation | Occlusion and Tab skipping answer the runtime; the keyboard-activation wording overclaims a capability the runtime does not have and the owner sent to the candidate pool. |
+| `dsl_spec.md` §3 / §4.5 / §8.8 | authored signal and textual-IR handler grammar | They still encode the pre-argument / `clicked`-only surface and are known false after `dismiss` and `key-down(\"…\")`. |
+| `dsl_spec.md` §4.15 | per-item handler admission, invocation-time binder reads, positional identity and shared subtree lifetime | The admitted subsection answers the landed T9 model; two rows in the Diagnostics table still reject that same model and are known false. |
+| `dsl_spec.md` §4.16 | child-carried placement examples | T8 corrected the childless-widget example; T13 confirms rather than repairs it. |
+| `dsl_spec.md` §4.19 | target/bubble routing, key admission and fallthrough, focus groups, modal containment/restoration and dismissal | The core answer exists. Named gaps entering this pass are arrow-axis direction, outside-scope click focus, container candidacy consequence and the unrecognised-signal policy; the Button keyboard sentence is false. |
+| `dsl_spec.md` §8.9 | string handler expressions are binding-only and assignment admits the documented scalar/collection forms | Runtime rejection matches the text, while checker/lowering/loader accept the string assignment until invocation; owner assigned capability to Phase 5 and diagnostic intake to Phase 3, so T13 records an unenforced normative statement rather than changing behaviour. |
+| `architecture.md` §12.3 | enumerable DIP / device conversion seams | The pointer row omits screen-to-client conversion for `WM_POINTER*` and still claims Visual readback after T2 removed it. |
+| `architecture.md` §13 | layout-derived hit geometry, routing, touch, focus, scopes and dismissal | The model answers most landed behaviour. Known wording/gaps concern touch precision and focus/hover policy, the focus-indicator write path and composed state, and the pre-/post-mutation split in scope restoration. |
+| DD-M4-P2-001 | one drain per dispatch and no residual-1 cycle | The conclusion ships, but F5 falsifies the reason that regeneration waits for handler return. Per the 2026-08-08 owner disposition and `workflow.md`, this is a dated annotation, not a supersede. |
+
+The recognised-key table, `dismiss` admission, child-kind admission, exact
+checker/runtime callers, conversion sites and the scope/focus mechanics are
+not accepted from prose alone: the close pass audits the landed code and
+tests. T12's frame set is the rendered cross-check for traversal order,
+single-stop grouping, containment, restoration, dismissal and composed
+checked/focused appearance.
+
+#### Review lane
+
+**Normal review, confirmed at start and subject to close-time re-decision.**
+The implementation preamble's T13 prediction remains correct for the present
+boundary: normative documentation, phase-close ledgers and one dated
+explanatory ADR annotation change, with no schema / IR migration, runtime
+structural change, newly authored diagnostic / reject / size branch, or new
+GUI capture. T12's GUI-render evidence already received full independent
+review; this task maps and re-verifies it without replacing or widening its
+claim. If T13 crosses any of those boundaries, the applicable full or
+branch/test-focused lane composes before merge.
