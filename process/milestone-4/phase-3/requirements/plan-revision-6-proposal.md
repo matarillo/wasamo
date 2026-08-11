@@ -1,9 +1,10 @@
 ---
 title: M4 plan Revision 6 proposal — ABI-bearing phase hypothesis
-status: authorised
+status: landed
 created: 2026-08-12
 authorised: 2026-08-12
-landing: pending
+landed: 2026-08-12
+landing-commit: f278b7f
 proposal-target: process/milestone-4/plan.md
 workflow-tier: tier 2 refining
 initiator: owner
@@ -16,8 +17,8 @@ related:
 
 # M4 plan Revision 6 proposal — ABI-bearing phase hypothesis
 
-**State:** Owner-authorised on 2026-08-12; reflected in the current working
-tree. Commit / landing is still pending.
+**State:** Landed on 2026-08-12 in `f278b7f` after owner authorisation and the
+agent critical check.
 
 This proposal arose during the independent review of the M4-Phase 3 §2.3 /
 §2.4 owner-alignment packet. It changes no Phase 3 scope or AC9 wording, but
@@ -58,7 +59,6 @@ candidate-pool row.
   multi-window / window config and must move `abi_spec.md` plus bindings if its
   ADR changes ABI.
 
-The exact edits are present as Revision 6 in the current working-tree version
-of [`process/milestone-4/plan.md`](../../plan.md). They do not alter the Phase 3
-§2.3 / §2.4 scope or verification proposal, and are not described as landed
-until their commit exists.
+The exact edits are recorded as Revision 6 in
+[`process/milestone-4/plan.md`](../../plan.md) and landed in `f278b7f`. They do
+not alter the Phase 3 §2.3 / §2.4 scope or verification proposal.
