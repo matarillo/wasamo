@@ -199,8 +199,10 @@ here.
   repetition (count, emptiness, index access), per-item conditional
   rendering, equality-based selection, and a small reusable
   handler-control-flow surface sufficient to guard a state write at
-  collection boundaries. String concatenation and general arithmetic stay
-  outside M4; promoted from the
+  collection boundaries. Every handler assignment is checked before execution
+  for expression-position admission and LHS / RHS type compatibility. Scalar
+  `string` write capability remains with M4-Phase 5. String concatenation and
+  general arithmetic stay outside M4; promoted from the
   [candidate pool](./candidate-pool.md) at M4 planning
 - Top-layer overlays: the top-layer structure itself (an element
   declared in place is realized at window level, escaping clip and

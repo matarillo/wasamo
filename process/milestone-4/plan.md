@@ -105,8 +105,10 @@ uses **A** for the photo-gallery target app.
   repetition (count, emptiness, index access), per-item conditional
   rendering, equality-based selection, and a small reusable
   handler-control-flow surface sufficient to guard a state write at
-  collection boundaries. String concatenation and general arithmetic stay
-  outside M4.
+  collection boundaries. Every handler assignment is checked before execution
+  for expression-position admission and LHS / RHS type compatibility. Scalar
+  `string` write capability remains with M4-Phase 5. String concatenation and
+  general arithmetic stay outside M4.
 - **AC10.** Top-layer overlays: the top-layer structure itself plus the
   focus rule set that binds to it — click-away close, Esc, focus
   containment, focus restoration on close, and screen-reader order.
@@ -224,6 +226,11 @@ and §Phase dependencies.
   (Left / Right key and the two navigation buttons), including empty, one-item
   and multi-item collections.
 
+  The phase establishes a complete admission and destination-type-checking
+  contract for every handler assignment rather than adding rejects for
+  individual RHS variants. This validation does not make scalar `string` writes
+  available; that capability remains in Phase 5.
+
   Consumer (A): the status-bar photo count, the lightbox caption
   (index read), and exclusive selection of the current thumbnail.
   String concatenation stays out — the count is authored as a static
@@ -296,9 +303,11 @@ and §Phase dependencies.
   its typed path from the **right-hand side's shape**, which cannot type
   an `item` read (whose type comes from the collection, not the
   expression), so a `for`-body handler writing a string binder needs
-  dispatch on the left-hand side's declared type. Whether handler-body
-  assignments gain type checking at the same time is a separable, wider
-  question. `dsl_spec.md` §4.6 and §8.9 both move.
+  dispatch on the left-hand side's declared type. Phase 3 has already
+  established handler-assignment position admission and destination-type
+  compatibility. Phase 5 consumes that invariant while adding the scalar
+  `string` writer and its admitted RHS forms; `dsl_spec.md` §4.6 and §8.9 both
+  move.
 
   Consumer (B4): the list window's first runnable form — a one-line
   entry field, an Add button, and the item rows.
@@ -978,6 +987,47 @@ M4-Phase 3.**
   and 2 are unchanged. Phase 3's close gains the four-producer boundary outcome;
   its retrospective / merge gates are not moved, and Phase 4 remains independent
   of Phase 3 in implementation order.
+
+**Revision 5 (2026-08-11) — Require complete handler-assignment admission
+and type checking in M4-Phase 3.**
+
+- **What / tier.** Tier 2 additive/refining. AC9 and the Phase 3 entry now
+  require every handler assignment to be checked before execution for
+  expression-position admission and LHS / RHS type compatibility. The Phase 5
+  scalar-string prerequisite now consumes this Phase 3 invariant instead of
+  leaving the wider type-checking gap open. The AC9 refinement is mirrored in
+  `_roadmap.md`; scalar `string` write capability remains in Phase 5.
+- **Initiator.** Owner, confirmed 2026-08-11 after independent framing review.
+- **Old premise.** Phase 3 owned the binding-only string diagnostic intake while
+  the plan left broader handler-assignment type checking as a separable open
+  question in the Phase 5 prerequisite.
+- **New evidence.** Phase 2 measured that both `i32 = "abc"` and `string = 5`
+  can pass `wasamoc check`; binding-only `StrLit`, `StrPropRead` and
+  `Interpolation` are visible instances of a wider admission gap. Phase 3's new
+  expression forms would add more paths on which per-variant rejection could be
+  omitted.
+- **Why the old plan no longer holds.** It was lower-confidence than the owner's
+  required completeness contract. Closing only three string cases would still
+  allow other destination mismatches to reach invocation and would provide no
+  auditable reason that every assignment form uses the same rules.
+- **No-change option considered.** Reject only the three binding-only string
+  forms and leave other mismatches to runtime. Rejected because that treats
+  measured symptoms ad hoc rather than establishing auditable coverage.
+- **Critical check.** Agent-completed 2026-08-11: the evidence is a systemic
+  checker gap, not merely a missing string evaluator. Position admission and
+  destination-type compatibility are separable: a type-correct scalar string
+  assignment remains unavailable until Phase 5, while a type mismatch is invalid
+  independently of that future capability. Phase 3 can own this correctness
+  invariant without selecting checker architecture in the plan or moving the
+  Phase 5 writer.
+- **Owner authorisation.** Authorised 2026-08-11 for the exact AC9, Phase 3,
+  Phase 5 and ROADMAP proposal.
+- **Impact check.** AC9 was additively refined and mirrored in `_roadmap.md`;
+  AC1–AC8 and AC10–AC13 keep their meaning. Phase order and completed-phase
+  evaluation are unchanged. Phase 3 gains a completeness obligation and later
+  auditable call-site coverage; its retrospective / merge gates are not moved.
+  Phase 5 continues to own scalar `string` writes and consumes, rather than
+  reopens, the Phase 3 invariant.
 
 ## Progress
 
