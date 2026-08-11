@@ -5,6 +5,7 @@ created: 2026-08-11
 source-phase: M4-Phase 2
 target-phase: M4-Phase 3
 related:
+  - process/milestone-4/phase-1/implementation/handoff.md
   - process/milestone-4/phase-2/implementation/handoff.md
   - process/milestone-4/plan.md
   - process/milestone-4/requirements/framing.md
@@ -16,8 +17,9 @@ related:
 # M4-Phase 3 制約引き継ぎ
 
 ワークフロー [§2.1](../../../procedures/workflow.md) の成果物。
-[M4-Phase 2 handoff](../../phase-2/implementation/handoff.md) を原典として、
-Phase 3（**述語式**）に効く制約だけを、Phase 3 の論点・範囲・検証方針に
+[M4-Phase 2 handoff](../../phase-2/implementation/handoff.md) を直接の原典とし、
+[M4-Phase 1 handoff](../../phase-1/implementation/handoff.md) も 2 phase 越しに
+再点検して、Phase 3（**述語式**）に効く制約だけを論点・範囲・検証方針に
 合わせて組み直す。単純な転記ではなく、各項目について「Phase 3 で何を
 守るか」と採否を明示する。
 
@@ -30,6 +32,7 @@ Phase 3（**述語式**）に効く制約だけを、Phase 3 の論点・範囲�
 | binding-only の文字列式をハンドラ代入が受理する欠陥 | **採用（診断のみ）** | Phase 3 は不正な形を早期に拒否する。文字列を書ける能力は Phase 5 のまま |
 | 陽性対照の比較自体を失敗させる証明の義務化 | **不採用** | 新しい常設ルールは作らない。既存の GUI 陽性対照と DD-V-029 の限定的な red-test 義務を適用する |
 | M3 で先送りした選択状態の 5 軸 | **等値選択だけ採用** | group 部品・部品所有状態・汎用 Toggle は M5、双方向束縛は Phase 7 のまま |
+| Phase 1 の layout / visual 単一書き手 | **条件付き採用** | per-item 条件表示の再実体化は既存の production layout 境界へ戻し、新しい cache / Composition geometry writer を作らない |
 
 ## Phase 3 の固定された境界
 
@@ -176,7 +179,35 @@ Phase 2 ADR の successor が要る。
 **採否:** **条件付き採用（構造更新または共通 evaluator に触れる task の
 開始ゲート）**。
 
-## 6. 検証は純ロジックと出荷アプリの両方で閉じる
+## 6. 再実体化した部分木は、既存の layout / visual 更新経路に戻す
+
+Phase 1 handoff の構造面で Phase 3 に直接効くのは、per-item 条件表示が
+部分木を再実体化する点である。Phase 2 までの現物では、reactive な `if` / `for`
+の追加・除去は layout dirty を立て、`emit::flush_layout` から
+`run_layout_as_window_root_at_scale` へ入り直す。この経路を維持する。
+
+- per-item 条件表示の追加・除去を、layout を通らない direct child mutation
+  として実装しない。初期 build は `window::set_root`、reactive mutation は
+  `mark_layout_dirty_for` → `flush_layout` という既存 2 seam のどちらかを通す。
+- per-node scale cache の writer は `commit_scale_recursive` 1 つ、Phase 2 が
+  追加した layout-derived `arranged_rect` の writer は `sync_visuals` 1 つの
+  ままにする。条件 effect や evaluator から直接 cache を書かない。
+- Composition の geometry write は `sync_visuals` 1 pass のままにする。
+  条件分岐の present / absent を実現するために `SetOffset` / `SetSize` を別経路へ
+  足さない。
+- 新しい collection / predicate binding の property writer が Button-family の
+  label を更新する場合は、`label_text`、`label_size`、node の
+  `SizeConstraint::Fixed` pair を同じ経路で更新する。既存 writer を再利用できる
+  場合は writer を増やさない。
+
+Phase 1 が残した「reactive drain が plain `run_layout` を使う」欠陥は、Phase 2
+T3 の F-23 で修復済みであり、現在の `flush_layout` は
+`run_layout_as_window_root_at_scale` を呼ぶ。これは Phase 3 の未解決事項として
+再掲せず、**修復済みの基準線**として退行させない。
+
+**採否:** **採用（Phase 1 からの cross-hop 実装制約）**。
+
+## 7. 検証は純ロジックと出荷アプリの両方で閉じる
 
 Phase 3 の中心は OS 非依存の式処理なので、checker・lowering・IR・evaluator の
 純ロジックは unit test で固定する。一方、完了条件は、Phase 3 が開く 5 つの
@@ -202,9 +233,23 @@ capture + assistant analysis を行い、誤実装でも同じに見える静止
 overflow は Phase 4 の判断事項なので、Phase 3 の証拠は内容が収まる幅で撮るか、
 既知事象として明記する。
 
+Phase 1 から継承する証拠規律も、該当する証拠形に限って適用する。
+
+- frame 差分を使う場合、committed frame 1 枚を基準線にせず、変更の両側で
+  複数回捕捉する。比較する frame 集合は同じ client-rectangle 形に揃える。
+- 外部 script / tool が window geometry、screen coordinates、cursor position を
+  読む場合、観測 process 自身を Per-Monitor-Aware V2 にしてから読む。
+- 「A と B が違う」を陽性対照にする場合、対象性質が効かない条件で A と B が
+  一致する脚も含める。
+- cold target で `cargo test --workspace` を行う場合は、同じ profile の primary
+  workspace build を先に行う。
+- Windows integration test が shared skip guard より前に OS state を触る場合、
+  その設定成功を `expect` しない。設定を試みた後の実状態を読み戻し、assert は
+  guard の内側へ置く。
+
 **採否:** **採用（検証方針の前提）**。
 
-## 7. 陽性対照を「失敗させて見せる」新ルールは作らない
+## 8. 陽性対照を「失敗させて見せる」新ルールは作らない
 
 Phase 2 handoff の CF-T12-5 は、新しいルールを採る意図を持たない未決の問い
 として送られた。Phase 3 では**新しい常設義務を設けない**。
@@ -225,11 +270,27 @@ Phase 2 handoff の CF-T12-5 は、新しいルールを採る意図を持たな
 
 **採否:** **不採用（CF-T12-5 を「no rule」で閉じる）**。
 
-## 8. 今回の制約にしない Phase 2 handoff 項目
+## 9. Phase 1 handoff の cross-hop 監査
+
+Phase 1 handoff の全行を、Phase 3 の surface と再発条件に照らして分類した。
+
+| Phase 1 項目群 | Phase 3 での扱い | 理由 |
+|---|---|---|
+| subtree の attach / re-parent / re-materialise、geometry / scale cache の単一 writer、Composition geometry の単一 pass、Button label の 3 点同期 | **採用** — §6 | per-item 条件表示が再実体化を行い、式の property writer が label 経路へ届き得る |
+| stale uplifted rlib、cold test-only build、frame baseline、DPI-aware observer、陽性対照の一致脚、pre-guard OS work | **採用または条件付き採用** — §7 | runtime / GUI 証拠、cold test、Windows fixture を使う場合に再発する |
+| reactive drain の誤った layout entry | **修復済み基準線** — §6 | Phase 2 T3 F-23 で修復済み。残件として再度開かない |
+| layout-derived hit rectangle、hit-test の相殺変換、DIP callback、scale-change 後の pointer update | **Phase 2 で消化済み** | Phase 3 は hit-test / pointer surface を変更しない。構造更新後の hover 残件だけを §5 で継承 |
+| toolbar overflow | **Phase 4** — §7 では証拠の既知事象だけ | layout policy の持ち主を Phase 3 へ変えない |
+| host scale / work-area、per-window scale、client-size semantics、screen-coordinate mapping、resolution-dependent image、`WM_GETDPISCALEDSIZE` | **各 named later phase** | Phase 3 は ABI、window、IME / top-layer、image、sizing を開かない |
+| pixel snapping、text quality、custom title bar、non-zero clip inset、scale-dependent measure、length newtype | **不発** | Phase 3 は geometry unit、raster quality、frame、clip、measure の意味を変えない |
+| `wasamo_init` / DPI declaration ordering、last-error、DPI change fixture / step order、cross-posture capture、portable host delivery | **不発** | Phase 3 は DPI initialization / transition や配布経路を変更しない |
+| misleading `wasamo-sys` warning と build-graph cleanup | **未スケジュールのまま** | Phase 3 の仕事に便乗させない。F-5 / F-21 の実行上の注意だけ §7 で守る |
+
+## 10. 今回の制約にしない Phase 2 handoff 項目
 
 | handoff 項目 | 持ち主 / 再発条件 | Phase 3 で不採用の理由 |
 |---|---|---|
-| `Row` / `HStack` overflow と重なった入力 | M4-Phase 4 | layout policy であり、Phase 3 は変更しない。証拠の既知基準線としてだけ §6 で参照 |
+| `Row` / `HStack` overflow と重なった入力 | M4-Phase 4 | layout policy であり、Phase 3 は変更しない。証拠の既知基準線としてだけ §7 で参照 |
 | pointer capture、drag、gesture、multi-contact | M4-Phase 4 以降 | Phase 3 の式面は新しい pointer gesture を持たない |
 | Button の Space / Enter activation | M5 widget set | equality selection は Button の keyboard contract を決めない |
 | scalar `string` を handler から書く能力 | M4-Phase 5 | Phase 3 は §3 の診断だけを持つ |
