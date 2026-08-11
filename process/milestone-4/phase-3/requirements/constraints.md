@@ -24,28 +24,37 @@ related:
 合わせて組み直す。単純な転記ではなく、各項目について「Phase 3 で何を
 守るか」と採否を明示する。
 
+この accepted 文書の判断も、その時点で得られた情報に基づく仮説である。
+後続の owner agreement、plan revision、設計・実装上の新しい証拠が前提を
+変えた場合は、旧前提と影響を Revisions に残したうえで本文を更新する。
+
 ## 判断要約
 
 | 入力 | 判断 | Phase 3 で必要な対応 |
 |---|---|---|
-| 範囲外の collection 添字読み | **採用** | 既定値・丸め・折返しでごまかさず、名前のある実行時診断で失敗させる |
-| ハンドラ内で書き込みを条件付きにする手段 | **採用。ただしスコープ境界の合意が先** | オーナー期待は Phase 3 での提供。現行 plan から自明ではないため、framing で「Phase 3 の述語面に含む」か「plan 改訂が必要」かを明示的に決める |
-| binding-only の文字列式をハンドラ代入が受理する欠陥 | **採用（診断のみ）** | Phase 3 は不正な形を早期に拒否する。文字列を書ける能力は Phase 5 のまま |
+| 範囲外の collection 添字読み | **採用（result / failure contract は未決）** | runtime diagnostic / fallback / clamp と、失敗時の旧表示・対象 effect・後続 effect を DD-M4-P3-002 で比較する。Phase 2 の runtime diagnostic 期待は有力な入力だが制約にはしない |
+| ハンドラ内で書き込みを条件付きにする手段 | **採用（Revision 4 landed）** | 四つの Gallery producer を全境界で止める、小さい再利用可能な handler control-flow surface を Phase 3 で届ける。正式構文・IR・評価方式は DD-M4-P3-005 で決める |
+| handler assignment の admission / 型適合不足 | **採用（Revision 5 landed）** | 全 handler assignment を実行前に position capability と LHS / RHS type compatibility へ通す。scalar `string` write capability は Phase 5 のまま |
+| per-item conditional の runtime structural responsibility | **採用（Revision 3 landed）** | condition evaluation と subtree 再実体化で loop context を保ち、生成・破棄を既存 effect / handler / focus / hover / layout lifecycle へ統合する |
 | 陽性対照の比較自体を失敗させる証明の義務化 | **不採用** | 新しい常設ルールは作らない。既存の GUI 陽性対照と DD-V-029 の限定的な red-test 義務を適用する |
 | M3 で先送りした選択状態の 5 軸 | **等値選択だけ採用** | group 部品・部品所有状態・汎用 Toggle は M5、双方向束縛は Phase 7 のまま |
 | Phase 1 の layout / visual 単一書き手 | **条件付き採用** | per-item 条件表示の再実体化は既存の production layout 境界へ戻し、新しい cache / Composition geometry writer を作らない |
 
-## Phase 3 の固定された境界
+## Phase 3 の現行基準線
 
 [M4 plan](../../plan.md) と [M4 framing](../../requirements/framing.md) が
-Phase 3 に割り当てた成果は次の 4 点である。
+Phase 3 に割り当てた成果は次の 6 点である。
 
 1. `for` の外からの collection 読み取り（件数、空判定、添字読み）。
-2. `for` の各項目を条件にした構造的な表示。
+2. `for` の各項目を条件にした構造的な表示と、その cross-layer lifecycle。
 3. 等値比較による、1 つの識別値を使った排他選択。
-4. 上記を A（写真ギャラリー）の件数表示、ライトボックスのキャプション、
-   選択中サムネイルで `.ui` → IR → runtime まで実証し、
-   `docs/dsl_spec.md` に規範として同期すること。
+4. collection 境界で state write を guard できる、小さい再利用可能な handler
+   control-flow surface。
+5. すべての handler assignment に対する、実行前の position admission と
+   LHS / RHS type compatibility の検査。
+6. 上記を A（写真ギャラリー）の件数表示、ライトボックスのキャプション、
+   選択中サムネイル、四つの navigation producer で `.ui` → IR → runtime まで
+   実証し、`docs/dsl_spec.md` に規範として同期すること。
 
 この境界から、次も固定される。
 
@@ -53,83 +62,84 @@ Phase 3 に割り当てた成果は次の 4 点である。
   表示する `Text` を並べて作る。
 - **`TypedValue` と構造化された項目データは入れない。** 読み取り結果は
   既存の `i32` / `string` / `bool` に閉じる。
-- **ABI を増やさない。** Phase 3 は checker / lowering / evaluator を中心と
-  する compiler-side phase であり、M4 の ABI 面は Phase 7 が持つ。
+- **ABI を増やさない。** Phase 3 は checker / lowering / evaluator と、
+  per-item conditional に不可欠な runtime structural integration を既存の
+  DSL / textual IR / loaded IR / runtime 内部経路で閉じる。新しい C ABI entry
+  point、value carrier、host callback が不可避と分かった場合は、暗黙に吸収せず
+  framing / plan の再確認へ戻す。
 - **新しい部品や選択状態の所有モデルを作らない。** 等値選択をサムネイルの
   区別へどう投影するか（既存 property の束縛か、条件表示による印か）は
   ADR で比較する。
 
 **採否:** **採用（スコープの外枠）**。
 
-## 1. 範囲外の添字読みは、実行時診断で失敗させる
+## 1. 範囲外の添字読みは、結果と failure containment を明示的に決める
 
 Phase 2 のギャラリーでは `selected_index` が 0 未満または要素数以上に
 なり得る。Phase 3 でキャプションを collection の添字読みに置き換えると、
 この状態を避けて通れない。
 
-Phase 3 は次を守る。
+Phase 2 handoff は runtime diagnostic を期待し、`EvalError::ItemOutOfRange` の
+先例も持つ。しかし、後続の framing 合意⑤は、その期待を ADR 前の結論には
+しないと決めた。DD-M4-P3-002 は少なくとも次を比較する。
 
-- 範囲外読みを空文字、0、`false` などの既定値に置き換えない。
-- 先頭・末尾へ丸めず、折り返しもしない。
-- 名前のある実行時診断として失敗させる。Phase 2 の
-  `EvalError::ItemOutOfRange` は比較対象だが、同じ型や文言の採用までは
-  この文書で決めない。
-- 診断を観測可能にし、範囲外読みを正常な値が得られた成功として扱わない。
+- runtime error / fallback / clamp のどれを author contract にするか。
+- 範囲外 read が起きたとき、旧表示、対象 effect、同じ drain の後続 effect を
+  どう扱うか。
+- guard による範囲外 state の予防（DD-M4-P3-005）と、既に範囲外になった state
+  を読む契約をどう分離するか。
 
-正確なエラー型、ログ面、旧値を保持するか、部分的な effect をどう扱うか、
-式全体を失敗させる単位は Phase 3 の ADR で決める。ただし「安全そうな値へ
-劣化させ、成功に見せる」案は選択肢に戻さない。
+ここで守る制約は、どの案を採るかではなく、範囲外を未定義動作や偶然の evaluator
+結果にせず、作者が予測できる一つの契約として決め、正常系と識別可能に検証する
+ことである。
 
 この分岐は純ロジックの**境界条件**なので、実装時は
 [DD-V-029](../../../cross-milestone/decisions/dd-v-029-pure-logic-red-test-obligation.md)
 に従い、対象テスト名と、そのテストを実際に赤くした誤実装を close artifact
 に記録する。
 
-**採否:** **採用（設計制約 + 検証制約）**。
+**採否:** **採用（判断義務 + 検証制約。result は DD-002 で未決）**。
 
-## 2. ハンドラの書き込みを守る述語は、スコープ合意なしに実装しない
+## 2. ハンドラの境界 guard は Phase 3 の必須成果とする
 
-オーナーが Phase 2 close で示した期待は、Phase 3 が範囲外読みを診断する
-だけでなく、作者が `selected_index` の更新を条件付きにして、先頭・末尾で
+オーナーが Phase 2 close で示した期待は、Phase 3 が範囲外読みの contract を
+決めるだけでなく、作者が `selected_index` の更新を条件付きにして、先頭・末尾で
 範囲外状態を作らないようにできることである。
 
-一方、現行 plan の Phase 3 行が明記するのは「collection 読み取り、項目ごとの
-条件**表示**、等値選択」であり、ハンドラ本体の条件分岐は明記されていない。
-既存の構造用 `if` を、そのままハンドラの命令文と読むこともできない。
+旧 plan からはこの能力を導出できなかったため、
+[Revision 4](./plan-revision-proposal.md#proposed-revision-4--add-small-reusable-handler-control-flow)
+が AC9、Phase 3 行、ROADMAP を additive に改訂した。Phase 3 は Left / Right key と
+previous / next button の四 producer を、empty / 1 件 / 複数件の両端で止められる
+surface を届ける。
 
-したがって Phase 3 framing は、ADR の論点を決める前に次を明示する。
+固定するのは成果と狭さであり、方式ではない。正式構文、IR、predicate の最小集合、
+false 時の event consumption、複数 statement での評価時点は DD-M4-P3-005 で比較する。
+一般関数、handler loop、一般命令言語まで広げず、gallery 専用命令にも閉じない。
 
-1. 条件付き書き込みを、Phase 3 の述語面に含まれる狭い能力として定義できるか。
-2. それとも handler control flow という別の surface であり、
-   [DD-V-026](../../../cross-milestone/decisions/plan-revision-discipline.md)
-   に沿った plan 改訂が必要か。
-3. どちらの場合も、一般的な命令文・関数・M-expr4 まで広げずに、今回必要な
-   guard をどこまで小さく保てるか。
+**採否:** **採用（Revision 4 による必須成果。能力の形は未決）**。
 
-この判断を「述語があるから当然使える」と暗黙に済ませない。plan 改訂が必要と
-判定した場合は、オーナー承認と非起点側の critical check が揃うまで Frozen
-agreement を変更しない。
-
-**採否:** **採用（Phase 3 framing の必須ゲート。能力の形は未決）**。
-
-## 3. 文字列代入の欠陥は診断するが、文字列書き込みは作らない
+## 3. 全 handler assignment を検査するが、文字列書き込みは作らない
 
 `docs/dsl_spec.md` §8.9 は、`StrLit`、`StrPropRead`、`Interpolation` を
 binding-only と定めている。しかし現在は checker・lowering・loader を通過し、
 ハンドラ実行時に evaluator が拒否するまで作者へ伝わらない。
 
-Phase 3 が引き取るのは**診断の欠落**だけである。
+Phase 2 の実測は個別の string 診断漏れではなく、assignment 全体に expected type と
+position capability を与える仕組みの欠落を示した。
+[Revision 5](./plan-revision-proposal.md#proposed-revision-5--require-complete-handler-assignment-admission-and-type-checking)
+により、Phase 3 は次を守る。
 
-- binding-only の文字列式を handler assignment の右辺に置いた形を、実行時
-  呼び出しより前に作者向け診断として拒否する。
+- すべての handler assignment を、実行前に position capability と LHS 宣言型に
+  対する RHS type compatibility の両方へ通す。
+- binding-only の文字列式を handler assignment の右辺に置いた形だけでなく、
+  `i32 = "abc"`、`string = 5` など方向の異なる mismatch も同じ枠組みで拒否する。
 - §8.9 の規範を実装不足に合わせて弱めない。
 - `string` state をハンドラから書ける能力、左辺の宣言型に基づく evaluator /
   writer の拡張、TextField の one-way binding + handler は Phase 5 に残す。
-- 診断対象を handler assignment 全体の型検査へ広げるか、既知の
-  binding-only 形だけに絞るかは ADR で比較する。無関係な型検査の全面刷新を
-  この欠陥修正に同梱しない。
+- 全 `HandlerExpr` variant と assignment form の分類・call-site audit によって
+  完全性を ground truth と照合し、既知 case の追加だけで完了としない。
 
-**採否:** **採用（Phase 3 の診断範囲。能力は Phase 5）**。
+**採否:** **採用（Revision 5 による全 assignment の検査。能力は Phase 5）**。
 
 ## 4. per-item 条件表示は、既存の反復モデルを変えない
 
@@ -211,8 +221,9 @@ T3 の F-23 で修復済みであり、現在の `flush_layout` は
 ## 7. 検証は純ロジックと出荷アプリの両方で閉じる
 
 Phase 3 の中心は OS 非依存の式処理なので、checker・lowering・IR・evaluator の
-純ロジックは unit test で固定する。一方、完了条件は、Phase 3 が開く 5 つの
-surface を `.ui` から実行時まで識別可能に通すことを要求する。
+純ロジックは unit test で固定する。一方、完了条件は、Phase 3 が開く author
+surface と validation contract を、それぞれの production gate まで識別可能に
+通すことを要求する。
 
 1. collection の件数が status bar に出る。
 2. collection が空かどうかで異なる結果になる。
@@ -220,12 +231,17 @@ surface を `.ui` から実行時まで識別可能に通すことを要求す�
 4. 1 つの `selected_index` と equality で、選択中 thumbnail が 1 つだけになる。
 5. `for` の item / index を使う条件が、項目ごとの部分木を present / absent に
    する。
+6. Left / Right key と previous / next button の四 producer が、empty / 1 件 /
+   複数件の両端で範囲外 state を作らない。
+7. 全 handler assignment が `wasamoc check` で position capability と LHS / RHS
+   type compatibility を検査され、正当な既存 assignment は維持される。
 
-1・3・4 は plan が名指す A（写真ギャラリー）の消費者で行う。2・5 も A の
+1・3・4・6 は plan が名指す A（写真ギャラリー）の消費者で行う。2・5 も A の
 自然な状態として示せるなら同じ slice に置く。アプリへ不自然な表示を足す必要が
 ある場合は、framing で理由を記録したうえで、出荷と同じ `.ui` → IR → runtime
 経路を通る named mechanism fixture に分ける。純ロジック test だけで 2・5 の
-author-facing surface を閉じない。
+author-facing surface を閉じない。7 は全 variant / assignment form の call-site
+audit と admit / reject matrix を主証拠とし、GUI を完了条件にしない。
 
 GUI の表示を成果の証拠にする場合は、AGENTS.md の規則どおり launch + screenshot
 capture + assistant analysis を行い、誤実装でも同じに見える静止画を除外する
@@ -294,13 +310,13 @@ Phase 1 handoff の全行を、Phase 3 の surface と再発条件に照らし�
 | `Row` / `HStack` overflow と重なった入力 | M4-Phase 4 | layout policy であり、Phase 3 は変更しない。証拠の既知基準線としてだけ §7 で参照 |
 | pointer capture、drag、gesture、multi-contact | M4-Phase 4 以降 | Phase 3 の式面は新しい pointer gesture を持たない |
 | Button の Space / Enter activation | M5 widget set | equality selection は Button の keyboard contract を決めない |
-| scalar `string` を handler から書く能力 | M4-Phase 5 | Phase 3 は §3 の診断だけを持つ |
+| scalar `string` を handler から書く能力 | M4-Phase 5 | Phase 3 は §3 の全 assignment validation を持つが、この writer capability は作らない |
 | host-listener の `key-down` 実体化 | M4-Phase 7 または最初の host consumer | Phase 3 は ABI / host listener を開かない |
 | nested modal scope、per-item modal scope | M4-Phase 9 | per-item 条件表示は modal scope の組合せを要求しない |
 | 半透明 cover 越しの no-change sensor | M4-Phase 9 | overlay を使わない |
 | `focus-group` + `modal-scope` の組合せ | candidate pool / M6 | Phase 3 は focus annotation を増やさない |
 | direct-ABI child mutator の focus rebase 欠落 | production `focused_path` reader または focus annotation ABI | Phase 3 の runtime 経路では direct-ABI child mutator を使わない |
-| unknown signal 名の診断 | 4 番目の signal または不具合報告 | Phase 3 の診断 intake は handler RHS の string 形に限定し、signal 語彙を変えない |
+| unknown signal 名の診断 | 4 番目の signal または不具合報告 | Phase 3 の assignment validation は signal 語彙や signal-name admission を変えない |
 | `pointer_physical` の座標型 | 3 番目の caller または単位欠陥 | Phase 3 は座標を扱わない |
 
 ## 先行フェーズからの境界確認
@@ -326,3 +342,12 @@ Phase 1 handoff の全行を、Phase 3 の surface と再発条件に照らし�
   本文の判断は現時点で得られている情報と知識に基づく仮説であり、不変の事実
   ではない。新しい情報・知識・実測によって前提が変わった場合は再評価してよい。
   内容を変更するときは、根拠と影響を本節に記録し、凍結文書の改訂として扱う。
+- **2026-08-12 — Reconciled with owner agreement and plan Revisions 3–5.**
+  当初の compiler-side 責務、範囲外 read = runtime diagnostic、handler guard の
+  scope gate、既知 string RHS だけの診断という四つの仮説を更新した。新情報は、
+  per-item conditional が loop context と runtime structural lifecycle を横断する現物、
+  四 producer を全境界で止める owner requirement、assignment 全体の expected-type /
+  position-admission 欠落、および範囲外 result を DD-002 の比較へ戻した framing 合意⑤。
+  Revision 3 (`7763555`)、Revision 4 (`4afa204`)、Revision 5 (`1499241`) は個別に
+  owner-authorised / landed 済みである。ABI 非変更、既存 iteration semantics、
+  layout / visual の単一 writer、検証規律、後続 phase の capability 所有は維持する。

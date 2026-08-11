@@ -1,9 +1,9 @@
 ---
-title: M4-Phase 3 フレーミング — 述語式（論点設定）
+title: M4-Phase 3 フレーミング — 述語式
 status: draft
 created: 2026-08-11
 target-phase: M4-Phase 3
-workflow-stage: "2.2 issue framing"
+workflow-stage: "2.3 / 2.4 owner review"
 related:
   - process/milestone-4/plan.md
   - process/milestone-4/requirements/framing.md
@@ -11,18 +11,18 @@ related:
   - process/milestone-4/phase-1/implementation/handoff.md
   - process/milestone-4/phase-2/requirements/framing.md
   - process/milestone-4/phase-2/implementation/handoff.md
+  - process/milestone-4/phase-3/requirements/plan-revision-6-proposal.md
   - docs/dsl_spec.md
 ---
 
-# M4-Phase 3 フレーミング — 論点設定
+# M4-Phase 3 フレーミング — 述語式
 
-**状態:** draft（§2.2 owner-agreed、§2.3 / §2.4 未実施）
+**状態:** draft（§2.2 owner-agreed、§2.3 / §2.4 owner review 待ち）
 
 **今回実施した段階:**
-[workflow.md §2.2「論点設定」](../../../procedures/workflow.md) のみ
+[workflow.md §2.2〜§2.4](../../../procedures/workflow.md) の framing draft
 
-**まだ実施していない段階:** §2.3 スコープ確定、§2.4 検証方針確認、
-§3 設計判断
+**まだ実施していない段階:** §2.3 / §2.4 の owner agreement、§3 設計判断
 
 この文書は、M4-Phase 3 で**何を決める必要があるか**を分け、DD 番号を
 予約し、オーナーとの合意点を明らかにするための資料である。構文、IR、
@@ -33,11 +33,12 @@ related:
 新しい情報で前提が変わった場合は再検討できるが、変更理由と影響を記録する。
 今回読み直した Phase 1・2 の implementation handoff / retrospective / 現物、
 M4 の計画・要件、現行の DSL 仕様と `.ui` の実例から、constraints の主要な
-境界は維持できる。一方、**plan の二つの前提は、そのままでは維持できない**。
+境界は維持できる。一方、当初の plan の二つの前提は、そのままでは維持できなかった。
 一つは、計画済みの per-item conditional が compiler-side だけでは閉じないという
-現物上の訂正である。もう一つは、現行 plan からは導出できない handler guard を
-Phase 3 の必須成果に加えるというスコープ変更である。この二つを一括承認せず、
-下記の別々の問いと plan-revision gate で扱う。
+現物上の訂正である。もう一つは、旧 plan からは導出できなかった handler guard を
+Phase 3 の必須成果に加えるというスコープ変更である。この二つは別々に owner
+authorise され、Revision 3〜5 として land 済みである。本 §2.3 / §2.4 は、改訂後の
+plan、roadmap AC9、`docs/dsl_spec.md` 1.22 を基準線にする。
 
 > **例の読み方:** 以下の `count(photos)`、`photos[selected_index]`、
 > `index == selected_index`、handler 内の `if` は、作者が実現したいことを
@@ -46,10 +47,9 @@ Phase 3 の必須成果に加えるというスコープ変更である。この
 
 ---
 
-## 今回オーナーに合意してほしいこと
+## §2.2 でオーナー合意済みのこと
 
-この節だけで §2.2 の合意判断ができる。推奨どおりなら「①〜⑦ OK」、
-変更したい項目があればその番号を指定してほしい。
+この節は §2.2 の合意記録である。
 
 | ID | 合意してほしいこと | 提案 | 状態 |
 |---|---|---|---|
@@ -61,10 +61,8 @@ Phase 3 の必須成果に加えるというスコープ変更である。この
 | ⑥ | **pre-ADR spike の要否** | Phase 3 全体には必須化しない。現物調査で per-item conditional の不足箇所は既に二つの loop-context seam として特定でき、未知の状態モデルを試作で発見する段階ではない。下記の発火条件が実際に成立した DD だけに、「何を観測できれば答えか」を限定した spike を ADR Accepted 前に提案する | owner-agreed 2026-08-11 |
 | ⑦ | **現行仕様の矛盾の扱い** | `docs/dsl_spec.md` §8.11 に残っていた「`for` body の handler 禁止」「item/index read は binding だけ」という二行は、Phase 2 の実装同期漏れとして factual correction し、Phase 3 の新しい DD や禁止前提にはしない | owner-agreed; corrected in `6e3db4f` |
 
-①〜⑦はいずれも、現時点の情報に基づく仮説としての合意を求める。
-新しい実測・設計上の発見があれば見直せる。②・③の plan 改訂だけは、仮説として
-合意した後も [workflow.md §計画(plan)改訂の規律](../../../procedures/workflow.md)
-の手続きが別に必要である。
+①〜⑦はいずれも、現時点の情報に基づく仮説として合意済みであり、新しい実測・
+設計上の発見があれば見直せる。②〜④に関係する plan 改訂手続きも完了している。
 
 ### Phase 1・2 の実施結果で plan 仮説を再評価した結論
 
@@ -78,8 +76,23 @@ Phase 3 の必須成果に加えるというスコープ変更である。この
 
 この再評価は、plan を無断で読み替えるためではない。旧前提、新情報、変更影響、
 no-change の意味を明示した Revision-log 草案を別 artifact に作り、critical check と
-owner authorisation を求めるべきだ、という**論点設定上の結論**である。plan 本文は
-その二つが満たされるまで変更しない。
+owner authorisation を求めるべきだ、という**論点設定上の結論**であった。その gate
+は [plan-revision-proposal.md](./plan-revision-proposal.md) の Revision 3〜5 として
+完了し、改訂後の plan / roadmap を本節以降の固定入力にする。
+
+## §2.3 / §2.4 でオーナーに合意してほしいこと
+
+下記の詳細な scope / verification を要約した owner alignment packet である。
+推奨どおりなら「⑧〜⑬ OK」、変更したい項目があればその番号を指定してほしい。
+
+| ID | 合意してほしいこと | 提案 | 状態 |
+|---|---|---|---|
+| ⑧ | **Phase 3 の In scope** | 改訂後 AC9 の全要素を本フェーズで閉じる。DD-001〜006 の式・collection read・per-item conditional・equality selection・小さい handler control flow・全 handler assignment の admission / 型適合に加え、per-item conditional の runtime structural lifecycle と Gallery A の named consumers までを含む | owner review pending |
+| ⑨ | **Out of scope** | 文字列連結、一般算術・一般命令言語、`TypedValue` / 構造化 item、keyed / nested iteration、新 widget / selection ownership、two-way binding、scalar `string` write、ABI、window / image / scrolling、focus model の再設計を含めない。DD が選ぶ正式構文・IR・範囲外 failure contract は「Phase 3 外」ではなく「framing では未決」と区別する | owner review pending |
+| ⑩ | **M4 acceptance criteria との対応** | Phase 3 が discharge する milestone criterion は AC9。AC1 は構造更新で focus / hover / handler lifecycle を退行させない回帰対象、AC12 は Gallery A を段階的に成熟させる consumer だが、どちらも Phase 3 単独で完了を主張しない | owner review pending |
+| ⑪ | **検証の三層** | OS 非依存の checker / lowering / IR / evaluator は unit test、実 `.ui` → IR → runtime と構造 lifecycle は mock-free Windows integration test、作者に見える Gallery 成果は launch + screenshot + assistant analysis で閉じる。出荷画面に不自然な検証 UI が必要なら named mechanism fixture に分ける | owner review pending |
+| ⑫ | **識別可能な陽性対照と境界 matrix** | count / empty / per-item presence は collection の状態を変えて結果が反転する対照、caption / selection は異なる index へ移動する対照、guard は key / button の 4 producer を empty / 1 件 / 複数件の両端で試す。範囲外 read は DD-V-029 の red-test、assignment 完全性は全 variant の call-site audit + reject / admit matrix で証明する | owner review pending |
+| ⑬ | **将来の追加を塞がない二つの設計義務** | Out of scope に置いた能力のうち二つは、Phase 3 が今決める形の下流にある。多段 `for` と入れ子の構造制御は DD-003 が選ぶ loop context の所有・寿命に依存し、Phase 5 の scalar `string` write と、既存スカラに収まる値を生む式が将来入る場合は DD-006 の position admission / 型適合の枠組みに乗る。**Phase 3 の scope はどちらにも広げない。**その選択が将来の追加を構造的に排除しないことだけを、両 DD の判断要件に加える | owner review pending |
 
 ---
 
@@ -346,6 +359,11 @@ for photo, index in photos {
   どう構造的に守るか。
 - nested `for`、bare nested control flow、複数 widget body、key identity、
   shadowing を開かずに済む境界はどこか。
+- 条件評価と再実体化で loop context を所有・保持する形が、将来の多段 `for` と
+  入れ子の構造制御を**構造的に排除しない**か。Phase 3 でそれらを開くことは
+  求めない。ただし一段専用と分かる形（単一の context を上書きで持つ、binder 名を
+  loop 外と同じ経路で解決する等）を選ぶなら、多段化に必要な変更が後から追加
+  として入るのか、既存 `.ui` の意味を変えるのかを ADR が判定して記録する。
 
 ### DD-M4-P3-004 — equality による単一識別値の選択
 
@@ -425,8 +443,8 @@ key-down("ArrowLeft") => {
 ```
 
 `has_previous` 相当を表すには、たとえば relational comparison、件数との境界
-比較、専用の index-valid predicate など複数の設計方向があり、どれも現行 plan
-から自明ではない。`selected_index == 0` だけでは「0 でないとき」を書くための
+比較、専用の index-valid predicate など複数の設計方向があり、どれも改訂済み plan
+が方式まで固定するものではない。`selected_index == 0` だけでは「0 でないとき」を書くための
 否定または別分岐が要り、末尾判定には `count - 1` 相当も問題になる。
 
 **plan-revision gate:**
@@ -453,7 +471,7 @@ key-down("ArrowLeft") => {
 5. critical check と owner authorisation がそろって plan 本文が land した後に、
    DD-005 を active にして設計判断へ進む。
 
-**gate が開いた後の下位の問い:**
+**land 済み scope の下位の問い:**
 
 - guard の条件に DD-001 の全 predicate を使えるか、境界用の狭い形だけか。
 - relational / logical / arithmetic のどれを本当に必要とするか。専用形で
@@ -473,11 +491,11 @@ key-down("ArrowLeft") => {
 - 一般関数、loop、`else` family、任意の command、M-expr4 全体を開かずに
   gallery の左右端を自然に書けるか。
 
-**no-change option の意味:** 現行 plan を維持すると、DD-002 で範囲外 read の
-契約は決められても、作者は Phase 3 の DSL だけで左右端の書き込みを guard
-できない。gallery は key と click の 4 経路すべてで無効 state を作り得るままに
-なり、2026-08-11 の owner requirement を満たさない。このため framing は
-tier 2 revision を提案するが、plan 本文の変更自体は gate 完了まで行わない。
+**revision 前の no-change option の意味:** 旧 plan を維持すると、DD-002 で範囲外
+read の契約は決められても、作者は Phase 3 の DSL だけで左右端の書き込みを guard
+できなかった。gallery は key と click の 4 経路すべてで無効 state を作り得るままに
+なり、2026-08-11 の owner requirement を満たさないため、この option は Revision 4
+で退けられた。
 
 ### DD-M4-P3-006 — handler assignment admission / 型検査の完全性
 
@@ -557,6 +575,14 @@ assignment であり、loop binder が append の要素値になる既存の許�
 - 診断は不正な RHS の source span、LHS 名、expected / actual type、または
   position capability のどれを示すか。Phase 5 という内部日程に依存せず、作者が
   現在できることを説明する文言にできるか。
+- position capability と type compatibility の枠組みが、将来の消費者を
+  **個別 case の追加ではなく同じ枠組みへの登録として**受け入れられるか。
+  最初の消費者は Phase 5 の scalar `string` write（許可される RHS が増える）と、
+  M4 の外に置かれている、既存スカラに収まる値を生む式（結果型を持つ RHS が
+  増える）である。どちらも「新しい RHS 形ごとに checker へ分岐を足す」形に
+  なるなら、DD-006 が主張する完全性は landing 時点のスナップショットにすぎず、
+  次の追加のたびに全経路を洗い直すことになる。この点は DD-006 の完全性要求に
+  既に含まれるが、判定できるよう将来の消費者を明示する。
 
 ---
 
@@ -568,7 +594,7 @@ assignment であり、loop binder が append の要素値になる既存の許�
 | count / empty / index read の reactive semantics と失敗 | DD-002 | per-item scope は DD-003 |
 | loop binder を条件表示で読むことと構造 lifecycle | DD-003 | selected-state family 全体は DD-004 の範囲外 |
 | equality で 1 state → 選択表示を作る author contract | DD-004 | group widget / two-way binding は後続へ残す |
-| handler write の条件実行 | DD-005（owner-required、plan gate 待ち） | gallery 専用にせず、gate 前に syntax / 方式を決めない |
+| handler write の条件実行 | DD-005（owner-required、plan gate 完了） | gallery 専用にせず、framing で syntax / 方式を決めない |
 | 全 handler assignment の position admission と LHS 型適合 | DD-006 | expression-result typing は DD-001、scalar string write capability は Phase 5 |
 
 この分離により、たとえば「collection 添字読みの範囲外診断を設計したから
@@ -591,6 +617,189 @@ DD-M4-P2-005、Phase 2 の integration tests、loader の landed validation と�
 既に一致しているため、Phase 2 の spec-sync 漏れとして `docs/dsl_spec.md` 1.22
 （`6e3db4f`）で factual correction した。DD 番号は割り当てていない。
 DD-001 / 003 / 006 は、訂正前の二行を制約として候補を狭めてはならない。
+
+---
+
+## Phase 3 の対象範囲（§2.3 scope）
+
+### 含むもの（In scope）
+
+- **DD-001 — 共通 predicate surface。** Phase 3 で必要な式の構文候補、結果型、
+  使用できる expression position、scope / type admission を決める。DD-002〜005 が
+  同じ規則を消費できることまでを含むが、一般式言語を完成させる責任は負わない。
+- **DD-002 — collection read。** `for` の外からの count、empty、index read、
+  collection / index の reactive dependency、各既存 element type の結果型、範囲外
+  result / failure contract と effect containment を決める。runtime error、fallback、
+  clamp の比較を framing で先取りしない。
+- **DD-003 — per-item conditional。** loop item / index を条件から読み、条件評価と
+  false → true の subtree 再実体化の両方で現在位置の loop context を保つ。
+  subtree の生成・破棄を既存 effect、handler registry、focus / hover、layout / visual
+  lifecycle へ統合し、新しい構造 writer を作らない。
+- **DD-004 — equality selection。** 一つの author-owned discriminant から既存の
+  `checked` binding または条件部分木へ排他的な選択表示を投影し、focus と selection
+  を別状態のまま保つ。
+- **DD-005 — 小さい handler control flow。** Gallery A の Left / Right key と左右
+  button の四つの producer を、empty / 1 件 / 複数件の両端で止められる、gallery
+  専用ではない最小 surface を決めて届ける。guard と範囲外 read の failure contract
+  は別責務のまま保つ。
+- **DD-006 — assignment validation の完全性。** 全 handler assignment を実行前に
+  position capability と LHS / RHS type compatibility の両方へ漏れなく通す。
+  既存の正当な `string[]` whole-value mutation を維持しつつ、scalar `string` write
+  は未提供として区別して診断する。
+- **出荷 consumer と規範同期。** Gallery A の status-bar count、lightbox caption、
+  current-thumbnail selection、四つの境界 guard を実 `.ui` → IR → runtime で通す。
+  empty と per-item presence が Gallery に不自然な UI を要求する場合だけ、同じ production
+  path を通る named mechanism fixture を補助 consumer にする。ADR Accepted 時と phase
+  close 時には、選ばれた surface を `docs/dsl_spec.md` と必要な architecture 記述へ同期する。
+- **ABI 非変更。** 新しい C ABI entry point、value carrier、host callback を作らず、
+  既存の DSL / textual IR / loaded IR / runtime 内部経路で閉じる。もし ADR 調査で ABI が
+  不可避と判明した場合は scope 内へ暗黙に吸収せず、framing / plan の再確認へ戻す。
+
+accepted [constraints.md](./constraints.md) から後続判断で変わった箇所は明示的に
+reconcile する。「compiler-side phase」は Revision 3 の cross-layer responsibility が
+置き換える。§1 の「範囲外 read は runtime diagnostic」は後の §2.2 合意 ⑤により
+DD-002 の比較へ戻り、§2 の handler guard gate と §3 の個別 string 診断は Revision 4 / 5
+により、それぞれ DD-005 の必須 surface と DD-006 の全 assignment 完全性へ広がった。
+ABI 非変更、既存 iteration semantics、単一 layout / visual writer、検証規律など、
+その他の制約は維持する。
+
+### 含まないもの（Out of scope）
+
+- 文字列連結、汎用の `+ - * /` expression、任意関数、handler loop、一般的な
+  `else` family、early return、任意 command からなる一般命令言語。DD-005 が Gallery
+  の境界表に必要だと示す最小 predicate / control-flow はこの除外の例外だが、何を
+  最小とするかは ADR が比較する。
+- record / object collection、`TypedValue`、item field access、keyed identity、
+  nested `for`、binder shadowing、複数-widget / member-range の `for` body。
+- `RadioGroup`、`SegmentedControl`、新しい選択 widget、widget-owned selection、
+  generic Toggle appearance、Button の Space / Enter activation。
+- two-way binding と scalar `string` state を handler から書く能力。前者は M4-Phase 7、
+  後者は M4-Phase 5 のままである。
+- ABI / host state、window、TextField / IME、scrolling / scrollbar、`Image`、top layer、
+  accessibility、theming、author-controllable sizing。
+- Phase 2 の routing / focus / modal-scope / hit-test / identity policy の再設計。
+  DD-003 の構造更新で退行が見つかった場合は既存契約を修復し、契約自体の変更が必要なら
+  Phase 2 ADR の successor と scope 再確認を先に行う。
+- `docs/dsl_spec.md` 1.22 で訂正済みの `for` body handler / handler-position binder
+  admission を再審議すること、unknown signal 名や focus annotation の診断を便乗して
+  広げること。
+
+次は Out of scope ではなく、**framing では決めず §3 の ADR に残す事項**である：正式な
+author syntax、AST / IR の形、evaluator / dependency-tracking 方式、範囲外時の具体的な
+error と effect containment、診断文言と優先順位、DD-004 の表示投影方式、DD-005 の
+control-flow 方式。ここで一案へ固定しない。
+
+#### 別 phase が所有する除外項目を Phase 3 で読み直さない線
+
+上の除外のうち他 phase が所有するものは「Phase 3 の外」であって「pre-1.0 の外」では
+ない。Phase 3 がそれらの進捗を主張しないのと同様に、**pre-1.0 に着地するかどうかの
+判断も Phase 3 では行わない。** 判断の所在は plan 側にあり、次の二つは撤回・遅延の
+余地が明示されているぶん Phase 3 から触りたくなるが、いずれも既に所有者と判断点を
+持つ。
+
+- **`Image` と直値 `fill`** — M4-Phase 4 所有。AC を持たない予備段の取り込みだが、
+  撤回を判断する stretch 再評価チェックポイントは M4-Phase 2 の ADR Accepted flip で
+  発火し、**2026-08-05 に両方を保持する形で discharge 済み**である
+  （[plan.md](../../plan.md) §Cross-phase dispositions 3）。未発火の gate は残って
+  いないので、Phase 3 が再評価を提案する理由はない。
+- **作者が制御する寸法** — M4-Phase 10 が調査、M5 が実装、M6 が凍結前 disposition と
+  いう控えを持つ（[plan.md](../../plan.md) §Cross-phase dispositions 2、
+  [sizing VDR](../../../cross-milestone/decisions/author-controllable-sizing-surface.md)）。
+  同じく Phase 3 の論点ではない。
+
+ただしこの二つを読み直す過程で、**plan がまだ持っていない観測**が一つ出た。M6 凍結の
+前に M5（または M4 と M5 の間）へ入りうる pre-1.0 項目は、作者が制御する寸法の実装
+だけではない。[candidate pool](../../../candidate-pool.md) の `TypedValue` / 構造化
+データも「M4〜M5 の専用スロット」に傾いており、その ABI 影響判定は M4-Phase 7 が負う。
+plan §Cross-phase dispositions 2 が spike を M4 に置いた判定入力の一つ「M5 は spike と
+実装の両方を吸収できるか」は、M5 が同時に `TypedValue` スロットも吸収する可能性を
+勘定に入れていない。これは Phase 3 が答える問いではなく、**M4-Phase 7 の ABI 判定が
+出た時点で plan 側が持つべき入力**である。ここでは論点として記録するにとどめ、Phase 3
+の scope にも DD にも入れない。
+
+### M4 acceptance criteria との対応
+
+| M4 criterion | Phase 3 での扱い | Phase 3 close で主張すること |
+|---|---|---|
+| **AC9 — Expression predicates** | **本フェーズの主 acceptance criterion。** 改訂後 AC9 の collection read、per-item conditional、equality selection、小さい handler control flow、全 assignment の admission / type compatibility と、明記された除外を DD-001〜006 で分担する | 下記 verification matrix の全行と Gallery / fixture の author-facing outcomes が揃い、AC9 の Phase 3 割当を discharge できる |
+| **AC1 — input / focus** | DD-003 の subtree mutation が既存 focus / hover / handler lifecycle を通るための**回帰境界** | Phase 2 の契約を壊していないことだけ。AC1 全体を再度 discharge したとも、新しい input 能力を追加したとも主張しない |
+| **AC12 — two showcases** | Gallery A を Phase 3 の consumer として段階的に成熟させる | Phase 3 の named Gallery slice を示すだけ。Gallery completion は Phase 4、二つの showcase 全体の完了は後続 phase / milestone close に残す |
+| その他の AC | 本フェーズでは所有しない | 進捗・完了を主張しない |
+
+---
+
+## 検証方針（§2.4）
+
+### 証拠レイヤー
+
+1. **OS 非依存の unit test。** parser / checker / lowering / textual-IR emission、
+   expression typing、純粋な evaluator / dependency bookkeeping は各 crate の unit test
+   と `wasamoc` round-trip test で固定する。Win32 / WinRT-bound object は mock しない。
+2. **mock-free Windows integration test。** 実 `.ui` を `wasamoc` で check / lower / emit
+   し、loader と production runtime を通す named fixture で、reactivity、subtree
+   lifecycle、input producer、focus / hover / handler regression を確認する。CI の必要
+   runtime capability が無ければ黙って skip せず失敗する既存方針を維持する。
+3. **出荷 Gallery の可視証拠。** GUI 表示を成果とする slice は launch + screenshot
+   capture + assistant analysis を必須とし、単なる process survival は補助信号に留める。
+   誤実装でも同じ一枚になり得ないよう、状態を変える前後脚と復帰 / no-change 脚を置く。
+4. **spec / call-site audit。** ADR Accepted 時の design sync と phase close 時の
+   implementation sync で `docs/dsl_spec.md` を現物へ合わせる。DD-003 は structural
+   side-effect / writer enumeration、DD-006 は assignment variant と検査 call site の
+   対応表を close artifact に残す。
+
+### DD と検証手段の対応（仮確定）
+
+| DD | 純ロジック / compiler 証拠 | 実経路 / consumer 証拠 | 固有の failure / review obligation |
+|---|---|---|---|
+| **DD-001** | 各採用 expression の parse、type、scope / position admission、lowering、emit / load round trip。隣接する不許可位置と型の reject case を対にする | DD-002〜005 の production-path fixture が同じ共通規則を消費する | IR schema を変更する案なら full independent review。prototype の通りやすさを ADR 選択理由にしない |
+| **DD-002** | count / empty / valid index の全 element-type matrix、collection と index の dependency 再実行、範囲外と containment の決定済み matrix | Gallery の count / caption。empty の自然な出荷状態が無ければ named fixture で non-empty ↔ empty を反転させる | 範囲外分岐は DD-V-029 に従い、対象 test とそれを落とした誤実装を close artifact に記録する |
+| **DD-003** | binder の型 / scope admission と lowering、nested / shadowing 等の非採用境界 reject | false ↔ true、same-length replacement、remove / reinsert を実 `.ui` 経路で行い、loop context、effect / handler 登録、layout、hover / focus の再発条件を確認。Gallery に自然な表示が無ければ named fixture | runtime structural change と GUI evidence は full independent review。既存 writer と lifecycle への call-site / side-effect audit を必須にする |
+| **DD-004** | equality の admitted type pairs、result=`bool`、mismatch reject | Gallery で一つの `selected_index` から選択表示 1 件を作り、別 index への移動、focus-only 移動、範囲外 discriminant 時の ADR 決定を区別する | selected と focused の同時成立表示を Phase 2 基準線から退行させない |
+| **DD-005** | 採用した guard / control-flow の parse、admission、lowering、IR、false=no-write と評価時点の unit cases | key Left / Right、button previous / next の四 producer × empty / 1 件 / 複数件（先頭・中間・末尾）matrix。少なくとも key と button の双方を production input path で通す | schema / runtime structural risk に応じ implementation gate の review level を選ぶ。DD-002 の rollback contract を重複して決めない |
+| **DD-006** | 全 `HandlerExpr` variant を RHS-capable / non-RHS に分類し、全 assignment form について LHS declared type × position capability の admit / reject matrix を作る。`i32 = "many"`、`string = 5`、未許可 scalar-string write を reject し、既存 `string[]` append を positive control にする | `wasamoc check` を作者向け gate として通し、ADR が loader defense-in-depth を選ぶ場合は textual / memory IR の reject も実 loader で確認する。GUI は完了条件にしない | variant 一覧と checker / lowering / loader / evaluator の call-site audit を ground truth と照合する。個別 case 追加だけで「完全」としない |
+
+### AC9 の discharge matrix
+
+| AC9 の要素 | 最低限必要な証拠 |
+|---|---|
+| collection count / emptiness / index access | type・dependency・境界の unit matrix、non-empty ↔ empty で count / empty を反転する fixture、Gallery の status-bar count と二つ以上の index に対応する caption |
+| per-item conditional rendering | binder 条件の compiler matrix、実 runtime の present ↔ absent ↔ present、same-length replacement、構造 lifecycle 回帰、識別可能な可視対照 |
+| equality-based selection | type matrix、Gallery で exactly-one selection、異なる index への移動、focus-only 移動との分離 |
+| small reusable handler control flow | 四 producer × empty / 1 / multiple matrix。内部へ一度動ける positive leg と、各端で余分な同方向入力が no-change になる boundary leg |
+| every handler assignment checked | 全 variant の call-site audit、admit / type-mismatch / capability-mismatch matrix、既存 `string[]` mutation の non-regression |
+| explicit exclusions | 文字列連結・一般算術が偶然 admission されていない negative cases、scalar `string` write の capability reject。一般言語全体の網羅テストは要求しない |
+| shipped author path | `examples/gallery/gallery.ui` が workspace build の build script を通って check / lower / emit され、Gallery runtime と可視 evidence が同じ artifact を消費する |
+
+### GUI 陽性対照と owner-visible smoke の範囲
+
+- **count / empty / per-item presence:** collection を non-empty → empty → non-empty、
+  または条件を false → true → false に変え、表示が対応して反転する。固定の件数文字列や
+  最初から空の一枚だけでは証拠にしない。Gallery に不自然な mutation UI を足さず、
+  必要なら named mechanism fixture を使う。
+- **caption / equality selection:** 少なくとも二つの異なる index を選び、caption の値と
+  exactly-one selection が一緒に移ることを示す。Tab だけで focus を移した脚では
+  selection が移らないことを分離対照にする。
+- **boundary guard:** 先頭から一度内側へ動ける脚を示してから先頭へ戻り、Left key と
+  previous button を余分に入力しても caption / selection が変わらないことを示す。
+  末尾も Right key / next button で対称に行う。empty / 1 件の全 matrix は自動 integration
+  test を主証拠とし、静止画を大量に並べることは要求しない。
+- assistant capture / analysis は実装 close 前の baseline であり、owner-visible smoke を
+  置き換えない。owner smoke の具体手順は implementation plan で、採用された構文と
+  Gallery UI に合わせて確定する。
+
+### build / CI 方針
+
+- 新しい言語・build system を導入しないため、**CI workflow 更新は予定しない**。
+- cold debug verification は `cargo build --workspace` の後に
+  `cargo test --workspace` を行う。Phase 3 の compiler / pure-logic test と mock-free
+  Windows integration test は workspace suite に載せ、CI の既存 Windows runner で
+  gate する。
+- runtime または出荷 Gallery を変えた GUI evidence の前には
+  `cargo build --release --workspace` を行う。これが `gallery-rust` の build script を
+  通じて出荷 `gallery.ui` の check / lower / emit も行い、stale uplifted rlib を避ける。
+- deterministic failure が出た場合は同一 command を一度 rerun して再現 / 非再現を記録し、
+  close artifact で disposition する。実装 task の gate 選択と具体的な test 名は §4 で
+  固定し、本 §2.4 では証拠の役割と最低 matrix だけを凍結する。
 
 ---
 
@@ -619,8 +828,12 @@ Revision 3 の根拠と変更範囲を critical check 済みとして authorise 
 の AC9 / Phase 3 / ROADMAP 案、Revision 5 の AC9 / Phase 3 / Phase 5 / ROADMAP
 案をそれぞれ authorise した。plan と ROADMAP の land は別コミットで記録する。
 
-回答後も、今回は §2.2 だけで止める。§2.3 の scope、§2.4 の verification、
-ADR の選択肢・推奨・結論は、次の明示的な作業として別に行う。
+この回答時点では §2.2 だけで止めた。§2.3 の scope、§2.4 の verification、
+ADR の選択肢・推奨・結論は、次の明示的な作業として別に残した。
+
+**2026-08-11 — §2.3 / §2.4 owner review request:** 上記 ⑧〜⑬と、
+§Phase 3 の対象範囲 / §検証方針を owner review へ提示した。scope と verification
+以外の ADR 選択肢・推奨・結論は起草していない。回答は pending。
 
 ## Revisions
 
@@ -652,3 +865,32 @@ ADR の選択肢・推奨・結論は、次の明示的な作業として別に�
   (`7763555`)、Revision 4 (`4afa204`)、Revision 5 (`1499241`) を個別に land。
   DD-005 の plan gate を完了扱いにした。`docs/dsl_spec.md` §8.11 の Phase 2
   spec-sync 漏れは version 1.22（`6e3db4f`）で訂正した。§2.3 / §2.4 と ADR は未着手。
+- **2026-08-11 — §2.3 / §2.4 owner-review draft.** 改訂後の M4 plan / roadmap
+  AC9、land 済み plan-revision proposal、accepted constraints、`dsl_spec.md` 1.22 を
+  突き合わせ、In scope / Out of scope / AC 対応と DD / AC9 discharge matrix を追加。
+  純ロジック unit、mock-free Windows integration、状態遷移つき Gallery GUI evidence、
+  DD-V-029 red-test、assignment call-site audit の役割を仮確定した。owner 回答までは
+  `draft` を維持し、ADR 起草・実装へ進まない。
+- **2026-08-12 — 将来の追加を塞がない設計義務の追加。** Out of scope の各能力を
+  1.0 までの取り込み価値で並べ直したところ、二つが Phase 3 の選択の下流にあると
+  分かった。多段 `for` / 入れ子の構造制御は DD-003 の loop context 所有・寿命に、
+  Phase 5 の scalar `string` write と将来の値を生む式は DD-006 の admission /
+  型適合の枠組みに依存する。scope は広げず、将来の追加を構造的に排除しないことを
+  ADR の判断要件として合意項目 ⑬ と両 DD の下位の問いに加えた。
+- **2026-08-12 — 別 phase 所有の除外項目を読み直さない線。** `Image` / 直値 `fill` と
+  作者が制御する寸法について、撤回・遅延の判断点が既に plan 側にあること（前者は
+  stretch 再評価が 2026-08-05 に discharge 済み、後者は M4-Phase 10 → M5 → M6 の控え）
+  を §含まないもの に記録し、Phase 3 が再評価を提案しない線を引いた。あわせて、
+  M5 の pre-1.0 スロットを作者制御寸法の実装と `TypedValue` が取り合いうるという、
+  plan がまだ持たない観測を、M4-Phase 7 の ABI 判定後に plan が消費する入力として
+  記録した。Phase 3 の scope と DD には入れていない。
+- **2026-08-12 — Owner-alignment independent-review remediation.** accepted
+  `constraints.md` を、その文書自身の再評価 allowance に従って Revision 3〜5 と
+  framing 合意⑤へ同期した。候補プールでは Button keyboard activation の根拠を
+  `dsl_spec.md` 1.21 と `key-down("Enter")` の互換性へ訂正し、focus annotation の
+  pre-1.0 扱いを制約ではなく再評価可能な scheduling hypothesis として記述した。
+  `TypedValue` については Phase 7 の decision ownership を維持しつつ、Phase 7 / 8 の
+  ABI 影響を ADR 前に固定しないよう [M4 plan Revision 6 proposal](./plan-revision-6-proposal.md)
+  と候補行を限定修正した。
+  ⑧〜⑬の scope / verification proposal 自体は変更しておらず、owner agreement は
+  引き続き pending である。
