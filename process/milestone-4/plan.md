@@ -211,6 +211,12 @@ and §Phase dependencies.
   Axes — the group-surface, widget-owned-state and generic-toggle axes
   stay with M5, the two-way-binding axis with Phase 7).
 
+  Per-item conditional rendering is a cross-layer deliverable: Phase 3 owns the
+  loop context used by condition evaluation and subtree re-materialisation, and
+  integrates creation and disposal through the existing effect, handler,
+  focus / hover and layout lifecycles. This responsibility does not create a
+  separate structural writer or change the positional iteration baseline.
+
   Consumer (A): the status-bar photo count, the lightbox caption
   (index read), and exclusive selection of the current thumbnail.
   String concatenation stays out — the count is authored as a static
@@ -449,8 +455,10 @@ is still small enough to reason about, not after five widgets have
 accumulated implicit expectations.
 
 Phases 3 and 4 are independent of each other and both depend only on
-Phase 2. Phase 3 is compiler-side (checker / lowering / evaluator);
-Phase 4 is runtime / widget-side. They are sequenced 3 → 4 because
+Phase 2. Phase 3 owns predicate checking / lowering / evaluation plus the
+runtime structural integration required by per-item conditional rendering;
+Phase 4 owns scrolling, gallery widgets and image presentation. They are
+sequenced 3 → 4 because
 Phase 4's status-bar and caption evidence reads better once predicates
 exist, and because Phase 3's novel normative spec section benefits from
 landing before the milestone's heavier OS integration begins.
@@ -892,6 +900,41 @@ handler-side scalar `string` write.**
   known then, and this entry is the authoritative placement.
 - **Not included.** What the rule should say. Also not included: any
   change to hit-testing, which behaves as specified.
+
+**Revision 3 (2026-08-11) — Correct M4-Phase 3's cross-layer
+responsibility.**
+
+- **What / tier.** Tier 2 additive/refining. The Phase 3 description now
+  explicitly owns the loop context and runtime structural integration required
+  by its already-planned per-item conditional. The dependency prose no longer
+  calls Phase 3 compiler-side or contrasts it with Phase 4 as runtime-side. No
+  new author-facing capability was added by this revision.
+- **Initiator.** Agent, from the Phase 3 source audit and independent framing
+  review.
+- **Old premise.** Checker, lowering and evaluator work could deliver the
+  planned per-item conditional inside a compiler-side phase boundary.
+- **New evidence.** The existing conditional effect uses an ordinary
+  `BindingEvalContext`, and false-to-true re-materialisation calls
+  `build_node(...)`; iteration uses item / index context and
+  `build_node_with_loop_context(...)`. A condition inside a `for` can therefore
+  lose its binder both when evaluated and when its subtree is rebuilt. That
+  subtree also owns effects and handlers and crosses the Phase 1 / 2 focus,
+  hover, handler-registry and layout lifecycles when inserted or removed.
+- **Why the old plan no longer holds.** A compiler-only delivery could accept
+  and lower the authored form without preserving the runtime binder and
+  structural lifecycle that give it meaning. The old responsibility statement
+  was insufficient for the deliverable already in the plan.
+- **No-change option considered.** Leave the runtime work implicit. Rejected
+  because the hidden dependency would misstate ADR responsibility, call-site
+  review and GUI evidence during implementation planning.
+- **Critical check.** Owner-completed 2026-08-11: the evidence and proposed
+  change boundary were judged valid and proportionate.
+- **Owner authorisation.** Authorised 2026-08-11 for the exact proposal recorded
+  in the Phase 3 plan-revision artifact.
+- **Impact check.** No AC meaning, phase order, completed-phase evaluation,
+  retrospective / merge gate or ROADMAP text changed. Phases 3 and 4 remain
+  independent after Phase 2. Phase 3's later evidence must cover the structural
+  consumer it already promised.
 
 ## Progress
 
