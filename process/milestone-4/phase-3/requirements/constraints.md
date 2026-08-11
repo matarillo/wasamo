@@ -1,7 +1,8 @@
 ---
 title: M4-Phase 3 制約引き継ぎ — 述語式
-status: draft
+status: accepted
 created: 2026-08-11
+accepted: 2026-08-11
 source-phase: M4-Phase 2
 target-phase: M4-Phase 3
 related:
@@ -318,3 +319,10 @@ Phase 1 handoff の全行を、Phase 3 の surface と再発条件に照らし�
 
 この文書は制約の引き継ぎだけを行う。述語の綴り、型規則、IR 表現、依存追跡、
 診断文言、handler guard の具体形は、次段階の Phase 3 framing と ADR で決める。
+
+## Revisions
+
+- **2026-08-11 — Accepted with re-evaluation allowance.** オーナー受入済み。
+  本文の判断は現時点で得られている情報と知識に基づく仮説であり、不変の事実
+  ではない。新しい情報・知識・実測によって前提が変わった場合は再評価してよい。
+  内容を変更するときは、根拠と影響を本節に記録し、凍結文書の改訂として扱う。
