@@ -622,10 +622,10 @@ M3's A1 required the Gallery to run on all three example hosts
 For B4 this plan requires:
 
 - B4 ships on the **Rust host** as its primary form; and
-- every **ABI-bearing** surface (M4-Phase 7 above all, plus window
-  creation changes from M4-Phase 8) is exercised from **at least one
-  non-Rust host**, so an ABI regression cannot hide behind Rust's
-  in-workspace build.
+- every **ABI-bearing** surface (M4-Phase 7 above all, plus any window
+  creation change from M4-Phase 8 if that phase's ADR adds or changes ABI)
+  is exercised from **at least one non-Rust host**, so an ABI regression
+  cannot hide behind Rust's in-workspace build.
 
 Whether B4 itself gains full C and Zig hosts is decided at
 **M4-Phase 7**, when the shape of the ABI change is known, and recorded
@@ -795,9 +795,11 @@ M4 is complete when **all** of the following hold:
   would not need it.
 
 - **ABI churn across three hosts.** M4-Phase 7 is the milestone's only
-  ABI-bearing phase, and M6 freezes the ABI. A boundary designed
-  against one consumer will not hold. Mitigation: the phase designs all
-  three directions together, exercises at least one non-Rust host, and
+  phase whose acceptance surface was explicitly classified as ABI-bearing
+  at planning; M4-Phase 8's window-creation ABI impact remains for its ADR
+  rather than being assumed either way. M6 freezes the ABI. A boundary
+  designed against one consumer will not hold. Mitigation: Phase 7 designs all
+  three host-state directions together, exercises at least one non-Rust host, and
   discharges the `TypedValue` ABI-impact homework
   ([framing.md](requirements/framing.md) §検討ノートのケース分類と M4
   期間中の宿題) rather than leaving "ABI impact: unknown" standing.
@@ -1029,6 +1031,51 @@ and type checking in M4-Phase 3.**
   Phase 5 continues to own scalar `string` writes and consumes, rather than
   reopens, the Phase 3 invariant.
 
+**Revision 6 (2026-08-12) — Qualify the M4 ABI-bearing phase hypothesis.**
+
+- **What / tier.** Tier 2 refining. Four planning/status statements now
+  distinguish an acceptance surface explicitly known to be ABI-bearing from a
+  later phase whose ABI impact is still an ADR question. This changes the
+  normative reading of Phase 8's verification trigger, so it is not classified
+  as a mechanical tier-1 correction. No AC, phase scope, dependency, ordering
+  or host-parity rule changes; only whether Phase 8 triggers that existing rule
+  is left conditional on its eventual ABI decision.
+- **Initiator.** Owner, during the 2026-08-12 Phase 3 framing review. The owner
+  directed the initial-plan statement to be treated as a revisable hypothesis
+  and asked the agent to choose the response after a critical re-check.
+- **Old premise.** Several lines called Phase 7 M4's only ABI-bearing phase,
+  while the host-parity section simultaneously treated Phase 8 window creation
+  as ABI-bearing. The two claims could not both be unconditional.
+- **New evidence.** The contradiction is visible inside this plan itself: AC8
+  and the Phase 7 description explicitly require a host-state ABI change, while
+  Phase 8 has not reached framing or ADR and its description does not establish
+  whether multi-window / `WindowConfig` needs a new entry point, can consume
+  Phase 7's boundary, or can remain internal to the DSL/runtime.
+- **Why the old plan no longer holds.** Treating either side of the contradiction
+  as unconditional would turn an initial-plan hypothesis into an unearned
+  constraint. The plan can state the known Phase 7 classification and preserve
+  the Phase 8 evidence gate without pre-deciding Phase 8's ABI design.
+- **No-change option considered.** Leave both claims and expect Phase 8 framing
+  to interpret them. Rejected because the same plan would continue to command
+  incompatible readings, and the `TypedValue` candidate would inherit a false
+  scheduling premise from whichever sentence a reader happened to choose.
+- **Critical check.** Agent-completed 2026-08-12. The evidence supports neither
+  "Phase 8 definitely changes ABI" nor "Phase 8 definitely does not". The
+  narrow correction is to record Phase 7 as the only *planning-classified*
+  ABI-bearing acceptance surface and make the existing non-Rust-host gate
+  conditional on Phase 8 actually changing ABI. This preserves verification
+  pressure without selecting an architecture.
+- **Owner authorisation.** Authorised 2026-08-12 while remediating the Phase 3
+  framing review, with the instruction to treat initial-plan statements as
+  revisable hypotheses and preserve the project vision rather than an obsolete
+  assumption.
+- **Impact check.** Phase 7 still owns the `TypedValue` ABI-impact homework and
+  the three-direction host-state design. Phase 8 still owns multi-window and
+  window config. Any ABI change from either phase still requires `abi_spec.md`,
+  binding and non-Rust-host evidence. `_roadmap.md` is unchanged because no AC
+  meaning changed. Proposal and critical-check evidence:
+  [plan-revision-6-proposal.md](phase-3/requirements/plan-revision-6-proposal.md).
+
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live task
@@ -1037,13 +1084,13 @@ tracking belongs in each phase's `implementation/plan.md` (with
 
 | Phase | Status | Progress file | ADR | Notes |
 |---|---|---|---|---|
-| M4-Phase 1 — Per-monitor DPI awareness | phase-end recorded; phase→main owner approval pending | [plan.md](phase-1/implementation/plan.md) | [preamble.md](phase-1/implementation/preamble.md) | Discharges AC7 and the M3 runtime-DPI residual. Framing owner-aligned 2026-07-28; four decisions Accepted 2026-07-28 (Per-Monitor-Aware V2 declared by the runtime in `wasamo_init`; layout in DIP with conversion confined to the seams and crispness bought at the rasterization surface; per-window scale with a fixed `WM_DPICHANGED` order; DIP as the outward unit with no new ABI function). Framing agreements ①/②/③ each tested inside the slate — no stage-2 plan revision required, and "Phase 7 is the milestone's only ABI-bearing phase" survives. Moment 1 spec sync landed 2026-07-28 ([architecture.md §12](../../docs/architecture.md#coordinate-spaces), [dsl_spec.md §1 units](../../docs/dsl_spec.md), [abi_spec.md §4.1 / §4.2](../../docs/abi_spec.md), [layout-engine.md §3.1](../../docs/notes/layout-engine.md) answered); Moment 2 implementation sync landed at T12, including the corrected `verification-environments.md` Observation 4 procedure. Initial phase-end CI runs `30873359437` and `30873615639` failed the DPI matrix test; repair code commit `1f162dc` passed [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516) on the experimental branch. After the review-remediation test-target change, [phase-branch run 30881324493](https://github.com/matarillo/wasamo/actions/runs/30881324493) passed and directly verified the current code tree; the CI criterion is discharged without erasing the failed-run history |
+| M4-Phase 1 — Per-monitor DPI awareness | phase-end recorded; phase→main owner approval pending | [plan.md](phase-1/implementation/plan.md) | [preamble.md](phase-1/implementation/preamble.md) | Discharges AC7 and the M3 runtime-DPI residual. Framing owner-aligned 2026-07-28; four decisions Accepted 2026-07-28 (Per-Monitor-Aware V2 declared by the runtime in `wasamo_init`; layout in DIP with conversion confined to the seams and crispness bought at the rasterization surface; per-window scale with a fixed `WM_DPICHANGED` order; DIP as the outward unit with no new ABI function). Framing agreements ①/②/③ each tested inside the slate — no stage-2 plan revision required, and Phase 1 added no ABI function; Revision 6 later qualified the broader "Phase 7 only" planning hypothesis without changing this phase's result. Moment 1 spec sync landed 2026-07-28 ([architecture.md §12](../../docs/architecture.md#coordinate-spaces), [dsl_spec.md §1 units](../../docs/dsl_spec.md), [abi_spec.md §4.1 / §4.2](../../docs/abi_spec.md), [layout-engine.md §3.1](../../docs/notes/layout-engine.md) answered); Moment 2 implementation sync landed at T12, including the corrected `verification-environments.md` Observation 4 procedure. Initial phase-end CI runs `30873359437` and `30873615639` failed the DPI matrix test; repair code commit `1f162dc` passed [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516) on the experimental branch. After the review-remediation test-target change, [phase-branch run 30881324493](https://github.com/matarillo/wasamo/actions/runs/30881324493) passed and directly verified the current code tree; the CI criterion is discharged without erasing the failed-run history |
 | M4-Phase 2 — Event routing + focus model + generic click | phase-end recorded; phase→main owner approval pending | [plan.md](phase-2/implementation/plan.md) | [preamble.md](phase-2/decisions/preamble.md) | Milestone core. Framing owner-aligned 2026-08-05 (seven agreements, six of them explicitly as revisable hypotheses; touch = synthesized injection with stated limits, no hardware available). Pre-ADR spike discharged — [focus-traversal-spike.md](phase-2/decisions/exploration/focus-traversal-spike.md): traversal core as Win32-independent pure logic under unit test, plus a mechanism fixture driving it from the real `.ui` → IR → runtime path. Five decisions Accepted 2026-08-06: DD-001 (target-then-bubble with no capture phase and consume-on-handle; an unconsumed key reaches the default window procedure; touch on `WM_POINTER*` without changing the host process's input mode), DD-002 (layout-derived DIP hit rectangles retained beside the Visual write by the one lockstep pass; one topmost target bounded by ancestor clips, from which occlusion follows rather than needing a scrim rule), DD-003 (one `FocusState` per window with tree-order traversal, `enabled: false` removing a stop, click focusing the nearest focusable widget at or above the target, and group traversal and focus / active-item separation settled for M5 without building widgets), DD-004 (a modal scope as an annotated subtree whose presence is the entry — materialisation captures the restore target, not derivable from the tree afterwards, and moves focus inside), and DD-005 (per-item handlers admitted inside `for` bodies together with the registration lifecycle and the position-not-item identity consequence M3-Phase 7 routed here; `focus-group` and `modal-scope`; a `dismiss` request admitted beside `modal-scope` only, whose sources grow without the spelling changing; and one `key-down("<key>")` command signal, the physical-key half with non-character key names only). Moment 1 spec sync ([dsl_spec.md §4.19](../../docs/dsl_spec.md), [architecture.md §13](../../docs/architecture.md), [m4-interaction-intake.md](../../docs/notes/m4-interaction-intake.md)) re-syncs at the Accepted flip. **Stretch re-evaluation discharged 2026-08-05: both stretch intakes retained** (`Image` / direct-value `fill` stay at M4-Phase 4; multi-line editing stays ride-if-room — §Cross-phase dispositions 3). T1–T12 and the owner-visible smoke are complete; T13 synchronized the specs and drafted the phase-end retrospective / handoff. Its first cold suite fired CF-T7-1: allocator reuse retained a focus record on a fresh row without repainting its indicator. Owner-authorized T13a repaired that divergence through the existing focus writer, added an allocator-independent red/green fixture, completed full independent review and passed a replacement cold suite plus all consumer checks. Pointer-address identity remains a bounded handoff residual. T13/T13a were merged no-ff as `b42a212`; phase-branch [CI run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054) passed on `4b1076f`; phase→main merge remains a separate owner gate |
 | M4-Phase 3 — Predicate expressions | not started | — | — | Novel normative DSL content; absorbs three M3-deferred DSL axes |
 | M4-Phase 4 — Gallery completion | not started | — | — | Scroll / scrollbar / `Image` / direct `fill`; two stretch intakes |
 | M4-Phase 5 — Single-line text editing | not started | — | — | Must fix the text-store-facing internal model for Phase 6 |
 | M4-Phase 6 — IME via TSF | not started | — | — | Heaviest OS integration; crosses the Phase 1 DPI bridge |
-| M4-Phase 7 — Host state boundary + in-out binding | not started | — | — | Only ABI-bearing phase; fixes B4 host-parity disposition |
+| M4-Phase 7 — Host state boundary + in-out binding | not started | — | — | Only acceptance surface explicitly classified ABI-bearing at planning; owns the `TypedValue` ABI-impact verdict and fixes B4 host-parity disposition |
 | M4-Phase 8 — Multi-window + window config | not started | — | — | Decides the dynamic title's value source |
 | M4-Phase 9 — Top-layer overlays + modal dialog | not started | — | — | Second structure for the modal focus scope |
 | M4-Phase 10 — Author-controllable sizing spike | not started | — | — | AC13; audit deliverable, no runtime surface |
