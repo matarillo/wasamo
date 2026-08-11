@@ -16,7 +16,7 @@ related:
 
 # M4-Phase 3 フレーミング — 論点設定
 
-**状態:** draft（オーナー合意待ち）
+**状態:** draft（オーナー意図の回答を反映、改訂後の §2.2 合意待ち）
 
 **今回実施した段階:**
 [workflow.md §2.2「論点設定」](../../../procedures/workflow.md) のみ
@@ -34,9 +34,10 @@ related:
 今回読み直した Phase 1・2 の implementation handoff / retrospective / 現物、
 M4 の計画・要件、現行の DSL 仕様と `.ui` の実例から、constraints の主要な
 境界は維持できる。一方、**plan の二つの前提は、そのままでは維持できない**。
-Phase 3 は compiler-side だけでは閉じず、handler guard は単なる任意候補より
-強い Phase 2 からの完了責任である。下記の critical check と plan-revision gate
-で明示的に扱う。
+一つは、計画済みの per-item conditional が compiler-side だけでは閉じないという
+現物上の訂正である。もう一つは、現行 plan からは導出できない handler guard を
+Phase 3 の必須成果に加えるというスコープ変更である。この二つを一括承認せず、
+下記の別々の問いと plan-revision gate で扱う。
 
 > **例の読み方:** 以下の `count(photos)`、`photos[selected_index]`、
 > `index == selected_index`、handler 内の `if` は、作者が実現したいことを
@@ -47,19 +48,21 @@ Phase 3 は compiler-side だけでは閉じず、handler guard は単なる任�
 
 ## 今回オーナーに合意してほしいこと
 
-この節だけで §2.2 の合意判断ができる。推奨どおりなら「①〜⑤ OK」、
+この節だけで §2.2 の合意判断ができる。推奨どおりなら「①〜⑦ OK」、
 変更したい項目があればその番号を指定してほしい。
 
 | ID | 合意してほしいこと | 提案 | 状態 |
 |---|---|---|---|
-| ① | **DD の分け方と番号** | DD-M4-P3-001〜006 の 6 件を予約する。001 = 共通の述語式、002 = collection 読み取り、003 = 項目ごとの条件表示、004 = 等値選択、005 = handler guard、006 = binding-only string RHS の診断。DD-005 だけは ② の gate が開くまで条件付き予約とする | pending |
-| ② | **Phase 3 責務と plan 改訂の方向** | Phase 3 は、狭い handler guard と runtime の構造統合まで責任を持つ方向を推奨する。理由は、Phase 2 close が「範囲外診断と handler predicate の両方」を前送りし、per-item 条件表示の現物も focus / hover / registry / layout に触れるため。現行 plan に暗黙に入っていたとは扱わず、次段階として tier 2 Revision-log 草案を別 artifact に起こす。critical check と owner authorisation がそろうまで Frozen agreement、DD-005 ADR、実装は変更しない | pending |
-| ③ | **診断責任の二層分離** | Phase 3 が新しく認める式は、認めた全位置で型・scope を早期検査する（DD-001）。別に、既存の binding-only `StrLit` / `StrPropRead` / `Interpolation` を handler RHS が受理する規範違反を DD-006 で直す。scalar `string` write capability は Phase 5 のまま。既存 handler assignment 全体の型検査まで広げるかは DD-006 の独立した下位問いとし、文字列能力と混ぜない | pending |
-| ④ | **pre-ADR spike の要否** | Phase 3 全体には必須化しない。現物調査で per-item conditional の不足箇所は既に二つの loop-context seam として特定でき、未知の状態モデルを試作で発見する段階ではない。下記の発火条件が実際に成立した DD だけに、「何を観測できれば答えか」を限定した spike を ADR Accepted 前に提案する | pending |
-| ⑤ | **現行仕様の矛盾の扱い** | `docs/dsl_spec.md` §8.11 に残る「`for` body の handler 禁止」「item/index read は binding だけ」という二行は、Accepted 済み Phase 2 DD、実装、同仕様 revision 1.21 と矛盾する。Phase 3 の新しい DD や禁止前提にはせず、Phase 2 の実装同期漏れとして別に factual correction する | pending |
+| ① | **DD の分け方と番号** | DD-M4-P3-001〜006 の 6 件を予約する。001 = 共通の述語式、002 = collection 読み取りと範囲外 failure contract、003 = 項目ごとの条件表示、004 = 等値選択、005 = 小さい一般的な handler control flow、006 = handler assignment admission / 型検査の完全性。DD-005 の必須性は owner 回答済みだが、ADR 起草は tier 2 gate 後とする | pending |
+| ② | **計画済み per-item conditional の責務訂正** | Phase 3 は compiler-only では閉じず、DD-003 が condition evaluation、subtree 再実体化、focus / hover / handler registry / layout lifecycle までを cross-layer に設計する。これは handler guard の採否とは独立した、既存 Phase 3 deliverable の実現条件である。plan の責務・依存記述を直す場合は tier 2 草案の独立項目にする | pending |
+| ③ | **handler control-flow の Phase 3 追加** | gallery の Left / Right key と左右 button の 4 経路すべてを、empty / 1 件 / 複数件で範囲外へ進ませないことを Phase 3 の必須成果とする。gallery 専用命令ではなく、今後も使える**一般的だが小さい surface**を DD-005 で設計する。正式構文・IR・評価方式はここでは選ばない。現行 plan から暗黙に導出せず、別 artifact の tier 2 proposal を critical check と owner authorisation にかける | owner intent settled 2026-08-11; plan gate pending |
+| ④ | **handler assignment 検査の完全性** | 個別の不正 RHS をアドホックに塞ぐのではなく、全 handler assignment が漏れなく検査される仕組みを DD-006 の要求にする。RHS が handler position で許されるかという **capability / position admission** と、許された RHS の型が LHS 宣言型に合うかという **type compatibility** を分ける。scalar `string` write capability は Phase 5 のまま | owner intent settled 2026-08-11 |
+| ⑤ | **範囲外 read の判断範囲** | runtime error / fallback / clamp のどれを契約にするか、失敗時に旧表示・対象 effect・後続 effect をどう扱うかを DD-002 の未決論点にする。Phase 2 の runtime diagnostic 期待は有力な入力だが、ADR 前の結論にはしない。DD-005 の guard は範囲外 state を予防する別責務であり、DD-002 の代替ではない | owner intent settled 2026-08-11 |
+| ⑥ | **pre-ADR spike の要否** | Phase 3 全体には必須化しない。現物調査で per-item conditional の不足箇所は既に二つの loop-context seam として特定でき、未知の状態モデルを試作で発見する段階ではない。下記の発火条件が実際に成立した DD だけに、「何を観測できれば答えか」を限定した spike を ADR Accepted 前に提案する | pending |
+| ⑦ | **現行仕様の矛盾の扱い** | `docs/dsl_spec.md` §8.11 に残る「`for` body の handler 禁止」「item/index read は binding だけ」という二行は、Accepted 済み Phase 2 DD、実装、同仕様 revision 1.21 と矛盾する。Phase 3 の新しい DD や禁止前提にはせず、Phase 2 の実装同期漏れとして別に factual correction する | pending |
 
-①〜⑤はいずれも、現時点の情報に基づく仮説としての合意を求める。
-新しい実測・設計上の発見があれば見直せる。②の plan 改訂だけは、仮説として
+①〜⑦はいずれも、現時点の情報に基づく仮説としての合意を求める。
+新しい実測・設計上の発見があれば見直せる。②・③の plan 改訂だけは、仮説として
 合意した後も [workflow.md §計画(plan)改訂の規律](../../../procedures/workflow.md)
 の手続きが別に必要である。
 
@@ -69,13 +72,14 @@ Phase 3 は compiler-side だけでは閉じず、handler guard は単なる任�
 |---|---|---|
 | Phase 3 は checker / lowering / evaluator 中心の **compiler-side** phase | per-item `if` は widget / effect / handler を生成・破棄する。Phase 2 で、同じ同期 drain 中に hover path のずれ、handler registry の再照会、focus の address identity が問題になり得ると判明。Phase 1 の layout dirty → `flush_layout` → `sync_visuals` も通る | Phase 3 を compiler-only と扱わない。DD-003 が runtime structural integration の責任を持つ。plan の phase 説明も改訂候補にする |
 | equality と collection 読みがあれば gallery の前後移動も自然に閉じる | 現在の gallery は key 2 経路と button click 2 経路の計 4 か所で無条件に `selected_index` を増減する。equality だけでは「0 より大きい」「末尾より小さい」を自然に書けず、空・1 件も扱えない | 範囲外読みの診断（DD-002）と、範囲外状態を作らない guard（DD-005）を別責務として両方残す。後者の plan 追加を推奨する |
-| predicate の追加は既存 expression pipeline の局所拡張 | Phase 2 で、handler assignment は `i32 = "abc"` や `string = 5` も check 時に見逃し、invocation 時まで失敗し得ると実測した。新しい expression position を増やすほど、この抜けを温存した影響が広がる | 新しい Phase 3 式の型・scope admission は DD-001 の必須責任。既存 binding-only string RHS は DD-006。全 legacy assignment typing は自動的に同梱せず、必要性を明示的に比較する |
+| predicate の追加は既存 expression pipeline の局所拡張 | Phase 2 で、handler assignment は `i32 = "abc"` や `string = 5` も check 時に見逃し、invocation 時まで失敗し得ると実測した。新しい expression position を増やすほど、case-by-case の reject では別経路の抜けが残る | 新しい Phase 3 式そのものの型・scope admission は DD-001、すべての handler assignment を LHS 宣言型と position capability に照らす完全性契約は DD-006 が持つ。検査を一つずつ足す方式はここで選ばず、ADR が漏れを構造的に防ぐ仕組みを比較する |
 | per-item 条件は既存 `if` と `for` の単純な合成 | 現物では `append_static_member` が `loop_context` を受け取る一方、`register_conditional_binding` は通常の `BindingEvalContext` を使い、再挿入も `build_node(...)` で loop context を落とす | DD-003 は「構文を許可するか」だけでは閉じない。条件評価と再実体化の両方で現在位置の loop context を保つ問いを持つ。ただし不足箇所は source audit で特定済みなので、現時点で必須 spike は不要 |
 | 選択表示は focus と同じ強調として扱ってもよい | Phase 2 が `checked` と `focused` を別状態として実装・可視確認し、同時成立時の合成も固定した | DD-004 は selection と focus を統合しない。Tab で focus が動いても、作者が `selected_index` を書かない限り selection は変わらない契約を保つ |
 
 この再評価は、plan を無断で読み替えるためではない。旧前提、新情報、変更影響、
-no-change の意味を明示した Revision-log 草案を次に作るべきだ、という
-**論点設定上の結論**である。今回はその草案や plan 本文までは作らない。
+no-change の意味を明示した Revision-log 草案を別 artifact に作り、critical check と
+owner authorisation を求めるべきだ、という**論点設定上の結論**である。plan 本文は
+その二つが満たされるまで変更しない。
 
 ---
 
@@ -91,8 +95,8 @@ Phase 3 の目的を「式の内部実装を増やすこと」ではなく、Was
 | 選択中の写真名を caption に出す | `Text { text: photos[selected_index] }` | `for` の外から添字で要素を読めない。現在は `Photo #<index>` | 有効な添字の値と、範囲外をどう失敗させるか（DD-002） |
 | 項目ごとに印を出し分ける | `for photo, index ... { if index == selected_index { ... } }` | loop binder は binding / handler では読めるが、`if` 条件では読めない | binder を条件から読む範囲と、部分木の作り直しをどう扱うか（DD-003） |
 | 1 つの状態で 1 つだけ選択表示する | `checked: index == selected_index` | 3 tab なら bool state を 3 個持ち、各 click で 3 個を書き換える | equality を使う単一識別値の選択を、既存 property / 構造表示へどう投影するか（DD-004） |
-| 先頭・末尾から範囲外へ進ませない | handler 内で「有効範囲なら更新」 | 現在は Left / Right key と `<` / `>` click の 4 経路が無条件に `selected_index` を増減し、−1 や件数と同じ値になれる | Phase 3 が handler guard を持つ方向を、plan 改訂後にどこまで小さい面で実現するか（DD-005） |
-| handler で文字列 state を書く | `title = "New"` | checker / lowering / loader を通り、クリック時に evaluator が拒否する。しかし公開仕様では既に binding-only | Phase 3 では早い診断だけを直し、書き込み能力は Phase 5 に残す（DD-006） |
+| 先頭・末尾から範囲外へ進ませない | handler 内で「有効範囲なら更新」 | 現在は Left / Right key と `<` / `>` click の 4 経路が無条件に `selected_index` を増減し、−1 や件数と同じ値になれる | plan 改訂後、gallery 専用でない小さい handler control-flow surface をどう設けるか（DD-005） |
+| handler assignment の誤りを実行前に知る | `count = "many"` / `title = 5` / `title = "New"` | LHS 型と RHS 型を照合しない経路があり、binding-only string RHS も invocation まで通る | 全 assignment を漏れなく検査しつつ、型適合と position capability をどう分離するか。scalar string write は Phase 5 に残す（DD-006） |
 
 Phase 3 を終えても、少なくとも次は実現できない前提を問いの境界に置く。
 
@@ -151,8 +155,8 @@ Phase 3 との違いは次のとおりである。
 | DD-002 collection 読み | **不要** | 既存に collection signal、型別 tracked read、`ItemOutOfRange` の先例がある。範囲外後の旧値 / effect の扱いは製品契約として ADR が決め、その後 unit test で固定できる |
 | DD-003 per-item 条件表示 | **不要** | source audit で、現在の conditional effect が通常の `BindingEvalContext` を使い、再挿入が `build_node(...)` で loop context を落とすという二つの不足を特定できた。未知の状態モデルではなく、ADR が loop context の所有・寿命・再評価規則を決めるための具体的入力である。Phase 2 の focus / hover / registry 再発条件は call-path audit で判定する |
 | DD-004 equality selection | **不要** | 新 widget / group state ではなく、1 state と既存 `checked` または条件表示の合成。author contract を先に決めるべきで、動く ToggleButton を先に作っても方式比較の根拠にならない |
-| DD-005 handler guard | **現時点では禁止** | spike より前に plan-revision gate がある。gate 前に prototype を作ると、未承認 scope を実装で先取りする。gate 後も、まず author example の境界表で必要な表現力を比較する |
-| DD-006 string RHS 診断 | **不要** | Phase 2 で `StrLit` / `StrPropRead` / `Interpolation` が check・lowering・loader を通り invocation で失敗することを実測済み。再度 prototype を作っても新しい判断材料にならない |
+| DD-005 handler control flow | **gate 前は禁止** | owner は Phase 3 の必須成果とする意図を確認済みだが、spike より前に tier 2 plan-revision gate がある。gate 前に prototype を作ると、未承認 scope を実装で先取りする。gate 後も、まず author example の境界表で必要な表現力を比較する |
+| DD-006 handler assignment 検査 | **不要** | Phase 2 で `i32 = "abc"` / `string = 5` と binding-only string forms の漏れを実測済み。中心は網羅的な admission / compatibility invariant の設計であり、個別 reject の prototype を増やしても完全性の判断材料にならない |
 
 ここでいう call-path audit や author example の境界表は ADR の調査であり、
 production code や暫定 IR を作る spike ではない。
@@ -201,8 +205,10 @@ DD の依存関係は次のとおりである。
 
 - DD-001 は共通の語彙・型・式位置を定める土台。
 - DD-002〜004 は、DD-001 の共通規則を 3 つの利用場面へ適用する。
-- DD-005 は plan-revision gate が開いた場合だけ DD-001 を消費する。
-- DD-006 は既存規範の診断欠落であり、他の 5 件と結論を共有しない。
+- DD-005 は owner-required deliverable だが、plan-revision gate が開いた後にだけ
+  DD-001 を消費して ADR 起草へ進む。
+- DD-006 は DD-001 の expression typing を利用しても、全 handler assignment の
+  destination compatibility と position admission の完全性を独立に所有する。
 
 ### DD-M4-P3-001 — 述語式の共通 surface と型規則
 
@@ -265,19 +271,21 @@ Text { text: count(photos) }
 // selected_index = 2 なら 3 件目の名前。
 Text { text: photos[selected_index] }
 
-// selected_index = -1 または count(photos) なら、空文字で成功扱いにしない。
+// selected_index = -1 または count(photos) のときの結果は DD-002 で決める。
 ```
 
 **下位の問い:**
 
 - collection 自体、添字 state、両方の reactive dependency をどう追跡するか。
 - 同じ長さの collection 差し替えでも、添字先の値を読み直すことをどう保証するか。
-- 負数、`index == len`、空 collection、読み取り後に collection が縮んだ場合を
-  どの名前付き診断にするか。
+- 負数、`index == len`、空 collection、読み取り後に collection が縮んだ場合を、
+  runtime error、fallback、clamp などのどの契約で扱うか。Phase 2 handoff の
+  `ItemOutOfRange` precedent を採用するか、別の作者契約を選ぶか。
 - 範囲外時に、対象 binding の旧表示を保持するか、式 / effect を失敗状態に
   するか、後続 effect をどう扱うか。部分的な更新をどこまで許すか。
-- 診断を作者がどこで観測できるようにするか。空文字、0、`false`、丸め、
-  折返しで正常に見せる案は選択肢に戻さない。
+- runtime error を選ぶ場合、診断を作者がどこで観測できるようにするか。
+  fallback / clamp を選ぶ場合、空文字、0、`false`、末尾値、丸め、折返しの
+  どれを許し、作者が意図しない範囲外 read を正常に見せる不利益をどう評価するか。
 - `i32[]` / `string[]` / `bool[]` の要素を、既存の型別 evaluator / writer と
   どうつなぐか。`TypedValue` は導入しない。
 
@@ -384,15 +392,17 @@ for photo, index in photos {
 - group surface、widget-owned state、generic Toggle / appearance を M5、
   two-way binding を Phase 7 に残したまま、どこまでを Phase 3 の選択契約とするか。
 
-### DD-M4-P3-005 — handler の書き込みを守る述語
+### DD-M4-P3-005 — 小さい一般的な handler control flow
 
-**予約状態:** **条件付き予約（採用方向を推奨）。** 下記 plan-revision gate が
-完了するまで、この DD の ADR は起草せず、実装もしない。
+**予約状態:** **owner-required、plan-revision gate 待ち。** gallery の左右端を
+key と button の両方で止めること、そのための能力を gallery 専用ではなく
+一般的だが小さい surface とすることは、2026-08-11 の owner 回答で必須になった。
+下記 plan-revision gate が完了するまで、この DD の ADR は起草せず、実装もしない。
 
 **問い:** イベント handler の state write を「条件が成り立つときだけ」
-実行する能力を Phase 3 に追加する場合、gallery の前後移動を安全に書ける
-最小の author-facing surface は何か。構造表示用 `if` と handler control flow
-をどう区別し、一般的な命令言語へ広げないか。
+実行でき、gallery 以外にも再利用できる最小の author-facing control-flow surface
+は何か。構造表示用 `if` と handler control flow をどう区別し、一般的な命令言語へ
+広げずに Left / Right key と左右 button の 4 経路を安全に書けるようにするか。
 
 **独立した問いにする理由:** 現在の `if` は widget body の structural member
 であり、handler block の statement ではない。また Phase 3 の計画済み
@@ -421,9 +431,9 @@ key-down("ArrowLeft") => {
 **plan-revision gate:**
 
 1. 本文書で、handler guard が既存 Phase 3 scope の暗黙の言い換えではなく、
-   handler control flow と追加の境界 predicate を含み得る scope 追加である、
-   それでも Phase 2 の完了責任と gallery の自然な記述を閉じるため Phase 3 に
-   入れる方向が妥当である、という critical check をオーナーに求める。
+   handler control flow と追加の境界 predicate を含み得る scope 追加であること、
+   それでも Phase 2 の完了責任と gallery の自然な記述を閉じるため Phase 3 の
+   必須成果にしたいという owner intent を、plan revision の入力として記録する。
 2. Phase 3 に入れる場合は、[workflow.md §計画(plan)改訂の規律](../../../procedures/workflow.md)
    の **tier 2（scope / phase 構成）**として Revision-log entry 草案を別 artifact
    に起こす。handler guard の追加だけでなく、「Phase 3 は compiler-side」という
@@ -453,43 +463,54 @@ key-down("ArrowLeft") => {
   を同期的に起こし得る。guard を一度評価してから書く間、また複数 statement の
   前後で collection や構造が変わる場合、どの時点の predicate を読むか。
 - guard 後の write が per-item conditional や caption を同期再評価し、その途中で
-  診断された場合、後続 statement と既に適用した effect をどう扱うか。
+  範囲外 read が起きた場合の表示・effect containment は DD-002 の結論を消費する。
+  DD-005 で別の rollback / transaction 契約を重ねて決めない。
 - 一般関数、loop、`else` family、任意の command、M-expr4 全体を開かずに
   gallery の左右端を自然に書けるか。
 
-**gate を開かない場合の意味:** Phase 3 は範囲外添字を名前付き実行時診断で
-失敗させるが、作者は Phase 3 の DSL だけで左右端の書き込みを guard できない。
-gallery は key と click の 4 経路すべてで無効 state を作り得るままになり、
-Phase 2 close の owner expectation を満たさない。この no-change の不利益を
-明示して受け入れる場合だけ、DD-005 を条件付き予約のまま未使用として閉じる。
+**no-change option の意味:** 現行 plan を維持すると、DD-002 で範囲外 read の
+契約は決められても、作者は Phase 3 の DSL だけで左右端の書き込みを guard
+できない。gallery は key と click の 4 経路すべてで無効 state を作り得るままに
+なり、2026-08-11 の owner requirement を満たさない。このため framing は
+tier 2 revision を提案するが、plan 本文の変更自体は gate 完了まで行わない。
 
-### DD-M4-P3-006 — binding-only string RHS の早期診断
+### DD-M4-P3-006 — handler assignment admission / 型検査の完全性
 
-**問い:** handler assignment の RHS に binding-only の文字列式が現れたとき、
-どの gate がどの形を、どの診断で拒否するか。既存の §8.9 規範を実装へ反映し、
-クリックするまで欠陥が見えない状態をどう解消するか。
+**問い:** 既知の不正 RHS を case-by-case に拒否するのではなく、すべての handler
+assignment が、実行前に漏れなく position capability と LHS 宣言型へ照合される
+完全性契約をどう作るか。その中で、現行仕様が binding-only とする string forms を
+Phase 5 の書き込み能力より前に正しく診断するには、各 gate の責任をどう分けるか。
 
-**独立した問いにする理由:** これは新しい文字列書き込み能力の設計ではない。
-現在すでに仕様が禁止している形を checker / lowering / loader が通してしまう
-診断欠落である。Phase 5 が持つ scalar string write と一緒にすると、Phase 3 が
-能力を先取りするか、逆に既存の規範違反を Phase 5 まで放置することになる。
+**独立した問いにする理由:** Phase 2 の実測は一つの string 診断漏れではなく、
+handler assignment 全体に expected type を与える検査がないことを示した。
+`i32 = "abc"` と `string = 5` の両方が `wasamoc check` を通り得るため、既知の
+`StrLit` だけを拒否しても、別の式形・別方向の mismatch が残る。反対に、
+scalar `string` write を Phase 3 で可能にすると Phase 5 の capability を先取りする。
+したがって、**その RHS を handler position で使用できるか**と、**使用できる RHS の
+型が LHS に適合するか**を二層に分け、どの assignment も両方の判定から漏れない
+仕組みを設計する必要がある。
 
-**Phase 3 後も不可能な例:**
+**Phase 3 で早期に拒否すべき異なる二種類の例:**
 
 ```wasamo
+state count: i32 = 0
 state caption: string = "Old"
-state other: string = "Other"
 
 Button {
-    clicked => { root.caption = "New"; }                  // string literal RHS
-    // clicked => { root.caption = root.other; }           // string state read RHS
-    // clicked => { root.caption = "Photo \{root.index}"; } // interpolation RHS
+    // 型不一致。string form の将来 capability とは無関係に不正。
+    clicked => { root.count = "many"; }
+
+    // 型は string 同士でも、Phase 3 では RHS が handler position に未許可。
+    clicked => { root.caption = "New"; }
+
+    // 逆方向の型不一致も同じ完全性契約で見逃さない。
+    clicked => { root.caption = 5; }
 }
 ```
 
-作者にとって直るのは「クリックして初めて失敗する」ことではなく、compile / load
-の早い段階で「この string 形は binding-only。handler からの string write は
-Phase 5 の surface」と分かることである。
+作者にとって必要なのは、上の三例を invocation 時の evaluator error まで持ち越さず、
+compile / load の早い段階で、型不一致なのか、この位置ではまだ使えない能力なのかを
+区別して理解できることである。具体的な checker 構造や診断優先順位は ADR で決める。
 
 **拒否してはいけない別の形:**
 
@@ -505,26 +526,32 @@ for label in labels {
 
 これは scalar string assignment ではなく、`string[]` の whole-value collection
 assignment であり、loop binder が append の要素値になる既存の許可形である。
-「RHS のどこかに string があれば拒否」という診断では壊してしまう。
+「RHS のどこかに string があれば拒否」という検査では、完全性ではなく誤拒否を
+増やしてしまう。
 
 **下位の問い:**
 
-- `StrLit`、`StrPropRead`、`Interpolation` を handler assignment 直下で
-  すべて拒否するか。`Block` 等に入った不正形をどう再帰的に見るか。
-- `wasamoc check` を作者向け主 gate とするか。lowering は不正 AST を
-  到達不能として扱うか、追加診断を持つか。
-- textual / memory IR は `wasamoc` を通らないため、loader も binding-only
-  invariant を defense-in-depth で拒否するか。現在の loader がどこまで
-  type-level invariant を compiler に trust しているかを踏まえて決める。
+- すべての scalar / collection handler assignment form が、LHS 宣言型を expected
+  type とする判定を必ず通るという invariant を、どの境界で定義するか。
+- `StrLit`、`StrPropRead`、`Interpolation` の binding-only rule を、型適合とは別の
+  position-capability rule としてどう表すか。`Block` 等の再帰形でも漏れないか。
+- Phase 3 で新設する expression forms と既存 forms を同じ完全性契約に乗せつつ、
+  DD-001 の expression-result typing と DD-006 の assignment compatibility を
+  二重実装しない責任分担は何か。
+- `wasamoc check` を作者向け主 gate とするか。lowering は不正 AST を到達不能と
+  みなすか、追加診断を持つか。
+- textual / memory IR は `wasamoc` を通らないため、loader は type / capability
+  invariant を defense-in-depth でどこまで再検査するか。
 - evaluator の現在の拒否は最後の防御として残すか。残す場合、正常経路の
   作者向け診断とどの責任を分けるか。
-- handler assignment 全体を LHS 宣言型に基づいて型検査するところまで行うか、
-  既知の binding-only 3 形の拒否に絞るか。Phase 2 では `i32 = "abc"` と
-  `string = 5` の両方向が check を通ることも分かっている。前者は Phase 5 の
-  string-write capability とは無関係なので、全面刷新を便乗させず、かつ既知の
-  unsound admission を理由なく温存しない境界をどう置くか。
-- 診断は不正な RHS の source span と LHS 名を示せるか。Phase 5 の capability
-  への説明を、内部 milestone 名に依存する一時的文言にしない方法は何か。
+- capability violation と type mismatch が同時に成立するとき、作者に最も
+  根本的な修正を示す診断順位は何か。
+- `string[]` append のような既存許可形、compound assignment、loop-local read を
+  含む全 call site をどう列挙し、未検査経路がないことを ADR / implementation
+  close で監査可能にするか。
+- 診断は不正な RHS の source span、LHS 名、expected / actual type、または
+  position capability のどれを示すか。Phase 5 という内部日程に依存せず、作者が
+  現在できることを説明する文言にできるか。
 
 ---
 
@@ -536,8 +563,8 @@ assignment であり、loop binder が append の要素値になる既存の許�
 | count / empty / index read の reactive semantics と失敗 | DD-002 | per-item scope は DD-003 |
 | loop binder を条件表示で読むことと構造 lifecycle | DD-003 | selected-state family 全体は DD-004 の範囲外 |
 | equality で 1 state → 選択表示を作る author contract | DD-004 | group widget / two-way binding は後続へ残す |
-| handler write の条件実行 | DD-005（条件付き） | plan gate 前に syntax /方式を決めない |
-| binding-only string RHS の早期拒否 | DD-006 | string write capability は Phase 5 |
+| handler write の条件実行 | DD-005（owner-required、plan gate 待ち） | gallery 専用にせず、gate 前に syntax / 方式を決めない |
+| 全 handler assignment の position admission と LHS 型適合 | DD-006 | expression-result typing は DD-001、scalar string write capability は Phase 5 |
 
 この分離により、たとえば「collection 添字読みの範囲外診断を設計したから
 handler guard も自動的に入った」「`==` を追加したから group widget まで決めた」
@@ -564,8 +591,25 @@ DD-001 / 003 / 006 は、古い二行を現行制約として候補を狭めて�
 
 ## オーナー回答の記録
 
-未回答。§「今回オーナーに合意してほしいこと」の ①〜⑤について回答を受けたら、
-ここに日付、合意内容、変更指示、仮説としての再検討許容を記録する。
+**2026-08-11 — 独立レビュー後の owner intent 回答:**
+
+- Phase 3 終了時に、gallery の左右端を Left / Right key と左右 button の両方で
+  止められることを**必須**とする。
+- その guard は gallery 専用能力ではなく、今後も使える**一般的だが小さい
+  handler control-flow surface**とする。構文・IR・評価方式は未決である。
+- handler assignment の型検査不足は全体として閉じたい。本質的な期待は、既知の
+  case をアドホックに塞ぐことではなく、すべての assignment を漏れなく扱える
+  仕組みを設けることである。Phase 5 の scalar string write capability は別である。
+- 範囲外 index read の結果と、エラー時の表示 / effect containment は、framing で
+  先に固定せず DD-002 の論点として判断する。
+
+これらは owner intent と DD に課す必須成果の確認であり、正式構文・IR 方式、
+範囲外 contract、診断方式を Accepted とする回答ではない。また handler control
+flow と plan の cross-layer 責務記述を Frozen agreement に land する authorisation
+でもない。別 artifact の tier 2 proposal に対する critical check と owner
+authorisation は、具体的な old/new plan diff と impact を見た後に記録する。
+
+改訂後の ①〜⑦ 全体に対する §2.2 合意はまだ pending である。
 
 回答後も、今回は §2.2 だけで止める。§2.3 の scope、§2.4 の verification、
 ADR の選択肢・推奨・結論は、次の明示的な作業として別に行う。
@@ -578,10 +622,17 @@ ADR の選択肢・推奨・結論は、次の明示的な作業として別に�
 - **2026-08-11 — Pre-ADR spike assessment.**
   `exp/m4-phase-2-focus-spike` の履歴と成果物を Phase 3 の DD ごとに比較。
   Phase 3 全体には spike を必須化せず、5 つの具体的な発火条件が成立した
-  DD だけに狭い spike を再提案する判断を、owner 合意項目 ④ として追加した。
+  DD だけに狭い spike を再提案する判断を、owner 合意項目 ⑥ として追加した。
 - **2026-08-11 — Critical responsibility re-audit after Phase 1 / 2.**
   `plan.md` を固定前提ではなく仮説として再評価。compiler-only では閉じない
   runtime structural responsibility、Phase 3 に handler guard を入れる推奨方向、
   新規式 admission と既存 string RHS 診断の二層分離、selection / focus の独立、
   per-item conditional が loop context を失う二つの現行 seam、§8.11 の stale rows
   を記録した。plan / roadmap / normative spec 本文は本 §2.2 作業では変更していない。
+- **2026-08-11 — Independent-review and owner-intent revision.** compiler-only の
+  訂正と handler control-flow の追加を別の合意単位にした。gallery の 4 入力を
+  全境界で止める owner requirement と、一般的だが小さい surface という境界を
+  DD-005 に記録。DD-006 を binding-only string の個別診断から、position admission
+  と LHS type compatibility を全 handler assignment に漏れなく適用する完全性問題へ
+  広げた。範囲外 read の result / failure containment は DD-002 の未決論点に戻し、
+  DD-005 が重複して rollback semantics を決めないよう責任を分離した。
