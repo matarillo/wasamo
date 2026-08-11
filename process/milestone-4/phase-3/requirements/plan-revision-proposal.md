@@ -1,7 +1,8 @@
 ---
 title: M4-Phase 3 plan revision proposal
-status: approved-for-landing
+status: landed
 created: 2026-08-11
+landed: 2026-08-11
 proposal-target: process/milestone-4/plan.md
 framing-status: "§2.2 owner-agreed; §2.3 / §2.4 pending"
 workflow-tier: tier 2 additive/refining
@@ -16,10 +17,10 @@ related:
 
 # M4-Phase 3 plan revision proposal
 
-**State:** Approved for landing on 2026-08-11. This artifact itself does not edit
-the plan's Frozen agreement or activate DD-M4-P3-005. The exact edits below were
-authorised independently; ADR drafting and implementation remain gated on their
-landing in the plan and, for AC changes, the ROADMAP mirror.
+**State:** Landed on 2026-08-11. The exact edits below were authorised
+independently and committed as Revision 3 (`7763555`), Revision 4 (`4afa204`)
+and Revision 5 (`1499241`). DD-M4-P3-005 is no longer plan-gated; ADR drafting
+and implementation still wait for the remaining framing stages.
 
 The independent framing review found three changes that must not share one
 approval:
@@ -28,9 +29,9 @@ approval:
 2. add an owner-required author capability that the current plan does not imply;
 3. close a systemic handler-assignment validation gap instead of individual cases.
 
-They are therefore recorded as separate Revision-log entries. Revision numbers
-remain provisional until landing. The required critical checks and exact-text
-authorisations are recorded per proposal below.
+They are therefore recorded as separate Revision-log entries. The required
+critical checks, exact-text authorisations and landing commits are recorded per
+proposal below.
 
 ## Proposed Revision 3 — Correct Phase 3's cross-layer responsibility
 
@@ -228,9 +229,10 @@ with:
 
 | Proposal | Critical check | Owner authorisation | Frozen agreement edit | ROADMAP mirror |
 |---|---|---|---|---|
-| Revision 3 — cross-layer responsibility | owner check completed 2026-08-11 | authorised 2026-08-11 | authorised to land | not required |
-| Revision 4 — handler control flow | agent check recorded | authorised 2026-08-11 | authorised to land | required on landing |
-| Revision 5 — assignment completeness | agent check recorded | authorised 2026-08-11 | authorised to land | required on landing |
+| Revision 3 — cross-layer responsibility | owner check completed 2026-08-11 | authorised 2026-08-11 | landed `7763555` | not required |
+| Revision 4 — handler control flow | agent check recorded | authorised 2026-08-11 | landed `4afa204` | landed in `4afa204` |
+| Revision 5 — assignment completeness | agent check recorded | authorised 2026-08-11 | landed `1499241` | landed in `1499241` |
 
-The three proposals were authorised independently. None is treated as landed
-until its Frozen-agreement edit, and any required ROADMAP mirror, is committed.
+The three proposals were authorised and landed independently. The plan-revision
+gate they formed is complete; this does not settle §2.3 scope, §2.4 verification
+or any ADR conclusion.

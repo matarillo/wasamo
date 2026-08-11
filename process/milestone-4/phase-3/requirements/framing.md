@@ -53,13 +53,13 @@ Phase 3 の必須成果に加えるというスコープ変更である。この
 
 | ID | 合意してほしいこと | 提案 | 状態 |
 |---|---|---|---|
-| ① | **DD の分け方と番号** | DD-M4-P3-001〜006 の 6 件を予約する。001 = 共通の述語式、002 = collection 読み取りと範囲外 failure contract、003 = 項目ごとの条件表示、004 = 等値選択、005 = 小さい一般的な handler control flow、006 = handler assignment admission / 型検査の完全性。DD-005 の ADR 起草は tier 2 plan revision の land 後とする | owner-agreed 2026-08-11 |
-| ② | **計画済み per-item conditional の責務訂正** | Phase 3 は compiler-only では閉じず、DD-003 が condition evaluation、subtree 再実体化、focus / hover / handler registry / layout lifecycle までを cross-layer に設計する。これは handler guard の採否とは独立した、既存 Phase 3 deliverable の実現条件である。plan の責務・依存記述を直す場合は tier 2 草案の独立項目にする | owner-agreed; Revision 3 authorised 2026-08-11 |
-| ③ | **handler control-flow の Phase 3 追加** | gallery の Left / Right key と左右 button の 4 経路すべてを、empty / 1 件 / 複数件で範囲外へ進ませないことを Phase 3 の必須成果とする。gallery 専用命令ではなく、今後も使える**一般的だが小さい surface**を DD-005 で設計する。正式構文・IR・評価方式はここでは選ばない。現行 plan から暗黙に導出せず、別 artifact の tier 2 proposal を critical check と owner authorisation にかける | owner-agreed; Revision 4 authorised 2026-08-11 |
-| ④ | **handler assignment 検査の完全性** | 個別の不正 RHS をアドホックに塞ぐのではなく、全 handler assignment が漏れなく検査される仕組みを DD-006 の要求にする。RHS が handler position で許されるかという **capability / position admission** と、許された RHS の型が LHS 宣言型に合うかという **type compatibility** を分ける。scalar `string` write capability は Phase 5 のまま | owner-agreed; Revision 5 authorised 2026-08-11 |
+| ① | **DD の分け方と番号** | DD-M4-P3-001〜006 の 6 件を予約する。001 = 共通の述語式、002 = collection 読み取りと範囲外 failure contract、003 = 項目ごとの条件表示、004 = 等値選択、005 = 小さい一般的な handler control flow、006 = handler assignment admission / 型検査の完全性。DD-005 の plan-revision gate は完了した | owner-agreed 2026-08-11 |
+| ② | **計画済み per-item conditional の責務訂正** | Phase 3 は compiler-only では閉じず、DD-003 が condition evaluation、subtree 再実体化、focus / hover / handler registry / layout lifecycle までを cross-layer に設計する。これは handler guard の採否とは独立した、既存 Phase 3 deliverable の実現条件である | owner-agreed; Revision 3 landed `7763555` |
+| ③ | **handler control-flow の Phase 3 追加** | gallery の Left / Right key と左右 button の 4 経路すべてを、empty / 1 件 / 複数件で範囲外へ進ませないことを Phase 3 の必須成果とする。gallery 専用命令ではなく、今後も使える**一般的だが小さい surface**を DD-005 で設計する。正式構文・IR・評価方式はここでは選ばない | owner-agreed; Revision 4 landed `4afa204` |
+| ④ | **handler assignment 検査の完全性** | 個別の不正 RHS をアドホックに塞ぐのではなく、全 handler assignment が漏れなく検査される仕組みを DD-006 の要求にする。RHS が handler position で許されるかという **capability / position admission** と、許された RHS の型が LHS 宣言型に合うかという **type compatibility** を分ける。scalar `string` write capability は Phase 5 のまま | owner-agreed; Revision 5 landed `1499241` |
 | ⑤ | **範囲外 read の判断範囲** | runtime error / fallback / clamp のどれを契約にするか、失敗時に旧表示・対象 effect・後続 effect をどう扱うかを DD-002 の未決論点にする。Phase 2 の runtime diagnostic 期待は有力な入力だが、ADR 前の結論にはしない。DD-005 の guard は範囲外 state を予防する別責務であり、DD-002 の代替ではない | owner-agreed 2026-08-11 |
 | ⑥ | **pre-ADR spike の要否** | Phase 3 全体には必須化しない。現物調査で per-item conditional の不足箇所は既に二つの loop-context seam として特定でき、未知の状態モデルを試作で発見する段階ではない。下記の発火条件が実際に成立した DD だけに、「何を観測できれば答えか」を限定した spike を ADR Accepted 前に提案する | owner-agreed 2026-08-11 |
-| ⑦ | **現行仕様の矛盾の扱い** | `docs/dsl_spec.md` §8.11 に残る「`for` body の handler 禁止」「item/index read は binding だけ」という二行は、Accepted 済み Phase 2 DD、実装、同仕様 revision 1.21 と矛盾する。Phase 3 の新しい DD や禁止前提にはせず、Phase 2 の実装同期漏れとして別に factual correction する | owner-agreed 2026-08-11 |
+| ⑦ | **現行仕様の矛盾の扱い** | `docs/dsl_spec.md` §8.11 に残っていた「`for` body の handler 禁止」「item/index read は binding だけ」という二行は、Phase 2 の実装同期漏れとして factual correction し、Phase 3 の新しい DD や禁止前提にはしない | owner-agreed; corrected in `6e3db4f` |
 
 ①〜⑦はいずれも、現時点の情報に基づく仮説としての合意を求める。
 新しい実測・設計上の発見があれば見直せる。②・③の plan 改訂だけは、仮説として
@@ -155,7 +155,7 @@ Phase 3 との違いは次のとおりである。
 | DD-002 collection 読み | **不要** | 既存に collection signal、型別 tracked read、`ItemOutOfRange` の先例がある。範囲外後の旧値 / effect の扱いは製品契約として ADR が決め、その後 unit test で固定できる |
 | DD-003 per-item 条件表示 | **不要** | source audit で、現在の conditional effect が通常の `BindingEvalContext` を使い、再挿入が `build_node(...)` で loop context を落とすという二つの不足を特定できた。未知の状態モデルではなく、ADR が loop context の所有・寿命・再評価規則を決めるための具体的入力である。Phase 2 の focus / hover / registry 再発条件は call-path audit で判定する |
 | DD-004 equality selection | **不要** | 新 widget / group state ではなく、1 state と既存 `checked` または条件表示の合成。author contract を先に決めるべきで、動く ToggleButton を先に作っても方式比較の根拠にならない |
-| DD-005 handler control flow | **gate 前は禁止** | owner は Phase 3 の必須成果とする意図を確認済みだが、spike より前に tier 2 plan-revision gate がある。gate 前に prototype を作ると、未承認 scope を実装で先取りする。gate 後も、まず author example の境界表で必要な表現力を比較する |
+| DD-005 handler control flow | **不要（targeted trigger only）** | tier 2 plan-revision gate は完了した。まず author example の境界表で必要な表現力を比較し、それだけでは IR / evaluator 候補の可否が決まらない場合に限って狭い spike を再検討する |
 | DD-006 handler assignment 検査 | **不要** | Phase 2 で `i32 = "abc"` / `string = 5` と binding-only string forms の漏れを実測済み。中心は網羅的な admission / compatibility invariant の設計であり、個別 reject の prototype を増やしても完全性の判断材料にならない |
 
 ここでいう call-path audit や author example の境界表は ADR の調査であり、
@@ -205,8 +205,8 @@ DD の依存関係は次のとおりである。
 
 - DD-001 は共通の語彙・型・式位置を定める土台。
 - DD-002〜004 は、DD-001 の共通規則を 3 つの利用場面へ適用する。
-- DD-005 は owner-required deliverable だが、plan-revision gate が開いた後にだけ
-  DD-001 を消費して ADR 起草へ進む。
+- DD-005 は owner-required deliverable であり、完了した plan-revision gate を
+  基準線として DD-001 を消費する。ADR 起草は §2.3 / §2.4 完了後に進む。
 - DD-006 は DD-001 の expression typing を利用しても、全 handler assignment の
   destination compatibility と position admission の完全性を独立に所有する。
 
@@ -394,10 +394,11 @@ for photo, index in photos {
 
 ### DD-M4-P3-005 — 小さい一般的な handler control flow
 
-**予約状態:** **owner-required、plan-revision gate 待ち。** gallery の左右端を
+**予約状態:** **owner-required、plan-revision gate 完了。** gallery の左右端を
 key と button の両方で止めること、そのための能力を gallery 専用ではなく
 一般的だが小さい surface とすることは、2026-08-11 の owner 回答で必須になった。
-下記 plan-revision gate が完了するまで、この DD の ADR は起草せず、実装もしない。
+Revision 4 は `4afa204` で land 済み。ADR 起草は §2.3 / §2.4 完了後とし、実装は
+さらに ADR Accepted と実装計画を待つ。
 
 **問い:** イベント handler の state write を「条件が成り立つときだけ」
 実行でき、gallery 以外にも再利用できる最小の author-facing control-flow surface
@@ -429,6 +430,10 @@ key-down("ArrowLeft") => {
 否定または別分岐が要り、末尾判定には `count - 1` 相当も問題になる。
 
 **plan-revision gate:**
+
+**Disposition:** completed 2026-08-11. Revision 3 (`7763555`)、Revision 4
+(`4afa204`)、Revision 5 (`1499241`) が個別に land した。以下は完了した gate の
+監査手順として残す。
 
 1. 本文書で、handler guard が既存 Phase 3 scope の暗黙の言い換えではなく、
    handler control flow と追加の境界 predicate を含み得る scope 追加であること、
@@ -583,9 +588,9 @@ item / index read を認めている。しかし §8.11 の loader validation ta
 
 これは「Phase 3 で再び許可するか」という設計論点ではない。Accepted 済み
 DD-M4-P2-005、Phase 2 の integration tests、loader の landed validation と答えが
-既に一致しているため、Phase 2 の spec-sync 漏れとして factual correction する
-対象である。今回の §2.2 では仕様本文を変更せず、DD 番号も割り当てない。
-DD-001 / 003 / 006 は、古い二行を現行制約として候補を狭めてはならない。
+既に一致しているため、Phase 2 の spec-sync 漏れとして `docs/dsl_spec.md` 1.22
+（`6e3db4f`）で factual correction した。DD 番号は割り当てていない。
+DD-001 / 003 / 006 は、訂正前の二行を制約として候補を狭めてはならない。
 
 ---
 
@@ -643,3 +648,7 @@ ADR の選択肢・推奨・結論は、次の明示的な作業として別に�
   ①〜⑦が owner-agreed。Revision 3 は owner critical check 済み、Revision 3〜5
   の具体案は個別に authorise された。§2.3 scope と §2.4 verification は未実施の
   ため、文書全体の status は `draft` のまま維持する。
+- **2026-08-11 — Plan-gate and factual-correction landing sync.** Revision 3
+  (`7763555`)、Revision 4 (`4afa204`)、Revision 5 (`1499241`) を個別に land。
+  DD-005 の plan gate を完了扱いにした。`docs/dsl_spec.md` §8.11 の Phase 2
+  spec-sync 漏れは version 1.22（`6e3db4f`）で訂正した。§2.3 / §2.4 と ADR は未着手。
