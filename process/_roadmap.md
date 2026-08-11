@@ -197,8 +197,10 @@ here.
   [candidate pool](./candidate-pool.md) at M4 planning
 - Expression predicates: reading a collection from outside the
   repetition (count, emptiness, index access), per-item conditional
-  rendering, and equality-based selection. String concatenation and
-  general arithmetic stay outside M4; promoted from the
+  rendering, equality-based selection, and a small reusable
+  handler-control-flow surface sufficient to guard a state write at
+  collection boundaries. String concatenation and general arithmetic stay
+  outside M4; promoted from the
   [candidate pool](./candidate-pool.md) at M4 planning
 - Top-layer overlays: the top-layer structure itself (an element
   declared in place is realized at window level, escaping clip and

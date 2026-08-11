@@ -103,8 +103,10 @@ uses **A** for the photo-gallery target app.
   (in-out binding). ABI-bearing.
 - **AC9.** Expression predicates: reading a collection from outside the
   repetition (count, emptiness, index access), per-item conditional
-  rendering, and equality-based selection. String concatenation and
-  general arithmetic stay outside M4.
+  rendering, equality-based selection, and a small reusable
+  handler-control-flow surface sufficient to guard a state write at
+  collection boundaries. String concatenation and general arithmetic stay
+  outside M4.
 - **AC10.** Top-layer overlays: the top-layer structure itself plus the
   focus rule set that binds to it — click-away close, Esc, focus
   containment, focus restoration on close, and screen-reader order.
@@ -216,6 +218,11 @@ and §Phase dependencies.
   integrates creation and disposal through the existing effect, handler,
   focus / hover and layout lifecycles. This responsibility does not create a
   separate structural writer or change the positional iteration baseline.
+
+  Phase 3 also owns the small reusable handler-control-flow surface needed to
+  keep the gallery selection index inside the collection at all four producers
+  (Left / Right key and the two navigation buttons), including empty, one-item
+  and multi-item collections.
 
   Consumer (A): the status-bar photo count, the lightbox caption
   (index read), and exclusive selection of the current thumbnail.
@@ -935,6 +942,42 @@ responsibility.**
   retrospective / merge gate or ROADMAP text changed. Phases 3 and 4 remain
   independent after Phase 2. Phase 3's later evidence must cover the structural
   consumer it already promised.
+
+**Revision 4 (2026-08-11) — Add small reusable handler control flow to
+M4-Phase 3.**
+
+- **What / tier.** Tier 2 additive/refining. AC9 and the Phase 3 entry now
+  require a reusable but small handler-control-flow surface sufficient to guard
+  state writes at collection boundaries. The AC9 refinement is mirrored in
+  `_roadmap.md`.
+- **Initiator.** Owner, confirmed 2026-08-11 after independent framing review.
+- **Old premise.** AC9 and Phase 3 listed collection count / emptiness / index
+  access, per-item conditional rendering and equality selection, but provided
+  no handler control flow or other way to prevent the gallery's four selection
+  writers from creating an invalid index.
+- **New evidence.** The gallery writes `selected_index` unconditionally from
+  Left and Right key handlers and the two navigation buttons. Equality can show
+  no selected thumbnail for an invalid value, but cannot by itself express both
+  lower and upper write guards, including empty and one-item collections.
+- **Why the old plan no longer holds.** It was insufficient for the owner's
+  required Phase 3 outcome: all four gallery paths must stop at both ends using
+  a capability reusable outside the gallery.
+- **No-change option considered.** Define the out-of-range read contract and
+  leave the writers unconditional. Rejected because a runtime read contract
+  cannot let an author prevent the invalid write.
+- **Critical check.** Agent-completed 2026-08-11: the guard is not derivable
+  from equality and is genuinely additional normative DSL scope, but can remain
+  narrow by requiring conditional handler execution and only the minimum
+  boundary predicates demonstrated by the gallery matrix. It need not admit
+  general functions, loops, an `else` family, string concatenation or general
+  arithmetic, and does not require a new phase or reorder an executed phase.
+- **Owner authorisation.** Authorised 2026-08-11 for the exact AC9, Phase 3 and
+  ROADMAP proposal.
+- **Impact check.** AC9 was additively refined and mirrored in `_roadmap.md`;
+  AC1–AC8 and AC10–AC13 keep their meaning. Phase order and completed Phases 1
+  and 2 are unchanged. Phase 3's close gains the four-producer boundary outcome;
+  its retrospective / merge gates are not moved, and Phase 4 remains independent
+  of Phase 3 in implementation order.
 
 ## Progress
 
