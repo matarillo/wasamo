@@ -1,9 +1,10 @@
 ---
 title: M4-Phase 3 フレーミング — 述語式
-status: draft
+status: accepted
 created: 2026-08-11
+accepted: 2026-08-12
 target-phase: M4-Phase 3
-workflow-stage: "2.3 / 2.4 owner review"
+workflow-stage: "phase planning complete (§2.1–§2.4)"
 related:
   - process/milestone-4/plan.md
   - process/milestone-4/requirements/framing.md
@@ -17,12 +18,12 @@ related:
 
 # M4-Phase 3 フレーミング — 述語式
 
-**状態:** draft（§2.2 owner-agreed、§2.3 / §2.4 owner review 待ち）
+**状態:** accepted（§2.1〜§2.4 complete、owner-agreed 2026-08-12）
 
-**今回実施した段階:**
-[workflow.md §2.2〜§2.4](../../../procedures/workflow.md) の framing draft
+**完了した段階:**
+[workflow.md §2「フェーズ計画」](../../../procedures/workflow.md) の §2.1〜§2.4
 
-**まだ実施していない段階:** §2.3 / §2.4 の owner agreement、§3 設計判断
+**次の段階:** §3 設計判断
 
 この文書は、M4-Phase 3 で**何を決める必要があるか**を分け、DD 番号を
 予約し、オーナーとの合意点を明らかにするための資料である。構文、IR、
@@ -80,19 +81,19 @@ owner authorisation を求めるべきだ、という**論点設定上の結論*
 は [plan-revision-proposal.md](./plan-revision-proposal.md) の Revision 3〜5 として
 完了し、改訂後の plan / roadmap を本節以降の固定入力にする。
 
-## §2.3 / §2.4 でオーナーに合意してほしいこと
+## §2.3 / §2.4 でオーナー合意済みのこと
 
-下記の詳細な scope / verification を要約した owner alignment packet である。
-推奨どおりなら「⑧〜⑬ OK」、変更したい項目があればその番号を指定してほしい。
+下記は、詳細な scope / verification を要約した owner alignment packet と、
+2026-08-12 の合意記録である。
 
 | ID | 合意してほしいこと | 提案 | 状態 |
 |---|---|---|---|
-| ⑧ | **Phase 3 の In scope** | 改訂後 AC9 の全要素を本フェーズで閉じる。DD-001〜006 の式・collection read・per-item conditional・equality selection・小さい handler control flow・全 handler assignment の admission / 型適合に加え、per-item conditional の runtime structural lifecycle と Gallery A の named consumers までを含む | owner review pending |
-| ⑨ | **Out of scope** | 文字列連結、一般算術・一般命令言語、`TypedValue` / 構造化 item、keyed / nested iteration、新 widget / selection ownership、two-way binding、scalar `string` write、ABI、window / image / scrolling、focus model の再設計を含めない。DD が選ぶ正式構文・IR・範囲外 failure contract は「Phase 3 外」ではなく「framing では未決」と区別する | owner review pending |
-| ⑩ | **M4 acceptance criteria との対応** | Phase 3 が discharge する milestone criterion は AC9。AC1 は構造更新で focus / hover / handler lifecycle を退行させない回帰対象、AC12 は Gallery A を段階的に成熟させる consumer だが、どちらも Phase 3 単独で完了を主張しない | owner review pending |
-| ⑪ | **検証の三層** | OS 非依存の checker / lowering / IR / evaluator は unit test、実 `.ui` → IR → runtime と構造 lifecycle は mock-free Windows integration test、作者に見える Gallery 成果は launch + screenshot + assistant analysis で閉じる。出荷画面に不自然な検証 UI が必要なら named mechanism fixture に分ける | owner review pending |
-| ⑫ | **識別可能な陽性対照と境界 matrix** | count / empty / per-item presence は collection の状態を変えて結果が反転する対照、caption / selection は異なる index へ移動する対照、guard は key / button の 4 producer を empty / 1 件 / 複数件の両端で試す。範囲外 read は DD-V-029 の red-test、assignment 完全性は全 variant の call-site audit + reject / admit matrix で証明する | owner review pending |
-| ⑬ | **将来の追加を塞がない二つの設計義務** | Out of scope に置いた能力のうち二つは、Phase 3 が今決める形の下流にある。多段 `for` と入れ子の構造制御は DD-003 が選ぶ loop context の所有・寿命に依存し、Phase 5 の scalar `string` write と、既存スカラに収まる値を生む式が将来入る場合は DD-006 の position admission / 型適合の枠組みに乗る。**Phase 3 の scope はどちらにも広げない。**その選択が将来の追加を構造的に排除しないことだけを、両 DD の判断要件に加える | owner review pending |
+| ⑧ | **Phase 3 の In scope** | 改訂後 AC9 の全要素を本フェーズで閉じる。DD-001〜006 の式・collection read・per-item conditional・equality selection・小さい handler control flow・全 handler assignment の admission / 型適合に加え、per-item conditional の runtime structural lifecycle と Gallery A の named consumers までを含む | owner-agreed 2026-08-12 |
+| ⑨ | **Out of scope** | 文字列連結、一般算術・一般命令言語、`TypedValue` / 構造化 item、keyed / nested iteration、新 widget / selection ownership、two-way binding、scalar `string` write、ABI、window / image / scrolling、focus model の再設計を含めない。DD が選ぶ正式構文・IR・範囲外 failure contract は「Phase 3 外」ではなく「framing では未決」と区別する | owner-agreed 2026-08-12 |
+| ⑩ | **M4 acceptance criteria との対応** | Phase 3 が discharge する milestone criterion は AC9。AC1 は構造更新で focus / hover / handler lifecycle を退行させない回帰対象、AC12 は Gallery A を段階的に成熟させる consumer だが、どちらも Phase 3 単独で完了を主張しない | owner-agreed 2026-08-12 |
+| ⑪ | **検証の三層** | OS 非依存の checker / lowering / IR / evaluator は unit test、実 `.ui` → IR → runtime と構造 lifecycle は mock-free Windows integration test、作者に見える Gallery 成果は launch + screenshot + assistant analysis で閉じる。出荷画面に不自然な検証 UI が必要なら named mechanism fixture に分ける | owner-agreed 2026-08-12 |
+| ⑫ | **識別可能な陽性対照と境界 matrix** | count / empty / per-item presence は collection の状態を変えて結果が反転する対照、caption / selection は異なる index へ移動する対照、guard は key / button の 4 producer を empty / 1 件 / 複数件の両端で試す。範囲外 read は DD-V-029 の red-test、assignment 完全性は全 variant の call-site audit + reject / admit matrix で証明する | owner-agreed 2026-08-12 |
+| ⑬ | **将来の追加を塞がない二つの設計義務** | Out of scope に置いた能力のうち二つは、Phase 3 が今決める形の下流にある。多段 `for` と入れ子の構造制御は DD-003 が選ぶ loop context の所有・寿命に依存し、Phase 5 の scalar `string` write と、既存スカラに収まる値を生む式が将来入る場合は DD-006 の position admission / 型適合の枠組みに乗る。**Phase 3 の scope はどちらにも広げない。**その選択が将来の追加を構造的に排除しないことだけを、両 DD の判断要件に加える | owner-agreed 2026-08-12 |
 
 ---
 
@@ -835,6 +836,12 @@ ADR の選択肢・推奨・結論は、次の明示的な作業として別に�
 §Phase 3 の対象範囲 / §検証方針を owner review へ提示した。scope と verification
 以外の ADR 選択肢・推奨・結論は起草していない。回答は pending。
 
+**2026-08-12 — §2.3 / §2.4 agreement and phase-planning completion:**
+オーナーは、独立レビューと修正後の ⑧〜⑬、§Phase 3 の対象範囲、§検証方針に
+合意した。§2.1 の accepted constraints と §2.2 の DD slate も再確認済みであり、
+workflow §2.1〜§2.4 の成果物は完備した。正式構文、IR、範囲外 contract、各 DD の
+Recommendation はこの合意に含めず、次段階の §3 設計判断に残す。
+
 ## Revisions
 
 - **2026-08-11 — Initial §2.2 draft.** DD-M4-P3-001〜006 を提案。
@@ -894,3 +901,8 @@ ADR の選択肢・推奨・結論は、次の明示的な作業として別に�
   と候補行を限定修正した。
   ⑧〜⑬の scope / verification proposal 自体は変更しておらず、owner agreement は
   引き続き pending である。
+- **2026-08-12 — Accepted after owner agreement.** `workflow.md` §2 を再監査し、
+  §2.1 constraints、§2.2 DD slate、§2.3 In / Out と AC mapping、§2.4 DD / AC9 /
+  GUI / CI verification の全成果物が揃っていることを確認した。オーナーが⑧〜⑬に
+  合意したため `status: accepted` へ遷移し、フェーズ計画を完了した。ADR の Options /
+  Recommendation と task breakdown は、それぞれ後続 §3 / §4 に残す。
