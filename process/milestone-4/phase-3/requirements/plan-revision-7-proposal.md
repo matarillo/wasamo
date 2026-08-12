@@ -1,11 +1,13 @@
 ---
 title: M4 plan Revision 7 proposal — a seventh Phase 3 decision record for what a dot means
-status: authorised
+status: landed
 created: 2026-08-12
 authorised: 2026-08-12
-landed: pending
-landing-commit: pending
-proposal-target: process/milestone-4/phase-3/requirements/framing.md (§論点一覧, §含まないもの, §DD ごとの判定, §DD と検証手段の対応, §AC9 の discharge matrix); process/milestone-4/plan.md (Phase 3 progress row)
+landed: 2026-08-12
+landing-commit: dbd0aac
+proposal-target:
+  - process/milestone-4/phase-3/requirements/framing.md
+  - process/milestone-4/plan.md
 workflow-tier: tier 2 refining
 initiator: owner
 related:
@@ -20,9 +22,8 @@ related:
 
 # M4 plan Revision 7 proposal — a seventh Phase 3 decision record for what a dot means
 
-**State:** Authorised by the owner on 2026-08-12 after the agent critical check.
-The framing and plan edits below are applied in the working tree and land with
-the commit that carries this file.
+**State:** Landed on 2026-08-12 in `dbd0aac` after owner authorisation and the
+agent critical check.
 
 - **What / tier.** **Tier 2 refining.** Widen the Phase 3 reserved decision set
   from **DD-M4-P3-001〜006** to **001〜007**, where DD-007 settles what a dot
@@ -101,6 +102,9 @@ the commit that carries this file.
 - **Owner authorisation.** Authorised 2026-08-12.
 
 ## Edits
+
+The section-level record of what this revision touched. `proposal-target`
+names the documents; this table names the sections.
 
 | Target | Edit |
 |---|---|
