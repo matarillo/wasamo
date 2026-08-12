@@ -196,6 +196,28 @@ proposes no pre-ADR spike.
 
 ## Revisions
 
+- **2026-08-12 — DD-007 restructured around its sub-issues, and two
+  measurements folded in.** Still a draft revision; nothing is Accepted.
+  Each sub-issue now carries a stable identifier (M4-P3-007-001 through
+  -010) and its own Options, Comparison and Recommendation subsection,
+  and the sub-issue table records which are choices, which are outcomes,
+  and which are live only when the prefix is retained. **Records outside
+  DD-007 cite a sub-issue by that identifier and state its answer in
+  words** — the option labels the entry below cites were renamed in the
+  restructure, and the Summary of decisions table above was rewritten to
+  state each recommendation without them. Two sub-issues the body already
+  argued but the list omitted were added: what a prefix denotes, settled
+  as a lookup space rather than a component instance or the root of the
+  widget tree; and how a `state` declared with a member's name is
+  handled. The retained-member question gained the required-prefix
+  disposition it was missing. Two measurements then moved the argument:
+  five property bindings already read state unprefixed, four of them in
+  `gallery.ui`, so both spellings ship; and §4.15 already requires the
+  unprefixed form for a loop collection and for a collection mutation
+  target. Those drop the required prefix, ground the canonical form in a
+  preference the language has already expressed, and correct the
+  assignment-target recommendation, which had not accounted for §4.15
+  being stricter than membership checking.
 - **2026-08-12 — DD-007 revised before accept after a strategic /
   owner-alignment review.** Nothing is Accepted, so this is a draft
   revision rather than a supersede. The review found the N1/N2
