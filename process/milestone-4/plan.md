@@ -1076,6 +1076,60 @@ and type checking in M4-Phase 3.**
   meaning changed. Proposal and critical-check evidence:
   [plan-revision-6-proposal.md](phase-3/requirements/plan-revision-6-proposal.md).
 
+**Revision 7 (2026-08-12) — M4-Phase 3 reserves a seventh decision record
+for what a dot means.**
+
+- **What / tier.** Tier 2 refining. The Phase 3 reserved decision set widens
+  from DD-M4-P3-001–006 to 001–007, where DD-007 settles what a dot means in an
+  expression and which prefixes are admissible. AC9 wording, phase order, phase
+  dependencies and the acceptance↔phase mapping are unchanged, and no other
+  record's question moves.
+- **Initiator.** Owner, 2026-08-12, in the Phase 3 pre-doc chat. The owner
+  judged the current `root.` handling to be a defect rather than a design and
+  asked whether a separate record should carry it.
+- **Old premise.** The framing reserved six records and gave DD-001 name
+  resolution as one of its sub-issues, on the premise that the dot's meaning is
+  a detail inside the expression-surface decision.
+- **New evidence.** Measured against the release `wasamoc`: a dotted prefix is
+  discarded rather than validated, so `photos.count` and `a.b.c.count` both
+  compile as a read of the state `count`; the prefix is therefore optional;
+  `dsl_spec.md` never defines the identifier `root` and spends the word on the
+  content root widget instead; §3 and §2.4 disagree on segment count; and the
+  prefix never reaches the IR, since `root.count` lowers to `(prop-read count)`.
+- **Why the old plan no longer holds — insufficient.** DD-001 must choose
+  between a member-read interrogation and a method-call one, and the member-read
+  spelling is legal and already taken under the unvalidated prefix. Deciding it
+  inside DD-001 decides it against an accident and freezes the outcome on a
+  rationale that disappears once the prefix is validated. The question is also
+  the phase's only change to what a currently legal `.ui` means, and it reaches
+  DD-006's assignment-target shape and M4-Phase 7's host-state prefix.
+- **No-change option considered.** Keep six records, or defer the whole matter
+  to M4-Phase 7. Rejected because DD-001's argument rests on every construct it
+  adds being a parse error or a named diagnostic today — folding in the one
+  change that breaks that property makes the record contradict itself — and
+  because both decisions are breaking, so settling DD-001 first buys either a
+  stale rationale or a second breaking change.
+- **Critical check.** Agent-completed 2026-08-12, the owner being the initiator.
+  Each measured claim was produced by running the compiler or reading the named
+  source. The strongest counter-argument is scope discipline — AC9 does not
+  require this and the phase has already been revised six times — and it does
+  not carry, because the cost of deferring is a 1.0-frozen spelling resting on a
+  rationale this record removes. The widening stays proportionate because
+  DD-007 settles the rule and hands the retirement question forward rather than
+  finishing it here. Noted limitation: the agent both drafted DD-007 and
+  performed this check, so an independent review of DD-007 before accept is the
+  stronger reading of the same rule.
+- **Owner authorisation.** Authorised 2026-08-12.
+- **Impact check.** No AC ID is added, renumbered or superseded and AC9's text
+  is untouched, so `_roadmap.md` needs no mirror. Phases 1 and 2 are closed and
+  neither authored a dotted prefix beyond the counted examples. DD-007 moves
+  `docs/dsl_spec.md` §2.4, §3, §4.16 and §5 at implementation; `abi_spec.md`
+  does not move. Two questions go onward, both to M4-Phase 7: the host-state
+  prefix spelling, and the prefix set's final form — the latter backed by a
+  [candidate pool](../candidate-pool.md) row whose per-planning disposition duty
+  is the backstop. Proposal and critical-check evidence:
+  [plan-revision-7-proposal.md](phase-3/requirements/plan-revision-7-proposal.md).
+
 ## Progress
 
 The Progress section is a compact milestone index. Detailed live task
@@ -1086,7 +1140,7 @@ tracking belongs in each phase's `implementation/plan.md` (with
 |---|---|---|---|---|
 | M4-Phase 1 — Per-monitor DPI awareness | phase-end recorded; phase→main owner approval pending | [plan.md](phase-1/implementation/plan.md) | [preamble.md](phase-1/implementation/preamble.md) | Discharges AC7 and the M3 runtime-DPI residual. Framing owner-aligned 2026-07-28; four decisions Accepted 2026-07-28 (Per-Monitor-Aware V2 declared by the runtime in `wasamo_init`; layout in DIP with conversion confined to the seams and crispness bought at the rasterization surface; per-window scale with a fixed `WM_DPICHANGED` order; DIP as the outward unit with no new ABI function). Framing agreements ①/②/③ each tested inside the slate — no stage-2 plan revision required, and Phase 1 added no ABI function; Revision 6 later qualified the broader "Phase 7 only" planning hypothesis without changing this phase's result. Moment 1 spec sync landed 2026-07-28 ([architecture.md §12](../../docs/architecture.md#coordinate-spaces), [dsl_spec.md §1 units](../../docs/dsl_spec.md), [abi_spec.md §4.1 / §4.2](../../docs/abi_spec.md), [layout-engine.md §3.1](../../docs/notes/layout-engine.md) answered); Moment 2 implementation sync landed at T12, including the corrected `verification-environments.md` Observation 4 procedure. Initial phase-end CI runs `30873359437` and `30873615639` failed the DPI matrix test; repair code commit `1f162dc` passed [run 30878747516](https://github.com/matarillo/wasamo/actions/runs/30878747516) on the experimental branch. After the review-remediation test-target change, [phase-branch run 30881324493](https://github.com/matarillo/wasamo/actions/runs/30881324493) passed and directly verified the current code tree; the CI criterion is discharged without erasing the failed-run history |
 | M4-Phase 2 — Event routing + focus model + generic click | phase-end recorded; phase→main owner approval pending | [plan.md](phase-2/implementation/plan.md) | [preamble.md](phase-2/decisions/preamble.md) | Milestone core. Framing owner-aligned 2026-08-05 (seven agreements, six of them explicitly as revisable hypotheses; touch = synthesized injection with stated limits, no hardware available). Pre-ADR spike discharged — [focus-traversal-spike.md](phase-2/decisions/exploration/focus-traversal-spike.md): traversal core as Win32-independent pure logic under unit test, plus a mechanism fixture driving it from the real `.ui` → IR → runtime path. Five decisions Accepted 2026-08-06: DD-001 (target-then-bubble with no capture phase and consume-on-handle; an unconsumed key reaches the default window procedure; touch on `WM_POINTER*` without changing the host process's input mode), DD-002 (layout-derived DIP hit rectangles retained beside the Visual write by the one lockstep pass; one topmost target bounded by ancestor clips, from which occlusion follows rather than needing a scrim rule), DD-003 (one `FocusState` per window with tree-order traversal, `enabled: false` removing a stop, click focusing the nearest focusable widget at or above the target, and group traversal and focus / active-item separation settled for M5 without building widgets), DD-004 (a modal scope as an annotated subtree whose presence is the entry — materialisation captures the restore target, not derivable from the tree afterwards, and moves focus inside), and DD-005 (per-item handlers admitted inside `for` bodies together with the registration lifecycle and the position-not-item identity consequence M3-Phase 7 routed here; `focus-group` and `modal-scope`; a `dismiss` request admitted beside `modal-scope` only, whose sources grow without the spelling changing; and one `key-down("<key>")` command signal, the physical-key half with non-character key names only). Moment 1 spec sync ([dsl_spec.md §4.19](../../docs/dsl_spec.md), [architecture.md §13](../../docs/architecture.md), [m4-interaction-intake.md](../../docs/notes/m4-interaction-intake.md)) re-syncs at the Accepted flip. **Stretch re-evaluation discharged 2026-08-05: both stretch intakes retained** (`Image` / direct-value `fill` stay at M4-Phase 4; multi-line editing stays ride-if-room — §Cross-phase dispositions 3). T1–T12 and the owner-visible smoke are complete; T13 synchronized the specs and drafted the phase-end retrospective / handoff. Its first cold suite fired CF-T7-1: allocator reuse retained a focus record on a fresh row without repainting its indicator. Owner-authorized T13a repaired that divergence through the existing focus writer, added an allocator-independent red/green fixture, completed full independent review and passed a replacement cold suite plus all consumer checks. Pointer-address identity remains a bounded handoff residual. T13/T13a were merged no-ff as `b42a212`; phase-branch [CI run 31302529054](https://github.com/matarillo/wasamo/actions/runs/31302529054) passed on `4b1076f`; phase→main merge remains a separate owner gate |
-| M4-Phase 3 — Predicate expressions | phase planning complete; ADR not started | — | — | Framing owner-aligned 2026-08-12: DD-M4-P3-001–006 reserved; scope and verification accepted |
+| M4-Phase 3 — Predicate expressions | phase planning complete; ADR drafting | — | — | Framing owner-aligned 2026-08-12: DD-M4-P3-001–007 reserved (007 = what a dot means and which prefixes are admissible, upstream of 001; plan Revision 7); scope and verification accepted |
 | M4-Phase 4 — Gallery completion | not started | — | — | Scroll / scrollbar / `Image` / direct `fill`; two stretch intakes |
 | M4-Phase 5 — Single-line text editing | not started | — | — | Must fix the text-store-facing internal model for Phase 6 |
 | M4-Phase 6 — IME via TSF | not started | — | — | Heaviest OS integration; crosses the Phase 1 DPI bridge |
