@@ -155,8 +155,10 @@ and their subsections say what determines them instead.
 to be a member of until 001 answers — and 003 in turn gates 004 and 010,
 which have no content if the member is retired. 009 survives retirement,
 because a later member could still be admitted to an empty set.
-**002 feeds 003**, because one of 003's options redefines the prefix as a
-value, and that is a different design under each denotation. 005 and 008
+**002 feeds 003 twice**: one of 003's options redefines the prefix as a
+value, which is a different design under each denotation; and the reading
+002 takes decides whether the spec can state that the member does no
+work, which is itself an argument at 003. 005 and 008
 are stated as outcomes rather than choices: nothing can be decided about
 them independently of 001 and 003.
 
@@ -349,6 +351,14 @@ the enclosing state scope is a root, and fitting the word was the one
 thing D1 supplied. That cost is real, and it is one of the reasons 004
 carries the member as provisional.
 
+D3 also reaches 003, and not only through K3. Defining the member as the
+label for a space an unprefixed name already reaches is a definition that
+says the member does no work. It does not make the member emptier than D1
+would — the emptiness belongs to the member, not to the reading — but it
+is what makes that emptiness **stateable**, and a member the spec has to
+describe as doing nothing is an argument for retiring it. That argument
+is weighed at 003.
+
 ### M4-P3-007-003 — K2, retain (K3 is out; K1 is M4-Phase 7's)
 
 **K3 is out. This phase does not take on component-instance-as-value.**
@@ -403,6 +413,20 @@ the rule, hand the membership forward) is still right, because the rule
 does not depend on Phase 7 and DD-001 is blocked on it. But the deferral
 is not neutral, and the record does not present Phase 7 as inheriting the
 same choice this phase has.
+
+**The 002 answer argues for K1 on the merits.** Under the lookup-space
+reading the member is defined as labelling the space an unprefixed name
+already reaches, so the spec's own sentence about it says it does no
+work; §4.15 already prefers the form that omits it; and no motivated name
+for it exists (002). An inert member, under a name that does not fit,
+against a preference the language has already expressed, is a case for
+retirement made on the merits rather than on migration cost — and it
+compounds the cost argument above rather than repeating it. This record
+does not treat it as decisive, for the reason below, but it does not hide
+it either: **K2 is recommended against a live argument, not an absent
+one.** Acting on it is still a framing revision, because §含まないもの
+assigns emptying the set to M4-Phase 7; what this record can do is state
+the argument at full strength so that revision is decidable.
 
 **The tiebreak between K1 and K2 sits in M4-Phase 7.** That phase designs
 the host state boundary. If it spells host state with a prefix, the (B)
@@ -529,7 +553,13 @@ assumed away.
   prose; the two uses of the word are unrelated, and neither this record
   nor the prose moves for the other.
 - **003 — `root` is retained and validated.** Retirement is M4-Phase 7's
-  to price, and 004 and 009 are chosen to keep it affordable there.
+  to price, and 004 and 009 are chosen to keep it affordable there. This
+  is recommended **against a standing argument for retiring it now**
+  (§Comparison): the 002 answer makes the member's emptiness stateable,
+  and nothing else about it argues for keeping it. What holds K2 is that
+  the tiebreak — whether M4-Phase 7 spells host state with a prefix —
+  does not exist yet. Acting on the argument instead is a framing
+  revision, not a milestone change.
 - **004 — optional, unprefixed form canonical, member provisional.** After
   validation the prefix does nothing an unprefixed name does not: `count` and
   `root.count` are the same read. The spec records the member as
