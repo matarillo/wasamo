@@ -138,7 +138,7 @@ the order they consume one another.
 
 | DD | Question | Recommendation |
 |---|---|---|
-| [DD-007](dd-m4-p3-007-dot-meaning-and-prefix-set.md) | What may stand to the left of a dot, and does the `root.` prefix survive? | **The left of a dot is a value; the exceptions are a closed, validated set of prefixes** — `slot` on the placement-key side and `root` on the expression side, with at most one prefix per name, on a read and on an assignment target alike. A non-member in prefix position becomes a diagnostic naming the members, which frees `photos.count` for DD-001 to decide on merit. `root` is **retained and validated, but recorded as provisional with the bare name canonical**, because after validation it does nothing a bare name does not and because a normative member would price M4-Phase 7's option to empty the set well above today's cost. Validation claims the identifier: `state root` becomes a reject, the second of this phase's two changes to what a legal `.ui` means. Making a component instance a value is rejected because this phase does not take on component-instance-as-value, not because the word "root" is taken. No authored `.ui` changes; this member stays out of the IR, which is a property of an inert member rather than of the set |
+| [DD-007](dd-m4-p3-007-dot-meaning-and-prefix-set.md) | What may stand to the left of a dot, and does the `root.` prefix survive? | **The left of a dot is a value; the exceptions are a closed, validated set of prefixes**, with membership stated per position, at most one prefix per name, on a read and on an assignment target alike. A prefix in a position that admits none is a diagnostic naming what is admissible, which frees `photos.count` for DD-001 to decide on merit. **The expression-side membership is empty: `root` is retired**, on the test the language already applies to `slot` — a prefix exists where it changes what the right-hand side resolves against, and `root` changes no resolution in any position, because a binder can never collide with a state. What survives is the set, its admission rule and `slot`; a later member that qualifies something is admitted to an empty set. `state root` stays legal and no identifier is claimed. Making a component instance a value is rejected because this phase does not take on component-instance-as-value. The occurrences that teach move — 24 in `examples/`, nine example lines in `dsl_spec.md` — while a closed phase's evidence artifact stays as the record of what was run. **Accepting this carries a framing revision**, since §含まないもの assigns emptying the set to M4-Phase 7 |
 | [DD-001](dd-m4-p3-001-predicate-surface-and-typing.md) | Which predicate forms exist, where may they be written, and what are their types? | **One comparison level added to the shared `expr` grammar**, admissible in every position that already takes a scalar expression; collection interrogation spelled as **method calls** on the existing `CollectionCall` form and element access as **`xs[i]`**; comparison operands must be the **same scalar type**, ordering restricted to `i32`, result `bool`; **no implicit integer-to-string display** in a bound string property; carried as **new `HandlerExpr` variants**, no second expression tree and no `TypedValue` |
 | [DD-002](dd-m4-p3-002-collection-read-and-failure-contract.md) | How is a collection read from outside the repetition, and what happens when the index is out of range? | `xs.count()`, `xs.is-empty()`, `xs.last-index()` are **total**; `xs[i]` is **partial**. An out-of-range index is an **error, not a value**: the binding writes nothing, the target keeps the value it last held, the failure is **contained to the failing effect**, and the diagnostic goes to the existing runtime channel. Fallback values and clamping are rejected because both render an author's mistake as a plausible screen |
 | [DD-003](dd-m4-p3-003-per-item-conditional-and-lifecycle.md) | How does a condition inside a `for` body read its binders, and what owns the subtree's lifecycle? | **Thread the enclosing `ForItemContext` through the three seams that drop it today** — `append_static_member`'s `If` arm, `register_conditional_binding`, and `mutate_conditional_subtree` — so condition evaluation and re-materialisation share one owner, and the subtree's `set_loop_scope` is written from the same parameter. **Repair the already-admitted composition rather than reject it**. Reuse the existing `mark_layout_dirty_for` → `flush_layout` seam unchanged; add no structural writer |
@@ -163,13 +163,13 @@ runtime diagnostic channel, which is ABI-adjacent; any C ABI entry point,
 value carrier or host callback; and any redesign of Phase 2's routing,
 focus, modal-scope, hit-test or identity policy.
 
-DD-007 sends two further questions onward rather than answering them,
-both to **M4-Phase 7**: the host-state prefix spelling, and the prefix
-set's final form — whether the expression-side set is emptied and whether
-its members carry a reserved symbol. The second is backed by a
-[pre-1.0 candidate pool](../../../candidate-pool.md) row, because its
-trigger depends on a negative outcome that Phase 7 would leave
-undocumented.
+DD-007 sends two questions onward rather than answering them, both to
+**M4-Phase 7**: the host-state prefix spelling, and whether members of
+the set carry a reserved symbol. The second is backed by a
+[pre-1.0 candidate pool](../../../candidate-pool.md) row. DD-007's
+recommendation settles the third question that row carried —
+membership — rather than deferring it, which is what its accept asks the
+owner to authorise as a framing revision.
 
 Two exclusions are **downstream of what this set chooses**, and framing
 agreement ⑬ makes not-foreclosing them a judgement requirement rather
