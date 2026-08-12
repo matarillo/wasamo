@@ -53,11 +53,16 @@ probe `.ui`, or by reading the named source.
 - **The prefix is absent from the IR.** `root.count` lowers to
   `(prop-read count)` ([dsl_spec.md §8.9](../../../../docs/dsl_spec.md)),
   so no representation, loader path or C ABI surface carries it.
-- **No document defines it.** `dsl_spec.md` never defines the identifier
-  `root`; it appears only inside code examples. In the spec's prose the
-  word denotes a different thing entirely — the **content root widget**
-  and the body root child (§4.14, §4.16). The only recorded intent is a
-  checker comment calling it "the component root alias".
+- **No normative document defines it.** `dsl_spec.md` never defines the
+  identifier `root`; it appears only inside code examples. In the spec's
+  prose the word denotes a different thing entirely — the **content root
+  widget** and the body root child (§4.14, §4.16). Two non-normative
+  readings are on record, one vague and one specific: a checker comment
+  calls it "the component root alias", which is ambiguous between the
+  component *as* a root and the root *of* its tree, and
+  [dsl-grammar.md](../../../../docs/notes/dsl-grammar.md) Q1 — the
+  owner's live note — resolves it to the first, the component's base, an
+  **implicit `self`**.
 - **The two grammar statements disagree.** §3 gives
   `qualified_name ::= IDENT ("." IDENT)*` — unbounded — while §2.4 says
   an interpolation placeholder takes "one or two `IDENT` segments". The
@@ -221,9 +226,11 @@ membership decision alone.
 [framing](../requirements/framing.md) §含まないもの gives **M4-Phase 7**
 whether the expression-side set is emptied. That is a constraint on what
 *accepting* this record means rather than on which option the comparison
-reaches: if it decides for K1, the accept carries a framing revision
-with it, and §What accepting this record means states what that revision
-touches.
+reaches: if it decides for K1, acting on that answer needs a framing
+revision, proposed separately as
+[Revision 8](../requirements/plan-revision-8-proposal.md) rather than
+carried by this accept. §What accepting this record means states what
+the revision touches and what this record says if it is declined.
 
 ### M4-P3-007-004 — How a retained member is written and documented
 
@@ -245,8 +252,10 @@ a member; under U3 it stays a state read. Nothing here is separable from
 
 ### M4-P3-007-006 — How many segments a name position takes
 
-- **G1 — at most one prefix.** A name position is an optional member
-  prefix followed by a name; `a.b.c.count` is a reject.
+- **G1 — at most one contextual prefix.** A name position is an optional
+  member prefix followed by a name, so `a.b.c.count` is a reject. This
+  bounds qualification (B); it says nothing about how deep navigation
+  into a value (A) may run.
 - **G2 — an unbounded chain,** as §3's production is written today, with
   §2.4 corrected to match it.
 
@@ -342,16 +351,25 @@ position is an error, so `photos.count` is not a state read — and it is
 still where a later member is admitted. U2's merit rises in that case,
 because an expression side with no members could be stated as "the left
 of a dot is always a value" and nothing more. What U2 gives up is the
-place a later member is admitted, which would then have to be invented
-at the moment it is first needed, in the phase least able to afford it.
+place a later member is admitted: under U2 the admission rule has to be
+written at the moment a member is first wanted, inside the record that
+wants it. That is a stated cost, not a prediction about a later phase's
+capacity — U1's case rests on the shape argument above, and this is what
+U1 additionally buys.
 
 ### M4-P3-007-002 — D3, a lookup space
 
-No document says. The spec's prose spends "root" on the content root
-widget and the body root child, and the only recorded intent is a checker
-comment reading "the component root alias" — in which "component root" is
-itself two readings, the component *as* a root or the root *of* the
-component's tree. Today one component owns one tree, so D1, D2 and D3
+No normative document says, and the two records that do speak stand in a
+vague-to-specific relation rather than a conflicting one. The spec's
+prose spends "root" on the content root widget and the body root child.
+The checker comment reads "the component root alias", in which
+"component root" is itself two readings — the component *as* a root, or
+the root *of* the component's tree.
+[dsl-grammar.md](../../../../docs/notes/dsl-grammar.md) Q1 resolves that
+ambiguity to the first, and it is **owner-authored**: the prefix names
+the component's base, an implicit `self`. That is D1, stated in the same
+note this record cites for its other prior commitment, and it is the
+strongest support any of the three readings has. Today one component owns one tree, so D1, D2 and D3
 select the same signals and no authored `.ui` can separate them. They
 separate on four questions the language has to answer anyway.
 
@@ -375,15 +393,29 @@ design the spec has deliberately left unopened.
 
 **D1 and D3 answer every row the same way**, and no checker behaviour or
 `.ui` can tell them apart. They differ in what the spec sentence commits
-to. D1 names an object the language cannot otherwise mention: no syntax
-produces a component instance and none holds one, so asserting the object
-in prose while declining to design it (003) leaves the spec claiming a
-thing it does not support, and it turns K4 into "expose what is already
-named" rather than "add something". D3 says only what is true and
-checked — the prefix labels the space a name is looked up in, which is
-what `check_qualified_name` resolves against — and it is the reading
-`slot` needs anyway: a placement key's head labels a space too, and it is
-not a value either.
+to, and D1 is the reading already on record. Its strongest form does not
+need an object the author can name: an *implicit* self is never written,
+so the language need not produce one, and the word `root` fits the
+enclosing state scope under this reading and under no other. What it
+costs is that the spec then asserts a referent no syntax produces and
+none holds — the language cannot otherwise mention a component
+instance — and K4 becomes "expose what is already named" rather than "add
+something". D3 says only what is true and checked — the prefix labels the
+space a name is looked up in, which is what `check_qualified_name`
+resolves against — and it is the reading `slot` needs anyway: a placement
+key's head labels a space too, and it is not a value either.
+
+**Choosing here is therefore a decision about Q1, not only about this
+record.** Three positions are available, and the owner authored the
+first: keep the implicit-self reading and design toward a self; leave the
+denotation unsettled until a second scope makes it observable; or
+supersede the note's reading and say the prefix labels a lookup space.
+The middle position is not free — 003 and 009 below both read the
+denotation, and the reading most available in the meantime to a reader of
+the published draft is D2, the one the first row eliminates. This record
+recommends the third, which **supersedes Q1's implicit-self sentence**
+for the language as it stands. Q1's widget-id question is untouched, and
+D1 stays available to a later member that qualifies something.
 
 D1 is not idle, though. It is the reading a **motivated** member would
 need: a `self`-shaped qualifier means the enclosing definition's own
@@ -485,14 +517,18 @@ commitment before 1.0 — but examples are what readers copy, and this is
 the honest price of the recommendation. It is also strictly rising: the
 same break costs more in every later phase than it does here.
 
-**Migration is a tie-breaker, and it points the same way.** K1 rewrites
-24 occurrences in `examples/` and nine example lines in `dsl_spec.md`;
-the rewrite is mechanical, diagnosable, and moves no meaning, and 008
-settles the four reject-illustrating places and the two occurrences in a
-closed phase's evidence artifact. That cost is not what decides this
-sub-issue. It is worth recording only because it is the smallest it will
-ever be: after this record's spec sync the spelling is published surface
-in §2.4, §3, §4.16 and §5, carried through Phases 4–6.
+**Migration barely separates them, and saying so keeps the comparison
+honest.** K1 rewrites 24 occurrences in `examples/` and nine example
+lines in `dsl_spec.md`. K2 under W3 moves **the same 33 places** — naming
+the unprefixed form canonical and then teaching the other one would be
+the contradiction W2 was rejected for — so what separates the two is not
+whether the teaching surface is rewritten but whether it *breaks* if it
+is not. The rewrite is mechanical, diagnosable and moves no meaning
+under either answer; 008 settles the four reject-illustrating places and
+the two occurrences in a closed phase's evidence artifact, and its
+answer differs between them. What migration does record is that the
+**break** is smallest now: after this record's spec sync the spelling is
+published surface in §2.4, §3, §4.16 and §5, carried through Phases 4–6.
 
 ### M4-P3-007-004 — not live under the recommendation
 
@@ -503,7 +539,7 @@ spelling once instead of twice, and W1's stated benefit — one spelling
 per read — arrives without obliging anyone to write a form that decides
 nothing.
 
-### M4-P3-007-006 — G1, at most one prefix
+### M4-P3-007-006 — G1, at most one contextual prefix
 
 G2 has no reading to offer. Once a prefix is a checked member of a closed
 set, a *chain* of prefixes is meaningless: `a.b.c.count` has no
@@ -512,6 +548,16 @@ interpretation in which `a.b` labels a lookup space. G1 also repairs the
 same shape, "an optional member prefix, then a name", instead of two
 different ones. Keeping G2 would mean keeping a production that admits
 forms no rule can explain.
+
+**What G1 caps is qualification, not navigation.** `a.b.c.count` is
+refused for a second reason that is not a cap at all: under 001's rule
+the head must be a value or a member, and no type the language has today
+carries a member `b`, so the form fails at the first dot whether or not a
+cap exists. G1 is a statement about the shape of a **name position** — the
+(B) form §2.4 and §3 disagree about — and it decides nothing about how
+deep an (A) navigation may run. When structured elements arrive, whether
+`photo.metadata.filename` is admissible is a question for the receiver's
+type, and this record neither grants nor refuses it.
 
 ### M4-P3-007-007 — L1, the same rule on both sides
 
@@ -589,24 +635,40 @@ reaches the sigil question over a namespace no prefix has touched.
   written in the other position is a reject. A non-member in prefix
   position is a `wasamoc check` error whose message names what is
   admissible there.
-- **002 — a lookup space.** A member labels *where a name is looked up*
-  and denotes no value. It is not the content root widget, which is what
-  "root" means in the spec's prose; the two uses of the word are
-  unrelated, and neither this record nor the prose moves for the other.
+- **002 — a lookup space, for the members the language has now.** A
+  member labels *where a name is looked up* and denotes no value. This
+  answers the denotation of `slot` and of the prefix 003 retires; it is
+  **not** a general rule binding what a later member denotes. A member
+  that qualifies a second scope is a self (D1), and 009 leaves that open.
+  It is not the content root widget, which is what "root" means in the
+  spec's prose; the two uses of the word are unrelated, and neither this
+  record nor the prose moves for the other. Taking this reading
+  **supersedes** the implicit-self sentence in
+  [dsl-grammar.md](../../../../docs/notes/dsl-grammar.md) Q1, whose
+  widget-id question is unaffected. That note is owner-authored, so
+  reconciling the sentence is part of what the accept asks for rather
+  than an edit this record makes.
 - **003 — the expression-side membership is empty; `root` is retired.**
   A prefix belongs where it changes what the right-hand side resolves
   against — the test `slot` passes and `root` fails in every position
   the language has. What survives is the set, its admission rule and its
   placement-key member; what goes is a member that decides nothing,
-  under a word the spec spends on something else. **This is a change to
-  the accepted framing** — see §What accepting this record means.
+  under a word the spec spends on something else. **This one sub-issue
+  is outside the accepted framing**, and it is proposed separately as
+  [Revision 8](../requirements/plan-revision-8-proposal.md) rather than
+  carried by this accept — see §What accepting this record means.
 - **004 — not live.** With no expression-side member there is nothing to
   require, to rank, or to record as provisional.
 - **005 — `photos.count` is not a state read.** With the set closed, the
   spelling is free and DD-001 decides it on its own merits.
-- **006 — one prefix at most.** `a.b.c.count` is rejected. §2.4 and §3
-  stop disagreeing about how many segments a name position takes, and the
-  interpolation placeholder stops claiming a segment count of its own.
+- **006 — one contextual prefix at most.** A name position is an optional
+  member prefix followed by a name, so `a.b.c.count` is rejected — as a
+  form with no reading, and, under 001's rule, as a head that is not a
+  value. §2.4 and §3 stop disagreeing about how many segments a name
+  position takes, and the interpolation placeholder stops claiming a
+  segment count of its own. **The depth of navigation into a value is not
+  decided here**; when structured elements arrive, the receiver's type
+  decides it.
 - **007 — the rule reaches the assignment target.** The segment cap and
   the membership check apply there as they do to a read. §4.15's
   collection positions need no rule of their own under this
@@ -648,25 +710,102 @@ sub-issue.
 
 ### What accepting this record means
 
-003 is outside what the accepted framing gives this phase.
+**Only 003 is outside what the accepted framing gives this phase.**
 §含まないもの assigns to **M4-Phase 7** whether the expression-side set
 is emptied, and §DD と検証手段の対応 names the 26 surviving `root.`
-occurrences as this record's positive control. Accepting the
-recommendation therefore carries a **framing revision** with it — tier 2
-refining, on the model of
-[Revision 7](../requirements/plan-revision-7-proposal.md) — touching:
+occurrences as this record's positive control. Acting on 003 therefore
+needs a **framing revision** — tier 2 refining, on the model of
+[Revision 7](../requirements/plan-revision-7-proposal.md) — and the
+discipline makes that revision a **separate artifact**, proposed by the
+agent and authorised and critically checked by the owner
+([DD-V-026](../../../cross-milestone/decisions/plan-revision-discipline.md)).
+It is filed as
+[Revision 8](../requirements/plan-revision-8-proposal.md), which states
+its own premise change and touches:
 
 | Target | Edit |
 |---|---|
 | framing §含まないもの | Membership of the expression-side set is settled here. What stays M4-Phase 7's is the host-state prefix spelling and whether members carry a reserved symbol |
 | framing §DD と検証手段の対応, DD-007 row | The positive control becomes the migrated `examples/` compiling without the prefix, not the 26 occurrences surviving |
 | [candidate pool](../../../candidate-pool.md), prefix-set row | Part (1), membership, is discharged; part (2), spelling, stays open |
-| `plan.md` §Revision log | One entry |
+| framing §Revisions, `plan.md` §Revision log | One entry each |
 
-**There is no fallback inside this record.** Without the revision, 003
-keeps a member, 004 and 010 become live, and 008 has a different answer —
-a materially different record, proposed as one rather than read out of
-this one.
+**The two decisions are separable, and most of this record does not rest
+on the revision.** 001, 002, 005, 006 and 007 sit inside the framing as
+accepted, and they are what DD-001 consumes: `photos.count` is freed by
+**closing** the set, not by emptying it. If the revision is declined, the
+record's answer at 003 becomes **K2 with W3** — the member is retained
+and validated, written optionally, with the unprefixed form named
+canonical and the member recorded as provisional pending M4-Phase 7 — and
+three things follow. 004 becomes live and is answered by W3; 010 becomes
+live and is answered by C2, so `state root` stays legal; and 008 stays
+A2, but with a different content on both halves. The 24 occurrences in
+`examples/` and the nine example lines in `dsl_spec.md` still move,
+because W3 names the unprefixed form canonical and A2 moves what
+teaches — they move without breaking rather than to keep compiling. The
+four §4.15 reject rows, by contrast, **stay as they are**: under a
+retained member the qualified loop collection and mutation target still
+reach the diagnostics printed beside them, which is exactly what K1
+takes away from them. The §4.15 carve-out §Comparison prices is what
+that answer carries, and the membership question returns to M4-Phase 7
+on its original trigger.
+
+**This record is not flipped to Accepted while the revision is pending,
+and it is never Accepted carrying both answers.** An Accepted record is
+what the implementation plan, the reject table and the spec sync
+consume, so it states one contract. The flip is therefore gated on
+Revision 8's disposition:
+
+- **Revision 8 authorised and landed** — this record is Accepted as
+  written. No further edit is required.
+- **Revision 8 declined** — the retention branch is **written into the
+  body first**, and the record is Accepted only after an **audit of
+  every claim in it that depends on retirement**, recorded as a table of
+  passage → disposition covering the whole record.
+
+  The audit is the gate, and no section is declared safe in advance.
+  Retirement is not confined to 003: it is asserted in passing wherever
+  the record reasons about what follows from an empty set, and a first
+  attempt to enumerate those places in advance missed several. A table a
+  reviewer can check line by line against the body is what makes the
+  branch auditable; a prose assurance that "the rest is unaffected" is
+  not checkable at all. The sites already known to depend on retirement
+  are the audit's **starting point, not its scope**:
+
+  - §Recommendation 003, 004, 008 and 010, plus 007 (§4.15's collection
+    positions need a rule of their own again, because a dotted head does
+    reach them) and 009 (a later member joins a set of one, not an empty
+    one);
+  - the closing sentence of the first consequence bullet under
+    §Recommendation, which attributes the unchanged IR to removing an
+    inert member rather than to retaining one still discarded at
+    lowering;
+  - §Comparison's heading for 003, its 004 and 010 subsections which
+    stop reading "not live", and the closing paragraph of 007, which
+    says there is nothing to carve out;
+  - §Forward-compat exposure's second, fifth and seventh bullets — the
+    empty expression side, what retirement costs a later `self`, and the
+    negative-trigger trap that retention leaves in place;
+  - §Technical risk's first bullet, whose reject table drops
+    `root.count`, whose positive control reverts to the surviving
+    occurrences, and which gains what retention makes testable
+    (`root.count` reading the same state as `count`, and `state root`
+    declaring legally), and its third bullet, which no longer describes
+    every prefixed read and write as stopping;
+  - the DD-007 row in [preamble.md](preamble.md).
+
+  What the audit is expected to leave standing is §Options, and the
+  bodies of §Comparison 001, 002, 003 and 006 — the comparison that
+  reaches K1 is also the comparison that prices K2 — but that is a
+  prediction the audit tests rather than a conclusion it may assume.
+
+**One accept-time action stands under either outcome.** 002 supersedes
+the implicit-self sentence in
+[dsl-grammar.md](../../../../docs/notes/dsl-grammar.md) Q1, which is
+owner-authored and outside this record's reach. Reconciling that
+sentence — leaving Q1's widget-id question untouched — belongs to the
+accept rather than to the framing revision, because the denotation is
+settled inside the framing whichever way 003 goes.
 
 ## Forward-compat exposure
 
@@ -735,8 +874,9 @@ this one.
   one prefix at most, membership checked, non-members are values. A
   narrowing with no firing reject test does not exist. The close artifact
   is a table with a firing case per rejected shape — a prefix in
-  expression position at all (`root.count` included), a chained prefix,
-  and `slot` written where no placement key is admitted. The positive
+  expression position at all (`root.count` included), a name written as
+  more than one contextual prefix, and `slot` written where no placement
+  key is admitted. The positive
   control moves with the recommendation: it is the migrated `examples/`
   compiling, not the prefixed occurrences surviving.
 - **The denotation has no reject to carry it.** The 002 decision changes
@@ -744,7 +884,9 @@ this one.
   only holder is that sentence, so the spec sync has to state it outright
   rather than leave it to the reader, and the close artifact cannot
   evidence it — the reject table covers the set, not what a member
-  denotes.
+  denotes. The same holds for what it supersedes: Q1's implicit-self
+  sentence is retired by prose alone, so reconciling that note is an
+  accept-time action with no test behind it.
 - **This record holds the phase's change to what a legal `.ui` means,
   and it is wider than a diagnostic on one spelling.** Every prefixed
   read and write stops compiling, the repository's own 24 included until
