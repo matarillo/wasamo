@@ -456,7 +456,7 @@ this record does not add a separate loader policy.
   `.ui`'s meaning: every construct this record adds is currently a parse
   error or a named diagnostic, so no shipped example can change
   behaviour. The changes to what a legal `.ui` means in this phase are
-  DD-007's, not this record's. The property is worth re-checking at
-  implementation close rather than assumed — the counter, bool-demo and
-  gallery examples all continuing to compile unchanged is the cheapest
-  form of that check.
+  DD-007's, not this record's, and DD-007 also migrates the examples'
+  prefix spelling. The property is worth re-checking at implementation
+  close — the counter, bool-demo and gallery examples compiling with no
+  edit *this record* requires is the cheapest form of that check.
