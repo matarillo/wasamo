@@ -455,7 +455,7 @@ this record does not add a separate loader policy.
 - **Nothing here is ABI-bearing**, and nothing here changes an existing
   `.ui`'s meaning: every construct this record adds is currently a parse
   error or a named diagnostic, so no shipped example can change
-  behaviour. The one change to what a legal `.ui` means in this phase is
+  behaviour. The changes to what a legal `.ui` means in this phase are
   DD-007's, not this record's. The property is worth re-checking at
   implementation close rather than assumed — the counter, bool-demo and
   gallery examples all continuing to compile unchanged is the cheapest

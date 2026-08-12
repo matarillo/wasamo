@@ -138,7 +138,7 @@ the order they consume one another.
 
 | DD | Question | Recommendation |
 |---|---|---|
-| [DD-007](dd-m4-p3-007-dot-meaning-and-prefix-set.md) | What may stand to the left of a dot, and does the `root.` prefix survive? | **The left of a dot is a value; the exceptions are a closed, validated set of prefixes** — `slot` on the placement-key side and `root` on the expression side (**N2**), with at most one prefix per name. A non-member in prefix position becomes a diagnostic naming the members, which frees `photos.count` for DD-001 to decide on merit. `root` is **retained and validated**; whether the expression-side set should be emptied (**N1**) is handed to M4-Phase 7, which decides whether the set gains a host member. Making a component instance a value (**N3**) is rejected: it collides with the spec's existing use of "root" for the content root widget and promises more than anything needs. No authored `.ui` changes; the prefix stays out of the IR |
+| [DD-007](dd-m4-p3-007-dot-meaning-and-prefix-set.md) | What may stand to the left of a dot, and does the `root.` prefix survive? | **The left of a dot is a value; the exceptions are a closed, validated set of prefixes** — `slot` on the placement-key side and `root` on the expression side (**N2**), with at most one prefix per name, on a read and on an assignment target alike. A non-member in prefix position becomes a diagnostic naming the members, which frees `photos.count` for DD-001 to decide on merit. `root` is **retained and validated, but recorded as provisional with the bare name canonical** (**N2b**), because after validation it does nothing a bare name does not and because a normative member would price M4-Phase 7's option to empty the set (**N1**) well above today's cost. Validation claims the identifier: `state root` becomes a reject, the second of this phase's two changes to what a legal `.ui` means. Making a component instance a value (**N3**) is rejected because this phase does not take on component-instance-as-value, not because the word "root" is taken. No authored `.ui` changes; this member stays out of the IR, which is a property of an inert member rather than of the set |
 | [DD-001](dd-m4-p3-001-predicate-surface-and-typing.md) | Which predicate forms exist, where may they be written, and what are their types? | **One comparison level added to the shared `expr` grammar**, admissible in every position that already takes a scalar expression (option **P1**); collection interrogation spelled as **method calls** on the existing `CollectionCall` form (**S3**) and element access as **`xs[i]`** (**X1**); comparison operands must be the **same scalar type**, ordering restricted to `i32`, result `bool`; **no implicit integer-to-string display** in a bound string property (**T1**); carried as **new `HandlerExpr` variants** (**C1**), no second expression tree and no `TypedValue` |
 | [DD-002](dd-m4-p3-002-collection-read-and-failure-contract.md) | How is a collection read from outside the repetition, and what happens when the index is out of range? | `xs.count()`, `xs.is-empty()`, `xs.last-index()` are **total**; `xs[i]` is **partial**. An out-of-range index is an **error, not a value** (**R2**): the binding writes nothing, the target keeps the value it last held, the failure is **contained to the failing effect** (**C-a**), and the diagnostic goes to the existing runtime channel. Fallback values and clamping are rejected because both render an author's mistake as a plausible screen |
 | [DD-003](dd-m4-p3-003-per-item-conditional-and-lifecycle.md) | How does a condition inside a `for` body read its binders, and what owns the subtree's lifecycle? | **Thread the enclosing `ForItemContext` through the three seams that drop it today** (**L1**) — `append_static_member`'s `If` arm, `register_conditional_binding`, and `mutate_conditional_subtree` — so condition evaluation and re-materialisation share one owner, and the subtree's `set_loop_scope` is written from the same parameter. **Repair the already-admitted composition rather than reject it** (**H-a**). Reuse the existing `mark_layout_dirty_for` → `flush_layout` seam unchanged; add no structural writer |
@@ -196,4 +196,21 @@ proposes no pre-ADR spike.
 
 ## Revisions
 
-*(none — initial draft)*
+- **2026-08-12 — DD-007 revised before accept after a strategic /
+  owner-alignment review.** Nothing is Accepted, so this is a draft
+  revision rather than a supersede. The review found the N1/N2
+  comparison priced only the migration cost: it added the identifier
+  claim (`state root` becomes a reject) and the "two synonymous
+  spellings, no canonical form" outcome to the table; recorded that the
+  set's two members share a syntactic shape but not their obligation,
+  their qualified space or their lowering; recorded that deferring the
+  retirement is not cost-neutral, since the retained member is cheap to
+  remove today and published surface afterwards; and split N2 into a
+  normative (**N2a**) and a provisional (**N2b**) disposition, adopting
+  N2b on the §4.16 precedent. It also noted that N1's exclusion and this
+  record were proposed in the same pass, so the framing does not
+  constrain the record independently. Claims reaching past current
+  evidence were weakened rather than sharpened — the custom-component
+  scope-qualification mechanism, the "prefixes are discarded at
+  lowering" generalisation, and the §2.4 production, which is DD-001's
+  to choose.
